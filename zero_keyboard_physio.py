@@ -80,16 +80,34 @@ FPS = 60
 
 # Colors
 COLOR_BG = (15, 15, 25)
-COLOR_SIDEBAR_BG = (25, 25, 40)
+COLOR_SIDEBAR_BG = (236, 243, 249)
 COLOR_PRIMARY = (0, 200, 255)
 COLOR_SECONDARY = (255, 100, 150)
 COLOR_SUCCESS = (50, 255, 150)
 COLOR_WARNING = (255, 200, 50)
+COLOR_DANGER = (204, 64, 74)
 COLOR_TEXT = (240, 240, 240)
 COLOR_ACCENT = (138, 43, 226)  # Purple
 COLOR_BUBBLE = (100, 200, 255)
 COLOR_SEED = (139, 69, 19)  # Brown
 COLOR_POT = (34, 139, 34)  # Green
+
+# Phase 2 medical interface palette
+COLOR_MED_TEXT = (28, 39, 53)
+COLOR_MED_MUTED = (102, 119, 138)
+COLOR_MED_PANEL = (255, 255, 255)
+COLOR_MED_PRIMARY = (0, 119, 182)
+COLOR_MED_SUCCESS = (29, 163, 101)
+COLOR_MED_WARNING = (220, 143, 20)
+
+LEVEL_DISPLAY_NAMES = {
+    1: "Flexibility Training",
+    2: "Strength Coordination",
+    3: "Fine Motor Pinch",
+    4: "Path Tracing Control",
+    5: "Grip Release Cycle",
+    6: "Cognitive Finger Taps",
+}
 
 # Game Settings
 HOVER_DURATION = 1.5
@@ -1737,6 +1755,174 @@ class MedicalSidebar:
             gl = self.font_label.render(line.strip(), True, (180, 210, 190))
             screen.blit(gl, (self.x + 8, y_offset))
 
+class MedicalSidebarV2:
+    """Professional clinical telemetry sidebar for Phase 2."""
+
+    def __init__(self):
+        self.x = GAME_AREA_WIDTH
+        self.width = SIDEBAR_WIDTH
+        self.font_title = pygame.font.SysFont("segoeui", 21, bold=True)
+        self.font_label = pygame.font.SysFont("segoeui", 14)
+        self.font_data = pygame.font.SysFont("segoeui", 20, bold=True)
+        self.font_small = pygame.font.SysFont("segoeui", 13)
+
+    def _draw_text(self, screen, text, font, color, pos):
+        screen.blit(font.render(str(text), True, color), pos)
+
+    def _panel(self, screen, rect, border=(210, 224, 236)):
+        pygame.draw.rect(screen, COLOR_MED_PANEL, rect, border_radius=8)
+        pygame.draw.rect(screen, border, rect, 1, border_radius=8)
+
+    def _metric(self, screen, rect, label, value, color=COLOR_MED_TEXT):
+        self._panel(screen, rect)
+        self._draw_text(screen, label.upper(), self.font_small, COLOR_MED_MUTED, (rect.x + 10, rect.y + 7))
+        value_surf = self.font_data.render(str(value), True, color)
+        screen.blit(value_surf, (rect.x + 10, rect.y + 25))
+
+    def _status_pill(self, screen, rect, text, color):
+        bg = tuple(max(0, min(255, int(c * 0.14 + 230))) for c in color)
+        pygame.draw.rect(screen, bg, rect, border_radius=12)
+        pygame.draw.rect(screen, color, rect, 1, border_radius=12)
+        txt = self.font_label.render(text, True, color)
+        screen.blit(txt, txt.get_rect(center=rect.center))
+
+    def _bar(self, screen, x, y, w, ratio, color):
+        ratio = max(0.0, min(1.0, ratio))
+        pygame.draw.rect(screen, (220, 229, 238), (x, y, w, 8), border_radius=4)
+        if ratio > 0:
+            pygame.draw.rect(screen, color, (x, y, int(w * ratio), 8), border_radius=4)
+
+    def _wrap(self, screen, text, x, y, max_chars, color=COLOR_MED_TEXT):
+        line = ""
+        for word in text.split():
+            test = f"{line}{word} "
+            if len(test) > max_chars:
+                self._draw_text(screen, line.strip(), self.font_small, color, (x, y))
+                y += 16
+                line = f"{word} "
+            else:
+                line = test
+        if line:
+            self._draw_text(screen, line.strip(), self.font_small, color, (x, y))
+            y += 16
+        return y
+
+    def draw(self, screen, camera_frame, hand_data: HandData,
+             level_goals: str, accuracy_hits: int = 0,
+             accuracy_attempts: int = 0, is_results: bool = False,
+             is_calibration: bool = False, is_mirror_active: bool = False,
+             is_paused: bool = False, score: int = 0,
+             exercise_name: str = "Session",
+             exercise_count: int = 0, session_elapsed: float = 0.0,
+             pain_level: int = 0, recovery_prediction: Optional[float] = None,
+             correctness_text: str = "Ready"):
+        pygame.draw.rect(screen, COLOR_SIDEBAR_BG, (self.x, 0, self.width, WINDOW_HEIGHT))
+        pygame.draw.line(screen, (198, 214, 229), (self.x, 0), (self.x, WINDOW_HEIGHT), 1)
+
+        title_rect = pygame.Rect(self.x + 12, 10, self.width - 24, 42)
+        self._panel(screen, title_rect)
+        self._draw_text(screen, "AI Rehabilitation Monitor", self.font_title, COLOR_MED_TEXT,
+                        (title_rect.x + 10, title_rect.y + 6))
+        self._draw_text(screen, "Live clinical session", self.font_small, COLOR_MED_MUTED,
+                        (title_rect.x + 10, title_rect.y + 27))
+
+        cam_y = 62
+        feed_h = 184
+        cam_rect = pygame.Rect(self.x + 12, cam_y, self.width - 24, feed_h)
+        cam_drawn = False
+
+        if is_calibration:
+            self._panel(screen, cam_rect, border=(120, 180, 215))
+            msg = self.font_label.render("Diagnostics scanner active", True, COLOR_MED_PRIMARY)
+            screen.blit(msg, msg.get_rect(center=(cam_rect.centerx, cam_rect.centery - 10)))
+            sub = self.font_small.render("Use the central camera preview", True, COLOR_MED_MUTED)
+            screen.blit(sub, sub.get_rect(center=(cam_rect.centerx, cam_rect.centery + 12)))
+            cam_drawn = True
+        elif camera_frame is not None:
+            try:
+                frame_resized = cv2.resize(camera_frame, (cam_rect.width, cam_rect.height))
+                frame_rgb = cv2.cvtColor(frame_resized, cv2.COLOR_BGR2RGB)
+                frame_surface = pygame.surfarray.make_surface(frame_rgb.swapaxes(0, 1))
+                screen.blit(frame_surface, cam_rect.topleft)
+                border = COLOR_DANGER if hand_data.index_tip is None else COLOR_MED_PRIMARY
+                pygame.draw.rect(screen, border, cam_rect, 2, border_radius=8)
+                overlay = pygame.Surface((cam_rect.width, 24), pygame.SRCALPHA)
+                overlay.fill((0, 0, 0, 105))
+                screen.blit(overlay, (cam_rect.x, cam_rect.bottom - 24))
+                self._draw_text(screen, "Hand skeleton overlay", self.font_small,
+                                (255, 255, 255), (cam_rect.x + 8, cam_rect.bottom - 20))
+                cam_drawn = True
+            except Exception:
+                pass
+
+        if not cam_drawn:
+            self._panel(screen, cam_rect, border=(230, 170, 175))
+            off = self.font_label.render("Camera unavailable", True, COLOR_DANGER)
+            screen.blit(off, off.get_rect(center=cam_rect.center))
+
+        y = cam_rect.bottom + 10
+        has_hand = hand_data.index_tip is not None
+        status = "Tracking stable" if has_hand else "Hand not detected"
+        self._status_pill(screen, pygame.Rect(self.x + 12, y, self.width - 24, 26),
+                          status, COLOR_MED_SUCCESS if has_hand else COLOR_DANGER)
+        y += 36
+
+        if is_results:
+            return
+
+        correctness_lower = correctness_text.lower()
+        correct_col = COLOR_MED_SUCCESS if correctness_lower.startswith(("correct", "good", "ready")) else COLOR_DANGER
+        self._status_pill(screen, pygame.Rect(self.x + 12, y, self.width - 24, 28),
+                          correctness_text, correct_col)
+        y += 38
+
+        acc = (accuracy_hits / accuracy_attempts * 100) if accuracy_attempts > 0 else 0.0
+        acc_col = COLOR_MED_SUCCESS if acc >= 70 else COLOR_MED_WARNING if acc >= 40 else COLOR_DANGER
+        rom = sum(hand_data.knuckle_angles[:4]) / len(hand_data.knuckle_angles[:4]) if hand_data.knuckle_angles else 0.0
+        card_w = (self.width - 34) // 2
+
+        self._metric(screen, pygame.Rect(self.x + 12, y, card_w, 54), "Score", score)
+        self._metric(screen, pygame.Rect(self.x + 22 + card_w, y, card_w, 54), "Accuracy", f"{acc:.0f}%", acc_col)
+        y += 64
+        self._metric(screen, pygame.Rect(self.x + 12, y, card_w, 54), "Exercises", exercise_count)
+        mins = int(session_elapsed // 60)
+        secs = int(session_elapsed % 60)
+        self._metric(screen, pygame.Rect(self.x + 22 + card_w, y, card_w, 54), "Timer", f"{mins:02d}:{secs:02d}")
+        y += 64
+        self._metric(screen, pygame.Rect(self.x + 12, y, card_w, 54), "Current ROM", f"{rom:.0f} deg", COLOR_MED_PRIMARY)
+        pain_col = COLOR_MED_SUCCESS if pain_level <= 3 else COLOR_MED_WARNING if pain_level <= 6 else COLOR_DANGER
+        self._metric(screen, pygame.Rect(self.x + 22 + card_w, y, card_w, 54), "Pain Score", f"{pain_level}/10", pain_col)
+        y += 64
+
+        panel = pygame.Rect(self.x + 12, y, self.width - 24, 62)
+        self._panel(screen, panel)
+        self._draw_text(screen, "EXERCISE NAME", self.font_small, COLOR_MED_MUTED, (panel.x + 10, panel.y + 8))
+        self._draw_text(screen, exercise_name, self.font_data, COLOR_MED_TEXT, (panel.x + 10, panel.y + 29))
+        y = panel.bottom + 10
+
+        pred_text = "Need more data"
+        pred_col = COLOR_MED_MUTED
+        if recovery_prediction is not None and recovery_prediction >= 0:
+            pred_text = f"{recovery_prediction:.1f}% predicted recovery"
+            pred_col = COLOR_MED_PRIMARY
+        panel = pygame.Rect(self.x + 12, y, self.width - 24, 60)
+        self._panel(screen, panel)
+        self._draw_text(screen, "RECOVERY PREDICTION", self.font_small, COLOR_MED_MUTED, (panel.x + 10, panel.y + 8))
+        self._draw_text(screen, pred_text, self.font_label, pred_col, (panel.x + 10, panel.y + 31))
+        y = panel.bottom + 10
+
+        panel = pygame.Rect(self.x + 12, y, self.width - 24, 104)
+        self._panel(screen, panel)
+        self._draw_text(screen, "STATUS MESSAGE", self.font_small, COLOR_MED_MUTED, (panel.x + 10, panel.y + 8))
+        next_y = self._wrap(screen, level_goals or "Ready for guided rehabilitation.",
+                            panel.x + 10, panel.y + 30, 34, COLOR_MED_TEXT)
+        if hand_data.is_pinching or hand_data.is_fist:
+            gesture = "Pinch active" if hand_data.is_pinching else "Fist active"
+            self._draw_text(screen, gesture, self.font_small, COLOR_MED_PRIMARY,
+                            (panel.x + 10, min(next_y + 2, panel.bottom - 18)))
+        self._bar(screen, panel.x + 10, panel.bottom - 12, panel.width - 20, acc / 100.0, acc_col)
+
+
 class CloseButton:
     """Close button with 3-second hover to exit"""
     
@@ -2251,7 +2437,7 @@ class PhysioSystem:
         # Components
         self.hand_engine = HandEngine()
         self.db = DatabaseManager()
-        self.sidebar = MedicalSidebar()
+        self.sidebar = MedicalSidebarV2()
         self.sounds = SoundSystem()
         self.particles = ParticleSystem()
         self.popups: List[ScorePopup] = []
@@ -3397,14 +3583,8 @@ class PhysioSystem:
 
     def _draw(self):
         self.screen.fill(COLOR_BG)
-        
-        # --- NEW PREMIUM ORB BACKGROUND ---
-        self._draw_cyber_grid()
-        t = time.time()
-        for i in range(3):
-            sx = GAME_AREA_WIDTH // 2 + math.sin(t * (0.3 + i*0.1) + i * 2) * (150 + i * 40)
-            sy = WINDOW_HEIGHT // 2 + math.cos(t * (0.4 + i*0.1) + i * 2) * (100 + i * 50)
-            pygame.draw.circle(self.screen, (20, 28, 45), (int(sx), int(sy)), 280)
+        pygame.draw.rect(self.screen, (12, 18, 30), (0, 0, GAME_AREA_WIDTH, WINDOW_HEIGHT))
+        pygame.draw.line(self.screen, (35, 50, 68), (0, 72), (GAME_AREA_WIDTH, 72), 1)
             
         # Draw game area
         if self.state == GameState.PATIENT_REGISTRATION:
@@ -3454,7 +3634,14 @@ class PhysioSystem:
                               is_results=(self.state == GameState.RESULTS),
                               is_calibration=(self.state == GameState.CALIBRATION),
                               is_mirror_active=getattr(self, 'results_mirror_active', False),
-                              is_paused=getattr(self, 'tracking_lost', False))
+                              is_paused=getattr(self, 'tracking_lost', False),
+                              score=self.score,
+                              exercise_name=self._get_current_exercise_name(),
+                              exercise_count=self._get_exercise_count(),
+                              session_elapsed=self._get_session_elapsed(),
+                              pain_level=self.pain_level,
+                              recovery_prediction=self._get_recovery_prediction(),
+                              correctness_text=self._get_correctness_label(hand_data))
 
             # Draw progress chart over the bottom half of the sidebar on Results screen
             if self.state == GameState.RESULTS:
@@ -3581,13 +3768,6 @@ class PhysioSystem:
             self.screen.fill(COLOR_BG)
             self.screen.blit(temp_surf, self.shake_offset)
             
-        # CRT SCANLINES
-        if not hasattr(self, '_scanline_surf'):
-            self._scanline_surf = pygame.Surface((WINDOW_WIDTH, WINDOW_HEIGHT), pygame.SRCALPHA)
-            for i in range(0, WINDOW_HEIGHT, 3):
-                pygame.draw.line(self._scanline_surf, (0, 0, 0, 35), (0, i), (WINDOW_WIDTH, i))
-        self.screen.blit(self._scanline_surf, (0, 0))
-
         # Draw Global Fist-Hold Exit Overlay
         if hasattr(self, '_global_fist_start') and self._global_fist_start is not None:
             elapsed = time.time() - self._global_fist_start
@@ -4355,6 +4535,44 @@ class PhysioSystem:
         elif self.state == GameState.LEVEL6_FINGER_TAPS:
             return "Memorize the pattern and repeat it!"
         return ""
+
+    def _get_current_exercise_name(self) -> str:
+        if self.state == GameState.MAIN_MENU:
+            return "Therapy Selection"
+        if self.state == GameState.CALIBRATION:
+            return "ROM Diagnostics"
+        return LEVEL_DISPLAY_NAMES.get(getattr(self, "current_level", 0), "Therapeutic Training")
+
+    def _get_exercise_count(self) -> int:
+        if getattr(self, "current_level", 0) == 5:
+            return int(getattr(self, "pump_reps", 0))
+        return int(getattr(self, "accuracy_hits", 0))
+
+    def _get_session_elapsed(self) -> float:
+        if self.session_start:
+            return max(0.0, time.time() - self.session_start)
+        return 0.0
+
+    def _get_correctness_label(self, hand_data: HandData) -> str:
+        warning = getattr(self, "correctness_warning", "")
+        if warning:
+            if "Bend" in warning:
+                return "Incorrect - adjust movement"
+            return "Correct - good control"
+        if hand_data.index_tip is None:
+            return "Incorrect - hand missing"
+        return "Ready - tracking hand"
+
+    def _get_recovery_prediction(self) -> Optional[float]:
+        now = time.time()
+        cache_time = getattr(self, "_recovery_prediction_time", 0.0)
+        if now - cache_time > 5.0:
+            try:
+                self._recovery_prediction_cache = self.db.predict_recovery_progress(self.patient_name)
+            except Exception:
+                self._recovery_prediction_cache = -1.0
+            self._recovery_prediction_time = now
+        return getattr(self, "_recovery_prediction_cache", -1.0)
     
     def _end_level(self):
         try:
