@@ -13,7 +13,7 @@ echo [1/2] Checking dependencies...
 
 echo [2/2] Starting dashboard...
 echo.
-%PYTHON% therapist_dashboard.py
+%PYTHON% therapist_dashboard.py 8081
 
 if %ERRORLEVEL% NEQ 0 (
     echo.
