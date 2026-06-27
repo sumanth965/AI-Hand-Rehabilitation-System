@@ -5,3 +5,4 @@ pygame
 matplotlib
 pyttsx3
 scikit-learn
+reportlab
