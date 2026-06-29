@@ -129,12 +129,16 @@ AGE_THEMES = {
         "level4_name": "Magic Trace",
         "level5_name": "Balloon Pump",
         "level6_name": "Simon Says",
+        "level7_name": "Rotation Orbit",
+        "level8_name": "Toy Builder",
         "level1_icon": "🦋",
         "level2_icon": "🌻",
         "level3_icon": "🌱",
         "level4_icon": "✨",
         "level5_icon": "🎈",
         "level6_icon": "🧠",
+        "level7_icon": "🪐",
+        "level8_icon": "🧱",
         "speed_multiplier": 0.7,  # Slower
         "size_multiplier": 1.3,   # Bigger targets
     },
@@ -150,12 +154,16 @@ AGE_THEMES = {
         "level4_name": "Neon Path",
         "level5_name": "Power Core",
         "level6_name": "Pattern Logic",
+        "level7_name": "Galaxy Spin",
+        "level8_name": "Mech Assembly",
         "level1_icon": "⚡",
         "level2_icon": "🎯",
         "level3_icon": "🔮",
         "level4_icon": "⚡",
         "level5_icon": "🔋",
         "level6_icon": "🧩",
+        "level7_icon": "🛰️",
+        "level8_icon": "🔧",
         "speed_multiplier": 1.3,  # Faster
         "size_multiplier": 0.9,   # Smaller targets
     },
@@ -171,12 +179,16 @@ AGE_THEMES = {
         "level4_name": "Zen Flow",
         "level5_name": "Bellows Breath",
         "level6_name": "Memory Path",
+        "level7_name": "Orbital Path",
+        "level8_name": "Stone Builder",
         "level1_icon": "🍃",
         "level2_icon": "💧",
         "level3_icon": "🪨",
         "level4_icon": "〰️",
         "level5_icon": "🌬️",
         "level6_icon": "👣",
+        "level7_icon": "🌎",
+        "level8_icon": "🧱",
         "speed_multiplier": 1.0,  # Normal
         "size_multiplier": 1.1,   # Slightly bigger
     },
@@ -192,12 +204,16 @@ AGE_THEMES = {
         "level4_name": "Smooth Line",
         "level5_name": "Heartbeat",
         "level6_name": "Recall Game",
+        "level7_name": "Moon Orbit",
+        "level8_name": "Birdhouse",
         "level1_icon": "🌺",
         "level2_icon": "🎵",
         "level3_icon": "🧩",
         "level4_icon": "🖌️",
         "level5_icon": "❤️",
         "level6_icon": "🧠",
+        "level7_icon": "🌕",
+        "level8_icon": "🏠",
         "speed_multiplier": 0.8,  # Slower
         "size_multiplier": 1.2,   # Bigger targets
     }
@@ -444,6 +460,8 @@ class GameState(Enum):
     LEVEL4_COORDINATION = 13
     LEVEL5_GRIP_RELEASE = 14
     LEVEL6_FINGER_TAPS = 15
+    LEVEL7_WRIST_MECHANICS = 16
+    LEVEL8_SMART_ASSEMBLY = 17
     PAUSED = 20
     LEVEL_COMPLETE = 22
     RESULTS = 21
@@ -468,8 +486,25 @@ class HandData:
     is_fist: bool = False
     finger_extension: float = 0.0
     knuckle_angles: List[float] = field(default_factory=list)
+    wrist_rotation_angle: float = 0.0
+    wrist_deviation_angle: float = 0.0
     landmarks: Optional[list] = None
     hand_label: str = "Unknown"
+
+from dataclasses import dataclass, field
+from typing import Optional, Tuple, List
+
+@dataclass
+class AssemblyPart:
+    name: str
+    target_pos: tuple
+    target_angle: float
+    current_pos: list
+    current_angle: float
+    color: tuple
+    shape: list
+    is_grabbed: bool = False
+    is_locked: bool = False
 
 @dataclass
 class Bubble:
@@ -765,6 +800,18 @@ class HandEngine:
             self._calculate_angle((wrist.x, wrist.y), (pinky_mcp.x, pinky_mcp.y), (pinky_tip.x, pinky_tip.y))
         ]
         
+        # Wrist Rotation (Pronation/Supination)
+        # Angle between Index MCP and Pinky MCP
+        dx_rot = pinky_mcp.x - index_mcp.x
+        dy_rot = pinky_mcp.y - index_mcp.y
+        wrist_rot = math.degrees(math.atan2(dy_rot, dx_rot))
+
+        # Wrist Deviation (Radial/Ulnar)
+        # Angle between Wrist and Middle MCP
+        dx_dev = middle_mcp.x - wrist.x
+        dy_dev = middle_mcp.y - wrist.y
+        wrist_dev = math.degrees(math.atan2(dy_dev, dx_dev))
+        
         return HandData(
             index_tip=index_pos,
             thumb_tip=thumb_pos,
@@ -774,6 +821,8 @@ class HandEngine:
             is_fist=is_fist,
             finger_extension=extension,
             knuckle_angles=angles,
+            wrist_rotation_angle=wrist_rot,
+            wrist_deviation_angle=wrist_dev,
             landmarks=[landmarks]
         )
     
@@ -2547,12 +2596,14 @@ class PhysioSystem:
             LevelButton(col1_x, 275, bw, 80, "LEVEL 3", 3, ring_radius=48),
             LevelButton(col2_x, 275, bw, 80, "LEVEL 4", 4, ring_radius=48),
             LevelButton(col1_x, 380, bw, 80, "LEVEL 5", 5, ring_radius=48),
-            LevelButton(col2_x, 380, bw, 80, "LEVEL 6", 6, ring_radius=48)
+            LevelButton(col2_x, 380, bw, 80, "LEVEL 6", 6, ring_radius=48),
+            LevelButton(col1_x, 485, bw, 80, "LEVEL 7", 7, ring_radius=48),
+            LevelButton(col2_x, 485, bw, 80, "LEVEL 8", 8, ring_radius=48)
         ]
         # Adjusting positions to fit History, Calibration, Exit nicely side-by-side
-        self.history_button = LevelButton(cx - 410, 495, 260, 60, "RECOVERY HISTORY", 9, ring_radius=40)
-        self.calibrate_button = LevelButton(cx - 130, 495, 260, 60, "ROM DIAGNOSTICS", 8, ring_radius=40)
-        self.exit_button = LevelButton(cx + 150, 495, 260, 60, "EXIT SYSTEM", 99, ring_radius=40)
+        self.history_button = LevelButton(cx - 410, 580, 260, 60, "RECOVERY HISTORY", 9, ring_radius=40)
+        self.calibrate_button = LevelButton(cx - 130, 580, 260, 60, "ROM DIAGNOSTICS", 8, ring_radius=40)
+        self.exit_button = LevelButton(cx + 150, 580, 260, 60, "EXIT SYSTEM", 99, ring_radius=40)
         self.logout_button = Button(20, 15, 140, 40, "← LOGOUT", (50, 50, 70))
         self.logout_button.duration = 1.2
         self.home_icon = HomeIcon(GAME_AREA_WIDTH - 250, 15, 240, 60)
@@ -2914,7 +2965,9 @@ class PhysioSystem:
                 GameState.LEVEL3_FINEMOTOR,
                 GameState.LEVEL4_COORDINATION,
                 GameState.LEVEL5_GRIP_RELEASE,
-                GameState.LEVEL6_FINGER_TAPS
+                GameState.LEVEL6_FINGER_TAPS,
+                GameState.LEVEL7_WRIST_MECHANICS,
+                GameState.LEVEL8_SMART_ASSEMBLY
             ]
             is_gameplay = self.state in gameplay_states
             
@@ -2989,6 +3042,12 @@ class PhysioSystem:
         elif self.state == GameState.LEVEL6_FINGER_TAPS:
             if not getattr(self, 'tracking_lost', False):
                 self._update_level6(hand_data)
+        elif self.state == GameState.LEVEL7_WRIST_MECHANICS:
+            if not getattr(self, 'tracking_lost', False):
+                self._update_level7(hand_data)
+        elif self.state == GameState.LEVEL8_SMART_ASSEMBLY:
+            if not getattr(self, 'tracking_lost', False):
+                self._update_level8(hand_data)
         elif self.state == GameState.LEVEL_COMPLETE:
             if time.time() - self._level_complete_time > 2.5:
                 self.state = GameState.RESULTS
@@ -3631,6 +3690,106 @@ class PhysioSystem:
             self.accuracy_attempts = max(self.accuracy_attempts, 5)
             self._end_level()
 
+
+    def _update_level7(self, hand_data: HandData):
+        """Level 7: Rotation Orbit (Forearm Pronation/Supination)"""
+        cx, cy = GAME_AREA_WIDTH // 2, WINDOW_HEIGHT // 2
+        
+        if not getattr(self, 'wrist_mode', None):
+            self.wrist_mode = "rotation"
+            self.wrist_target_angle = 45.0 # Starting orbital target
+            self.wrist_hold_time = 0.0
+
+        if not hand_data.index_tip or not hand_data.wrist: return
+        
+        # We scale the physical rotation (-90 to +90) into a 360 degree orbit
+        # Physical rotation is usually smaller, so * 2 gives a full circle feel
+        current_angle = hand_data.wrist_rotation_angle * 2.0
+        
+        # Normalize angles to 0-360 for comparison
+        target_norm = self.wrist_target_angle % 360
+        current_norm = current_angle % 360
+        
+        diff = abs(current_norm - target_norm)
+        if diff > 180: diff = 360 - diff
+        
+        if diff < 25.0: # 25 degree tolerance for "locking on"
+            self.wrist_hold_time += 1/30.0
+            if self.wrist_hold_time > 1.5:
+                # Success!
+                self.score += int(15 * getattr(self, 'score_multiplier', 1.0))
+                self.accuracy_hits += 1
+                self.accuracy_attempts += 1
+                self.particles.emit(cx, cy, (0, 255, 255), 30)
+                self.sounds.play('catch')
+                
+                # Spawn new target far enough away (at least 60 degrees)
+                import random
+                offset = random.uniform(60, 180)
+                if random.choice([True, False]): offset *= -1
+                self.wrist_target_angle = (self.wrist_target_angle + offset) % 360
+                self.wrist_hold_time = 0.0
+        else:
+            self.wrist_hold_time = 0.0
+            
+        import time
+        if (time.time() - getattr(self, 'session_start', 0)) > 60:
+            self.accuracy_attempts += 1
+            self._end_level()
+
+        self.satellite_angle = current_angle
+    def _update_level8(self, hand_data: HandData):
+        """Level 8: Smart Object Assembly"""
+        if not hand_data.index_tip or not getattr(hand_data, 'is_pinching', False) and not getattr(self, 'was_pinching', False):
+            pass
+            
+        hx, hy = hand_data.index_tip if hand_data.index_tip else (0,0)
+        is_pinching = getattr(hand_data, 'is_pinching', False)
+        
+        if is_pinching and not getattr(self, 'was_pinching', False):
+            for part in getattr(self, 'assembly_parts', []):
+                if not part.is_locked:
+                    dist = ((part.current_pos[0] - hx)**2 + (part.current_pos[1] - hy)**2)**0.5
+                    if dist < 80:
+                        part.is_grabbed = True
+                        self.sounds.play('select')
+                        break
+        
+        if not is_pinching and getattr(self, 'was_pinching', False):
+            for part in getattr(self, 'assembly_parts', []):
+                if part.is_grabbed:
+                    part.is_grabbed = False
+                    dist = ((part.current_pos[0] - part.target_pos[0])**2 + (part.current_pos[1] - part.target_pos[1])**2)**0.5
+                    ang_diff = abs(part.current_angle - part.target_angle) % 360
+                    if ang_diff > 180: ang_diff = 360 - ang_diff
+                    
+                    if dist < 50 and ang_diff < 30:
+                        part.is_locked = True
+                        part.current_pos = list(part.target_pos)
+                        part.current_angle = part.target_angle
+                        self.sounds.play('catch')
+                        self.particles.emit(part.current_pos[0], part.current_pos[1], (0,255,0), 30)
+                        self.score += int(50 * getattr(self, 'score_multiplier', 1.0))
+                        
+                        if all(p.is_locked for p in self.assembly_parts):
+                            self.popups.append(ScorePopup(GAME_AREA_WIDTH//2, WINDOW_HEIGHT//2, "ASSEMBLY COMPLETE!", (0,255,0)))
+                            self.accuracy_hits += 1
+                            self.accuracy_attempts += 1
+                            self._end_level()
+
+        for part in getattr(self, 'assembly_parts', []):
+            if part.is_grabbed:
+                part.current_pos[0] = hx
+                part.current_pos[1] = hy
+                part.current_angle = getattr(hand_data, 'wrist_rotation_angle', 0.0)
+                
+        self.was_pinching = is_pinching
+        
+        import time
+        if (time.time() - self.session_start > 120):
+            self.accuracy_attempts += 1
+            self._end_level()
+
     def _draw_cyber_grid(self):
         """Moving background grid for technical feel"""
         scr = self.screen
@@ -3672,6 +3831,10 @@ class PhysioSystem:
             self._draw_level5()
         elif self.state == GameState.LEVEL6_FINGER_TAPS:
             self._draw_level6()
+        elif self.state == GameState.LEVEL7_WRIST_MECHANICS:
+            self._draw_level7()
+        elif self.state == GameState.LEVEL8_SMART_ASSEMBLY:
+            self._draw_level8()
         elif self.state == GameState.LEVEL_COMPLETE:
             self._draw_level_complete()
         elif self.state == GameState.RESULTS:
@@ -4594,6 +4757,96 @@ class PhysioSystem:
         seed.is_golden = is_golden
         self.seeds.append(seed)
     
+
+    def _draw_level7(self):
+        """Draw Level 7: Rotation Orbit"""
+        import math
+        import pygame
+        theme = self._get_theme()
+        primary = theme['primary_color']
+        cx, cy = GAME_AREA_WIDTH // 2, WINDOW_HEIGHT // 2
+        orbit_radius = 200
+        
+        level_name = theme.get('level7_name', 'Rotation Orbit')
+        title = getattr(self, 'font_medium').render(f"LEVEL 7: {level_name}", True, primary)
+        self.screen.blit(title, (50, 75))
+        
+        # 1. Draw Planet (Center)
+        pygame.draw.circle(self.screen, (20, 50, 100), (cx, cy), 60) # Core
+        pygame.draw.circle(self.screen, primary, (cx, cy), 60, 3) # Atmosphere
+        
+        # 2. Draw Orbital Ring
+        pygame.draw.circle(self.screen, (50, 50, 50), (cx, cy), orbit_radius, 2)
+        
+        # 3. Draw Target Zone (Asteroid/Space Station)
+        target_rad = math.radians(self.wrist_target_angle)
+        tx = cx + int(math.cos(target_rad) * orbit_radius)
+        ty = cy + int(math.sin(target_rad) * orbit_radius)
+        
+        # Draw target zone glow based on hold time
+        hold_pct = min(self.wrist_hold_time / 1.5, 1.0)
+        target_color = (int(255 * hold_pct), 255, int(255 * (1-hold_pct)))
+        pygame.draw.circle(self.screen, target_color, (tx, ty), 35, 4)
+        pygame.draw.circle(self.screen, target_color, (tx, ty), int(35 * hold_pct)) # Fill up
+        
+        # 4. Draw Satellite (Patient's Forearm Rotation)
+        # Using a dummy object hand_data, but we need to access it via self or pass it. 
+        # _draw_level7 doesn't take hand_data, so we read it from self if available or we store current_angle in _update_level7.
+        # Let's fix that by storing satellite_angle in self during _update_level7.
+        # Fallback to 0 if not set.
+        sat_angle = getattr(self, 'satellite_angle', 0.0)
+        sat_rad = math.radians(sat_angle)
+        sx = cx + int(math.cos(sat_rad) * orbit_radius)
+        sy = cy + int(math.sin(sat_rad) * orbit_radius)
+        
+        pygame.draw.circle(self.screen, (255, 255, 255), (sx, sy), 15)
+        pygame.draw.circle(self.screen, primary, (sx, sy), 20, 2)
+        
+        # Draw tether from planet to satellite
+        pygame.draw.line(self.screen, (100, 100, 100), (cx, cy), (sx, sy), 1)
+
+    def _draw_level8(self):
+        """Draw Level 8: Smart Assembly"""
+        theme = self._get_theme()
+        primary = theme['primary_color']
+        cx, cy = GAME_AREA_WIDTH // 2, WINDOW_HEIGHT // 2
+        
+        level_name = theme.get('level8_name', 'Toy Builder')
+        title = getattr(self, 'font_medium').render(f"LEVEL 8: {level_name}", True, primary)
+        self.screen.blit(title, (50, 75))
+        
+        import math
+        import pygame
+        
+        def rotate_polygon(points, angle_deg, offset_x, offset_y):
+            rad = math.radians(angle_deg)
+            cos_a = math.cos(rad)
+            sin_a = math.sin(rad)
+            rotated = []
+            for px, py in points:
+                rx = px * cos_a - py * sin_a
+                ry = px * sin_a + py * cos_a
+                rotated.append((rx + offset_x, ry + offset_y))
+            return rotated
+
+        for part in getattr(self, 'assembly_parts', []):
+            blueprint_poly = rotate_polygon(part.shape, part.target_angle, part.target_pos[0], part.target_pos[1])
+            pygame.draw.polygon(self.screen, (50, 50, 50), blueprint_poly, 2)
+            
+        for part in getattr(self, 'assembly_parts', []):
+            if not part.is_locked:
+                poly = rotate_polygon(part.shape, part.current_angle, part.current_pos[0], part.current_pos[1])
+                color = (255,255,255) if part.is_grabbed else part.color
+                pygame.draw.polygon(self.screen, color, poly)
+                pygame.draw.polygon(self.screen, (200,200,200), poly, 2)
+            else:
+                poly = rotate_polygon(part.shape, part.target_angle, part.target_pos[0], part.target_pos[1])
+                pygame.draw.polygon(self.screen, part.color, poly)
+                pygame.draw.polygon(self.screen, (0, 255, 0), poly, 3)
+
+        inst = getattr(self, 'font_small').render("PINCH to grab, ARM to move, WRIST to rotate", True, (200, 200, 200))
+        self.screen.blit(inst, inst.get_rect(center=(cx, WINDOW_HEIGHT - 40)))
+
     def _get_level_goals(self) -> str:
         if self.state == GameState.MAIN_MENU:
             return "Select a level to begin rehabilitation"
@@ -5276,6 +5529,25 @@ class PhysioSystem:
             self.simon_sequence = []
             self.simon_state = "START"
             VOICE.speak("Level 6: Pattern Tap. Memorize the blinking pattern, then hover over the colored pads in correct order.")
+        elif lv == 7:
+            self.state = GameState.LEVEL7_WRIST_MECHANICS
+            self.wrist_target_angle = 45.0
+            self.wrist_hold_time = 0.0
+            self.wrist_mode = "rotation"
+            VOICE.speak("Level 7: Rotation Orbit. Rotate your forearm to align the satellite with the orbital target.")
+        elif lv == 8:
+            self.state = GameState.LEVEL8_SMART_ASSEMBLY
+            cx, cy = GAME_AREA_WIDTH // 2, WINDOW_HEIGHT // 2
+            
+            base_shape = [(-50, -50), (50, -50), (50, 50), (-50, 50)]
+            roof_shape = [(-60, 40), (60, 40), (0, -40)]
+            
+            import random
+            self.assembly_parts = [
+                AssemblyPart("Base", (cx, cy+50), 0.0, [150.0, 200.0], random.uniform(-45, 45), (100, 150, 200), base_shape),
+                AssemblyPart("Roof", (cx, cy-40), 0.0, [GAME_AREA_WIDTH-150.0, 200.0], random.uniform(-45, 45), (200, 100, 100), roof_shape)
+            ]
+            VOICE.speak("Level 8: Smart Assembly. Pinch a piece to grab it, drag it to the blueprint, and rotate your wrist to fit it.")
         self.sounds.play('select')
         self.popups.append(ScorePopup(GAME_AREA_WIDTH//2, WINDOW_HEIGHT//2 - 60, "POSTURE FIX: Sit up & keep shoulders relaxed!"))
 

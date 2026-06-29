@@ -105,6 +105,8 @@ While this project provides a strong proof-of-concept for AI-powered rehabilitat
 - **Environmental Dependency:** MediaPipe requires adequate lighting and clear contrast; poor lighting can drop the tracking frame rate.
 - **2D Depth Limitations:** Using a standard webcam means depth estimation is inferred. Future improvements could integrate 3D depth cameras (like Intel RealSense) for true spatial accuracy.
 - **Data Portability:** Currently, all data is stored locally in SQLite. Future versions aim to implement a secure, cloud-based PostgreSQL or Firebase backend for cross-device syncing.
+- **AI-Driven Smart Object Assembly:** As a future enhancement, the system can include an AI-driven rehabilitation game called Smart Object Assembly. In this game, patients perform therapeutic hand, wrist, and forearm movements to assemble virtual objects such as houses, machines, or robotic structures. Different rehabilitation exercises, including wrist flexion, extension, pronation, supination, and pinch movements, are mapped to specific assembly actions. The game difficulty can be automatically adjusted based on the patient's recovery progress and previous performance. This approach can improve patient engagement, support advanced hand and forearm rehabilitation, and provide a novel adaptive rehabilitation framework suitable for future research and potential patent development.
+
 
 ## 🔒 Security Posture
 
