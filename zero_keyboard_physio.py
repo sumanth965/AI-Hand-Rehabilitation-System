@@ -852,7 +852,8 @@ class DatabaseManager:
                     cal_max_ext REAL DEFAULT 170.0,
                     cal_min_ang REAL DEFAULT 15.0,
                     cal_max_ang REAL DEFAULT 90.0,
-                    cal_active INTEGER DEFAULT 0
+                    cal_active INTEGER DEFAULT 0,
+                    id_number TEXT UNIQUE
                 )
             """)
             # Migrations for older DBs
@@ -871,7 +872,18 @@ class DatabaseManager:
                     try:
                         cursor.execute(f"ALTER TABLE sessions ADD COLUMN {col} {defn}")
                     except Exception as e:
-                        print(f"Migration error for {col}: {e}")
+                        print(f"Migration error for sessions {col}: {e}")
+                        
+            # Patient migrations
+            try:
+                cursor.execute(f"SELECT id_number FROM patients LIMIT 1")
+            except sqlite3.OperationalError:
+                try:
+                    cursor.execute(f"ALTER TABLE patients ADD COLUMN id_number TEXT")
+                    cursor.execute(f"CREATE UNIQUE INDEX IF NOT EXISTS idx_patients_id_number ON patients(id_number)")
+                except Exception as e:
+                    print(f"Migration error for patients id_number: {e}")
+                    
             conn.commit()
             conn.close()
         except Exception as e:
@@ -882,15 +894,23 @@ class DatabaseManager:
     def save_patient(self, name: str, age: int, age_group: str,
                      cal_fist_val: float = 0.12, cal_max_ext: float = 170.0,
                      cal_min_ang: float = 15.0, cal_max_ang: float = 90.0,
-                     cal_active: int = 0):
+                     cal_active: int = 0, id_number: str = None):
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
+            
+            # If id_number is not provided but exists in db, preserve it
+            if id_number is None:
+                cursor.execute("SELECT id_number FROM patients WHERE name = ?", (name,))
+                row = cursor.fetchone()
+                if row:
+                    id_number = row[0]
+                    
             cursor.execute("""
                 INSERT OR REPLACE INTO patients 
-                (name, age, age_group, cal_fist_val, cal_max_ext, cal_min_ang, cal_max_ang, cal_active)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?)
-            """, (name, age, age_group, cal_fist_val, cal_max_ext, cal_min_ang, cal_max_ang, cal_active))
+                (name, age, age_group, cal_fist_val, cal_max_ext, cal_min_ang, cal_max_ang, cal_active, id_number)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """, (name, age, age_group, cal_fist_val, cal_max_ext, cal_min_ang, cal_max_ang, cal_active, id_number))
             conn.commit()
             conn.close()
             print(f"[SUCCESS] Saved patient profile: {name} (Age {age}, Group {age_group})")
@@ -921,6 +941,31 @@ class DatabaseManager:
         except Exception as e:
             print(f"Failed to get patient: {e}")
             return None
+
+    def get_patient_by_id(self, id_number: str):
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT name, age, age_group, cal_fist_val, cal_max_ext, cal_min_ang, cal_max_ang, cal_active
+                FROM patients WHERE id_number = ?
+            """, (id_number,))
+            row = cursor.fetchone()
+            conn.close()
+            if row:
+                return {
+                    'name': row[0],
+                    'age': row[1],
+                    'age_group': row[2],
+                    'cal_fist_val': row[3],
+                    'cal_max_ext': row[4],
+                    'cal_min_ang': row[5],
+                    'cal_max_ang': row[6],
+                    'cal_active': row[7]
+                }
+        except Exception as e:
+            print(f"Error fetching patient by ID: {e}")
+        return None
 
     def get_all_patients(self):
         try:
@@ -2451,7 +2496,8 @@ class PhysioSystem:
         # Patient Information
         self.patient_name = ""
         self.patient_age = ""
-        self.input_active = "name"  # "name" or "age"
+        self.patient_id_str = ""
+        self.input_active = "id"  # default to "id"
         
         self.running = True
         self.session_start = None
@@ -2593,26 +2639,7 @@ class PhysioSystem:
 
     def _refresh_patient_profiles(self):
         """Query existing patients and construct zero-keyboard buttons for the top 3"""
-        try:
-            patients = self.db.get_all_patients()
-            # Select top 3 patients
-            top_patients = patients[:3]
-            
-            self.patient_profile_buttons = {}
-            left_x = 50
-            cam_x = WINDOW_WIDTH - 480 - 40 # 760
-            input_w = cam_x - left_x - 40   # 670
-            btn_y = 515
-            btn_w = (input_w - 20) // 3     # 216
-            btn_h = 50
-            
-            for i, p in enumerate(top_patients):
-                px = left_x + i * (btn_w + 10)
-                btn = CloseButton(px, btn_y, btn_w, btn_h)
-                btn.duration = 1.5
-                self.patient_profile_buttons[p['name']] = btn
-        except Exception as e:
-            print(f"Error refreshing patient profiles: {e}")
+        self.patient_profile_buttons = {}
         
     def run(self):
         """Main application loop with initial splash screen"""
@@ -2796,12 +2823,16 @@ class PhysioSystem:
                         self.patient_name = self.patient_name[:-1]
                     elif self.input_active == "age":
                         self.patient_age = self.patient_age[:-1]
+                    elif self.input_active == "id":
+                        self.patient_id_str = self.patient_id_str[:-1]
                 elif event.key == pygame.K_TAB:
-                    # Switch between name and age fields
-                    self.input_active = "age" if self.input_active == "name" else "name"
+                    # Switch between fields
+                    if self.input_active == "id": self.input_active = "name"
+                    elif self.input_active == "name": self.input_active = "age"
+                    else: self.input_active = "id"
                 elif event.key == pygame.K_RETURN:
-                    # Submit if both fields are filled
-                    if self.patient_name and self.patient_age:
+                    # Submit if ID is provided OR (name and age) are provided
+                    if self.patient_id_str or (self.patient_name and self.patient_age):
                         self._submit_registration()
                 else:
                     # Add character to active field
@@ -2811,6 +2842,9 @@ class PhysioSystem:
                     elif self.input_active == "age" and len(self.patient_age) < 3:
                         if event.unicode.isdigit():
                             self.patient_age += event.unicode
+                    elif self.input_active == "id" and len(self.patient_id_str) < 30:
+                        if event.unicode.isprintable():
+                            self.patient_id_str += event.unicode
                             
             # Therapist Dashboard shortcut
             elif event.type == pygame.KEYDOWN and self.state == GameState.MAIN_MENU:
@@ -3061,6 +3095,33 @@ class PhysioSystem:
 
     def _submit_registration(self):
         """Process patient registration and auto-assign age group"""
+        # 1. Check if ID Number is provided
+        if self.patient_id_str.strip():
+            existing_p = self.db.get_patient_by_id(self.patient_id_str.strip())
+            if existing_p:
+                self.patient_name = existing_p['name']
+                self.patient_age = str(existing_p['age'])
+                self.age_group = AgeGroup(existing_p['age_group'])
+                if existing_p.get('cal_active', 0):
+                    self.calibrated_fist_val = existing_p.get('cal_fist_val', 0.12)
+                    self.calibrated_max_extension = existing_p.get('cal_max_ext', 170.0)
+                    self.calibrated_min_angle = existing_p.get('cal_min_ang', 15.0)
+                    self.calibrated_max_angle = existing_p.get('cal_max_ang', 90.0)
+                    self.hand_engine.fist_threshold = self.calibrated_fist_val
+                    self.hand_engine.calibrated_max_extension = self.calibrated_max_extension
+                    self.hand_engine.calibration_active = True
+                    self.calibration_active = True
+                self.state = GameState.MAIN_MENU
+                self.sounds.play('select')
+                print(f"Logged in via ID: {self.patient_id_str}")
+                return
+            else:
+                print(f"No profile found for ID: {self.patient_id_str}")
+                # Clear invalid ID and return
+                self.patient_id_str = ""
+                return
+
+        # 2. Name + Age fallback
         try:
             age = int(self.patient_age)
             
@@ -3093,7 +3154,7 @@ class PhysioSystem:
                     print(f"[SUCCESS] Existing Patient Calibration Loaded: Fist={self.calibrated_fist_val}, MaxExt={self.calibrated_max_extension}")
             else:
                 # Save new profile to DB
-                self.db.save_patient(self.patient_name, age, self.age_group.value)
+                self.db.save_patient(self.patient_name, age, self.age_group.value, id_number=self.patient_id_str.strip() or None)
                 # Refresh local top-3 profile buttons
                 self._refresh_patient_profiles()
 
@@ -3906,16 +3967,42 @@ class PhysioSystem:
         left_x = 50
         input_w = cam_x - left_x - 40 # Fill remaining space
         
-        # Patient Name Field
+        # --- Mode 1: Clinical ID Login ---
+        y_id = y_start
+        id_active = self.input_active == "id"
+        id_col = (0, 255, 200) if id_active else (60, 100, 120)
+        scr.blit(self.font_hint.render("MODE 1: CLINICAL ID LOGIN", True, id_col), (left_x, y_id))
+        
+        id_box = pygame.Rect(left_x, y_id+25, input_w, 50)
+        pygame.draw.rect(scr, (8, 14, 20), id_box, border_radius=6)
+        
+        if id_active:
+            pygame.draw.rect(scr, (0, 255, 200), id_box, 2, border_radius=6)
+            pygame.draw.rect(scr, (0, 150, 120), id_box.inflate(-2, -2), 1, border_radius=5)
+        else:
+            pygame.draw.rect(scr, (40, 60, 80), id_box, 1, border_radius=6)
+            
+        d_id = self.patient_id_str + ("_" if id_active and int(t*2)%2==0 else "")
+        id_surf = self.font_medium.render(d_id or "Enter ID to Login...", True, (255, 255, 255) if self.patient_id_str else (80, 80, 80))
+        id_rect = id_surf.get_rect(midleft=(id_box.x + 15, id_box.centery))
+        scr.blit(id_surf, id_rect)
+
+        # --- Divider ---
+        y_div = y_id + 90
+        pygame.draw.line(scr, (40, 60, 80), (left_x, y_div), (left_x + input_w, y_div), 1)
+        or_txt = self.font_small.render("OR", True, (60, 100, 120))
+        scr.blit(or_txt, or_txt.get_rect(center=(left_x + input_w // 2, y_div)))
+
+        # --- Mode 2: Guest Registration ---
+        y_name = y_div + 20
         name_active = self.input_active == "name"
         name_col = (0, 255, 200) if name_active else (60, 100, 120)
-        scr.blit(self.font_hint.render("PATIENT IDENTIFIER (NAME)", True, name_col), (left_x, y_start))
+        scr.blit(self.font_hint.render("MODE 2: GUEST REGISTRATION (NAME)", True, name_col), (left_x, y_name))
         
-        name_box = pygame.Rect(left_x, y_start+25, input_w, 50)
+        name_box = pygame.Rect(left_x, y_name+25, input_w, 50)
         pygame.draw.rect(scr, (8, 14, 20), name_box, border_radius=6)
         
         if name_active:
-            # High-tech Sci-Fi active glow borders
             pygame.draw.rect(scr, (0, 255, 200), name_box, 2, border_radius=6)
             pygame.draw.rect(scr, (0, 150, 120), name_box.inflate(-2, -2), 1, border_radius=5)
         else:
@@ -3923,21 +4010,19 @@ class PhysioSystem:
         
         d_name = self.patient_name + ("_" if name_active and int(t*2)%2==0 else "")
         ns = self.font_medium.render(d_name or "Enter Name...", True, (255, 255, 255) if self.patient_name else (80, 80, 80))
-        # Center name text perfectly in the vertical center of the input box
         ns_rect = ns.get_rect(midleft=(name_box.x + 15, name_box.centery))
         scr.blit(ns, ns_rect)
 
         # Patient Age Field
-        y_age = y_start + 90
+        y_age = y_name + 90
         age_active = self.input_active == "age"
         age_col = (0, 255, 200) if age_active else (60, 100, 120)
-        scr.blit(self.font_hint.render("PATIENT AGE", True, age_col), (left_x, y_age))
+        scr.blit(self.font_hint.render("GUEST AGE", True, age_col), (left_x, y_age))
         
         age_box = pygame.Rect(left_x, y_age+25, input_w // 2, 50)
         pygame.draw.rect(scr, (8, 14, 20), age_box, border_radius=6)
         
         if age_active:
-            # High-tech Sci-Fi active glow borders
             pygame.draw.rect(scr, (0, 255, 200), age_box, 2, border_radius=6)
             pygame.draw.rect(scr, (0, 150, 120), age_box.inflate(-2, -2), 1, border_radius=5)
         else:
@@ -3945,7 +4030,6 @@ class PhysioSystem:
         
         d_age = self.patient_age + ("_" if age_active and int(t*2)%2==0 else "")
         as_ = self.font_medium.render(d_age or "00", True, (255, 255, 255) if self.patient_age else (80, 80, 80))
-        # Center age text perfectly in the vertical center of the input box
         as_rect = as_.get_rect(midleft=(age_box.x + 15, age_box.centery))
         scr.blit(as_, as_rect)
 
@@ -3957,7 +4041,6 @@ class PhysioSystem:
             elif age > 60: label, lcol = "GERIATRIC CARE", (255, 200, 100)
             
             mode_tag = self.font_small.render(f"[{label}]", True, lcol)
-            # Center mode tag perfectly centered vertically next to the age box
             scr.blit(mode_tag, mode_tag.get_rect(midleft=(left_x + input_w // 2 + 15, age_box.centery)))
 
         # ── Medical Sub-Panel ──────────────────────────────────────────
@@ -3992,15 +4075,7 @@ class PhysioSystem:
                     base_col=(30, 40, 55), hov_col=(0, 120, 180), border_col=(0, 180, 220)
                 )
 
-        # ── Previous Patient Profiles Directory ───────────────────────
-        if hasattr(self, 'patient_profile_buttons') and self.patient_profile_buttons:
-            lbl_surf = self.font_hint.render("SELECT PREVIOUS CLINICAL PROFILE:", True, (0, 255, 180))
-            scr.blit(lbl_surf, (left_x, 490))
-            for name, btn in self.patient_profile_buttons.items():
-                btn.draw(
-                    scr, self.font_hint, name,
-                    base_col=(10, 22, 36), hov_col=(0, 120, 180), border_col=(0, 200, 150)
-                )
+
 
         # Cursor
         hand_data = self.hand_engine.get_hand_data()

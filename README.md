@@ -32,79 +32,43 @@
 [![MediaPipe](https://img.shields.io/badge/MediaPipe-CV-0097A7?style=for-the-badge&logo=google&logoColor=white)](https://mediapipe.dev)
 [![Pygame](https://img.shields.io/badge/Pygame-UI-1C1C1C?style=for-the-badge&logo=pygame&logoColor=white)](https://pygame.org)
 [![OpenCV](https://img.shields.io/badge/OpenCV-Vision-5C3EE8?style=for-the-badge&logo=opencv&logoColor=white)](https://opencv.org)
-[![License](https://img.shields.io/badge/License-MIT-22C55E?style=for-the-badge)](LICENSE)
 
 A gesture-controlled physiotherapy application built for patients recovering from hand injuries.
 Navigate menus, play games, and track your recovery — **using only your hands.**
 
 </div>
 
-
-
-## ✨ Features
+## ✨ Key Features
 
 | | Feature | Description |
 |---|---|---|
 | 🖱️ | **Zero Keyboard Navigation** | Hover-to-Select menus powered entirely by hand gestures |
 | 📡 | **Real-Time Feedback** | Mirrored webcam feed with MediaPipe landmarks overlaid |
-| 📊 | **Progress Tracking** | Monitors flexion angles and session scores per session |
+| 📊 | **Therapist Dashboard** | Web interface for doctors to manage patients and view analytics |
+| 🔐 | **Dual Authentication** | Login using Clinical ID or Guest Mode (Name & Age) |
 | 🎮 | **Level-Based Progression** | Three exercise levels from warm-up to fine motor control |
-| ⚡ | **60 FPS Performance** | Threaded async processing for a smooth, lag-free experience |
 
+## 🚀 Two-Part Architecture
 
+The project is split into two integrated components:
 
-## 🎮 Rehabilitation Levels
+### 1. The Rehabilitation Game (`zero_keyboard_physio.py`)
+A Pygame-based, interactive computer vision game for patients. It features:
+- Hand tracking using Google MediaPipe.
+- Exercise routines for Range of Motion, Coordination, and Fine Motor skills.
+- Local SQLite database logging (`rehab_data.db`).
 
-| 🎈 Level 1 — Warm Up | 🎯 Level 2 — Coordination | ✊ Level 3 — Fine Motor |
-|:---:|:---:|:---:|
-| Range of Motion | Precision Catching | Fist ↔ Open Transitions |
-| Balloon Exercises | Target Movements | Advanced Gestures |
-| *Early-stage recovery* | *Rebuild hand-eye coordination* | *Dexterity & neuromuscular rehab* |
-
-
-## ⚙️ How It Works
-
-```
-  📷 Webcam Capture
-       │
-       ▼
-  🤖 MediaPipe  ──▶  21 Hand Landmarks / Frame
-       │
-       ▼
-  📐 Flexion Angle Analysis
-       │
-       ├──▶  🎮  Game Logic (Pygame)
-       │
-       └──▶  📊  Progress Tracking & Session Logs
-```
-
-1. **Capture** — Webcam frames are captured and mirrored in real time.
-2. **Detect** — MediaPipe identifies 21 hand landmarks per frame.
-3. **Analyze** — Flexion angles are computed from joint positions.
-4. **Respond** — The game reacts to gestures; progress is recorded.
-
-
-
-## 🛠️ Tech Stack
-
-```
-┌─────────────────────────────────────────────────┐
-│              AI Hand Rehab System               │
-├─────────────────┬───────────────────────────────┤
-│  Computer Vision│  MediaPipe · OpenCV           │
-│  Graphics & UI  │  Pygame                       │
-│  Language       │  Python 3.x                   │
-│  Performance    │  Threaded Async @ 60 FPS      │
-└─────────────────┴───────────────────────────────┘
-```
-
-
+### 2. The Therapist Dashboard (`therapist_dashboard.py`)
+A web-based portal designed for medical professionals. It features:
+- Patient management and unique Clinical ID generation (e.g., `HR001`).
+- Analytics charts mapping a patient's recovery progress over time.
+- Clinical session notes and downloadable PDF reports.
 
 ## 📦 Installation
 
 **1. Clone the repository**
 ```bash
-git clone https://github.com/VaradScript/AI-Hand-Rehabilitation-System.git
+git clone https://github.com/Sumanth965/AI-Hand-Rehabilitation-System.git
 cd AI-Hand-Rehabilitation-System
 ```
 
@@ -113,15 +77,41 @@ cd AI-Hand-Rehabilitation-System
 pip install -r requirements.txt
 ```
 
-**3. Launch the application**
+**3. Launch the Therapist Dashboard**
 ```bash
-python final_physio_game.py
+python therapist_dashboard.py
+```
+*(This will automatically open http://127.0.0.1:8000 in your browser)*
+
+**4. Launch the Rehabilitation Session**
+```bash
+python zero_keyboard_physio.py
 ```
 
 > [!WARNING]
-> A functioning webcam is required. Ensure adequate lighting for optimal hand detection accuracy.
+> A functioning webcam is required for the Rehabilitation Session. Ensure adequate lighting for optimal hand detection accuracy.
 
+## ⚙️ How It Works
 
+1. **Capture** — Webcam frames are captured and mirrored in real time.
+2. **Detect** — MediaPipe identifies 21 hand landmarks per frame.
+3. **Analyze** — Flexion angles are computed from joint positions.
+4. **Respond** — The game reacts to gestures; progress is recorded to the local database.
+5. **Review** — Therapists review the automatically generated data on the web dashboard.
+
+## ⚠️ Limitations & Future Improvements
+
+While this project provides a strong proof-of-concept for AI-powered rehabilitation, it has some limitations to be addressed in future versions:
+- **Environmental Dependency:** MediaPipe requires adequate lighting and clear contrast; poor lighting can drop the tracking frame rate.
+- **2D Depth Limitations:** Using a standard webcam means depth estimation is inferred. Future improvements could integrate 3D depth cameras (like Intel RealSense) for true spatial accuracy.
+- **Data Portability:** Currently, all data is stored locally in SQLite. Future versions aim to implement a secure, cloud-based PostgreSQL or Firebase backend for cross-device syncing.
+
+## 🔒 Security Posture
+
+This system is designed as a **local prototype** and is currently rated for non-clinical research and development. 
+- **The Good:** The system natively prevents network exposure by binding the web dashboard exclusively to `127.0.0.1`. It also utilizes parameterized database queries to prevent SQL Injection, and sanitizes all HTML outputs to prevent Cross-Site Scripting (XSS).
+- **The Bad:** The local SQLite database (`rehab_data.db`) is not encrypted at rest. Furthermore, the Therapist Dashboard currently lacks a login portal (no username/password required). 
+- **Compliance:** Due to the lack of at-rest encryption and dashboard authentication, this software is **not yet HIPAA/GDPR compliant** and should not be used to store real Protected Health Information (PHI) outside of an encrypted, access-controlled environment.
 
 ## 👨‍💻 Author
 
@@ -131,7 +121,6 @@ python final_physio_game.py
 *Developed as an MCA Major Project*
 
 [![GitHub](https://img.shields.io/badge/GitHub-VaradScript-181717?style=flat-square&logo=github)](https://github.com/VaradScript)
-
 
 *Made with 🖐️ for patients on the road to recovery.*
 

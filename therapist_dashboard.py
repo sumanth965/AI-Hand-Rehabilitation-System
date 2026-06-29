@@ -162,6 +162,28 @@ class DashboardRepository:
                 )
                 """
             )
+            # Ensure patients table exists and has id_number in case dashboard is run before the game
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS patients (
+                    name TEXT PRIMARY KEY,
+                    age INTEGER,
+                    age_group TEXT,
+                    cal_fist_val REAL DEFAULT 0.12,
+                    cal_max_ext REAL DEFAULT 170.0,
+                    cal_min_ang REAL DEFAULT 15.0,
+                    cal_max_ang REAL DEFAULT 90.0,
+                    cal_active INTEGER DEFAULT 0,
+                    id_number TEXT UNIQUE
+                )
+            """)
+            try:
+                conn.execute(f"SELECT id_number FROM patients LIMIT 1")
+            except sqlite3.OperationalError:
+                try:
+                    conn.execute(f"ALTER TABLE patients ADD COLUMN id_number TEXT")
+                    conn.execute(f"CREATE UNIQUE INDEX IF NOT EXISTS idx_patients_id_number ON patients(id_number)")
+                except Exception:
+                    pass
             conn.commit()
 
     def query(self, sql: str, params: Iterable[Any] = ()) -> list[sqlite3.Row]:
@@ -187,6 +209,7 @@ class DashboardRepository:
                 p.name,
                 p.age,
                 p.age_group,
+                COALESCE(p.id_number, '') AS id_number,
                 COALESCE(d.gender, '') AS gender,
                 COALESCE(d.injury_type, '') AS injury_type,
                 COALESCE(d.rehab_stage, '') AS rehab_stage,
@@ -205,6 +228,7 @@ class DashboardRepository:
                 s.patient_id AS name,
                 NULL AS age,
                 '' AS age_group,
+                '' AS id_number,
                 COALESCE(d.gender, '') AS gender,
                 COALESCE(d.injury_type, '') AS injury_type,
                 COALESCE(d.rehab_stage, '') AS rehab_stage,
@@ -234,14 +258,15 @@ class DashboardRepository:
         age = form.get("age", "").strip()
         age_value = int(age) if age.isdigit() else None
         age_group = form.get("age_group", "").strip()
+        id_number = form.get("id_number", "").strip() or None
         with self.connect() as conn:
             conn.execute(
                 """
-                INSERT INTO patients (name, age, age_group)
-                VALUES (?, ?, ?)
-                ON CONFLICT(name) DO UPDATE SET age = excluded.age, age_group = excluded.age_group
+                INSERT INTO patients (name, age, age_group, id_number)
+                VALUES (?, ?, ?, ?)
+                ON CONFLICT(name) DO UPDATE SET age = excluded.age, age_group = excluded.age_group, id_number = excluded.id_number
                 """,
-                (name, age_value, age_group),
+                (name, age_value, age_group, id_number),
             )
             conn.execute(
                 """
@@ -668,6 +693,7 @@ function sortTable(tableId, column) {
             f"""
             <tr>
               <td><a href="/patients?patient={quote(row['name'])}"><strong>{esc(row['name'])}</strong></a><div class="muted">{esc(row['injury_type'] or 'No injury type set')}</div></td>
+              <td>{esc(row['id_number'] or '-')}</td>
               <td>{esc(row['age'] or '-')}</td>
               <td>{esc(row['gender'] or '-')}</td>
               <td>{esc(row['rehab_stage'] or '-')}</td>
@@ -698,7 +724,7 @@ function sortTable(tableId, column) {
               </form>
             </div>
             <table id="patientsTable">
-              <thead><tr><th onclick="sortTable('patientsTable',0)">Name</th><th>Age</th><th>Gender</th><th>Stage</th><th>Sessions</th><th>Accuracy</th><th>ROM</th><th>Last Visit</th></tr></thead>
+              <thead><tr><th onclick="sortTable('patientsTable',0)">Name</th><th>ID Number</th><th>Age</th><th>Gender</th><th>Stage</th><th>Sessions</th><th>Accuracy</th><th>ROM</th><th>Last Visit</th></tr></thead>
               <tbody>{table_rows}</tbody>
             </table>
           </div>
@@ -714,6 +740,7 @@ function sortTable(tableId, column) {
           <h2>{'Edit Patient Profile' if row else 'Register Patient'}</h2>
           <form method="post" action="/patients/save" class="form-grid">
             <label>Name<input name="name" value="{esc(name)}" {'readonly' if row else ''} required></label>
+            <label>ID Number (Login)<input name="id_number" value="{esc(row['id_number'] if row else '')}" placeholder="Optional custom ID"></label>
             <label>Age<input name="age" type="number" min="0" max="120" value="{esc(row['age'] if row else '')}"></label>
             <label>Gender<input name="gender" value="{esc(row['gender'] if row else '')}" placeholder="Female, Male, Other"></label>
             <label>Age group<input name="age_group" value="{esc(row['age_group'] if row else '')}" placeholder="adult, senior"></label>
