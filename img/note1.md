@@ -42,10 +42,10 @@ Here is an honest evaluation of how well our current AI Hand Rehabilitation Syst
 
 ### 6. Limited exercise library.
 **Status: Moderately Satisfied (80% Completion)**
-- **What we have:** We upgraded from a basic tracker to a suite of **6 dedicated exercises** (Bubble Reach, Falling Catch, Pinch Transfer, Path Tracing, Grip Cycle, and Cognitive Sequence). 
-- **Accuracy:** The exercises themselves trigger with **~90% accuracy**. While 6 exercises is fantastic for a robust prototype/thesis project, a commercial clinical app typically features 20+ specialized modules.
+- **What we have:** We upgraded from a basic tracker to a suite of **8 dedicated exercises** (Bubble Reach, Falling Catch, Pinch Transfer, Path Tracing, Grip Cycle, Cognitive Sequence, Rotation Orbit, and Smart Assembly). 
+- **Accuracy:** The exercises themselves trigger with **~90% accuracy**. While 8 exercises is fantastic for a robust prototype/thesis project, a commercial clinical app typically features 20+ specialized modules.
 
 ***
 
 ### **Summary Conclusion**
-The project has **successfully solved** the accessibility gap (via ROM calibration) and the basic exercise gap (via the 6-level architecture). However, **security** and **advanced predictive modeling (AI regression)** remain the biggest unaddressed gaps that could be highlighted as "Future Scope" if you are writing a research paper!
+The project has **successfully solved** the accessibility gap (via ROM calibration) and the basic exercise gap (via the 8-level architecture). However, **security** and **advanced predictive modeling (AI regression)** remain the biggest unaddressed gaps that could be highlighted as "Future Scope" if you are writing a research paper!

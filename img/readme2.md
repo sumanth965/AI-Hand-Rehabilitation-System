@@ -1,3 +1,24 @@
+Level 1 (Flexibility / Bubble Reach): Used for range of motion, finger extension, and hand-shoulder coordination.
+Level 2 (Strength Coordination / Falling Catch): Used for sustained palm positioning, reaction timing, and coordination.
+Level 3 (Fine Motor / Pinch Transfer): Used to practice the thumb-index pinch, fine motor control, and release accuracy.
+Level 4 (Path Tracing Control): Used for smooth, controlled continuous motion along a guided path.
+Level 5 (Grip Release Cycle): Used to practice repeated hand opening and closing (fist vs. open hand).
+Level 6 (Cognitive Finger Taps / Sequence Task): Used to train motor planning and cognition by following memory sequences.
+
+
+Level 7: Rotation Orbit (Orbital Path)
+Clinical Goal: Forearm Pronation and Supination (Wrist/Forearm Rotation).
+How it works: You have a central orbital target and a satellite (the white circle). You rotate your forearm to align the satellite with the orbital target along the circular path.
+Why it's used: Previous levels mainly focused on pinching, reaching, and finger extension. Level 7 fills a major gap by specifically tracking and training the twisting/rotational movement of the forearm and wrist.
+Level 8: Smart Assembly (Stone Builder)
+Clinical Goal: Advanced Multi-stage Coordination (Pinch + Drag + Rotate).
+How it works: It requires three distinct actions combined into one sequence:
+Pinch to grab a piece (like the blue square or red triangle).
+Use your Arm to move/drag it to the blueprint (the wireframe outline).
+Rotate your wrist to fit it correctly into place.
+
+
+
 # AI Hand Rehabilitation System — Complete Workflow Documentation
 
 ## 1. Purpose and Scope
@@ -386,6 +407,45 @@ Measured signals:
 - Correct sequence steps.
 - Accuracy.
 - Response consistency.
+
+### 14.7 Level 7 — Rotation Orbit (Orbital Path)
+
+Clinical goal:
+
+- Train forearm pronation and supination (wrist/forearm rotation).
+
+Flow:
+
+1. A central orbital target and a satellite (white circle) are displayed.
+2. The patient rotates their forearm to align the satellite with the orbital target.
+3. The movement follows a circular path around the center.
+4. Keeping the satellite in the target advances progress.
+
+Measured signals:
+
+- Forearm rotation tracking accuracy.
+- Time held in target.
+- Pronation/supination range of motion.
+
+### 14.8 Level 8 — Smart Assembly (Stone Builder)
+
+Clinical goal:
+
+- Advanced multi-stage coordination combining pinch grip, arm motion, and wrist rotation.
+
+Flow:
+
+1. The patient pinches to grab a loose piece (e.g., a blue square or red triangle).
+2. The patient uses arm movement to drag the piece to the wireframe blueprint outline.
+3. The patient rotates their wrist to fit the piece correctly into the blueprint.
+4. Correct placement scores points and advances the assembly.
+5. This simulates complex real-world functional tasks (e.g., turning a key or building).
+
+Measured signals:
+
+- Pinch success and hold consistency.
+- Translation (drag) accuracy.
+- Wrist rotation accuracy.
 
 ## 15. In-Session Feedback Workflow
 
