@@ -23,6 +23,7 @@ import pyttsx3
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from adaptive_ai_engine import AdaptiveRehabEngine, ForearmExerciseClassifier
 try:
     from reportlab.pdfgen import canvas
     from reportlab.lib.pagesizes import letter
@@ -107,6 +108,8 @@ LEVEL_DISPLAY_NAMES = {
     4: "Path Tracing Control",
     5: "Grip Release Cycle",
     6: "Cognitive Finger Taps",
+    7: "Forearm Rotation Orbit",
+    8: "Smart Functional Assembly",
 }
 
 # Game Settings
@@ -860,6 +863,10 @@ class HandEngine:
             self.thread.join(timeout=2.0)
         if self.webcam:
             self.webcam.stop()
+        try:
+            self.hands.close()
+        except Exception:
+            pass
 
 # ============================================================================
 # DATABASE MANAGER
@@ -2531,6 +2538,8 @@ class PhysioSystem:
         # Components
         self.hand_engine = HandEngine()
         self.db = DatabaseManager()
+        self.adaptive_engine = AdaptiveRehabEngine(self.db.db_path)
+        self.forearm_classifier = ForearmExerciseClassifier()
         self.sidebar = MedicalSidebarV2()
         self.sounds = SoundSystem()
         self.particles = ParticleSystem()
@@ -2555,6 +2564,13 @@ class PhysioSystem:
         self.reach_distance = 0.0
         self.accuracy_hits = 0
         self.accuracy_attempts = 0
+        self.active_prescription = None
+        self.session_time_limit = LEVEL_DURATION
+        self.adaptive_target_scale = 1.0
+        self.adaptive_speed_scale = 1.0
+        self.adaptive_guidance_level = "standard"
+        self.forearm_angle_history = deque(maxlen=90)
+        self.forearm_assessment = None
         
         # Visual feedback
         self.combo = 0
@@ -3355,7 +3371,7 @@ class PhysioSystem:
                             self.reach_distance = max(self.reach_distance, reach)
 
         # Check if all bubbles popped (only when list is non-empty)
-        if (self.bubbles and all(b.popped for b in self.bubbles)) or (time.time() - getattr(self, 'level_wall_start', 0.0) > LEVEL_DURATION * 1.5):
+        if (self.bubbles and all(b.popped for b in self.bubbles)) or (time.time() - getattr(self, 'level_wall_start', 0.0) > self.session_time_limit * 1.5):
             self._end_level()
     
     def _update_level2(self, hand_data: HandData):
@@ -3368,7 +3384,7 @@ class PhysioSystem:
         
         # Update falling items
         for item in self.falling_items[:]:
-            item.y += item.speed * speed_mult * getattr(self, 'pacing_multiplier', 1.0)
+            item.y += item.speed * speed_mult * getattr(self, 'pacing_multiplier', 1.0) * getattr(self, 'adaptive_speed_scale', 1.0)
             
             # Check collision with basket
             if (item.y >= self.basket_y - 20 and 
@@ -3440,7 +3456,7 @@ class PhysioSystem:
             self._spawn_falling_item()
         
         # End after 30 seconds
-        if (time.time() - self.session_start > 30) or (time.time() - getattr(self, 'level_wall_start', 0.0) > LEVEL_DURATION * 1.5):
+        if (time.time() - self.session_start > self.session_time_limit) or (time.time() - getattr(self, 'level_wall_start', 0.0) > self.session_time_limit * 1.5):
             self._end_level()
     
     def _update_level3(self, hand_data: HandData):
@@ -3448,7 +3464,7 @@ class PhysioSystem:
         # Update seeds
         for seed in self.seeds[:]:
             if not seed.grabbed:
-                seed.y += seed.speed * getattr(self, 'pacing_multiplier', 1.0)
+                seed.y += seed.speed * getattr(self, 'pacing_multiplier', 1.0) * getattr(self, 'adaptive_speed_scale', 1.0)
                 
                 # Check pinch grab
                 if hand_data.is_pinching and hand_data.index_tip:
@@ -3496,7 +3512,7 @@ class PhysioSystem:
             self._spawn_seed()
         
         # End after 30 seconds
-        if (time.time() - self.session_start > 30) or (time.time() - getattr(self, 'level_wall_start', 0.0) > LEVEL_DURATION * 1.5):
+        if (time.time() - self.session_start > self.session_time_limit) or (time.time() - getattr(self, 'level_wall_start', 0.0) > self.session_time_limit * 1.5):
             self._end_level()
 
     def _update_level4(self, hand_data: HandData):
@@ -3504,7 +3520,7 @@ class PhysioSystem:
         # Time-based movement for the target (Figure 8 pattern)
         theme = self._get_theme()
         speed_mult = theme.get("speed_multiplier", 1.0)
-        self.trace_t += 0.008 * speed_mult * getattr(self, 'pacing_multiplier', 1.0)
+        self.trace_t += 0.008 * speed_mult * getattr(self, 'pacing_multiplier', 1.0) * getattr(self, 'adaptive_speed_scale', 1.0)
         
         # Figure 8 (Lissajous curve) parameters
         cx = GAME_AREA_WIDTH // 2
@@ -3529,12 +3545,12 @@ class PhysioSystem:
             if int(self.trace_t * 100) % 5 == 0:
                 self.accuracy_attempts += 1
                 self.recent_tracing_attempts += 1
-                if dist < 85: # Good trace radius (was 60)
+                if dist < 85 * getattr(self, 'adaptive_target_scale', 1.0): # Good trace radius (was 60)
                     self.accuracy_hits += 1
                     self.recent_tracing_hits += 1
                     self.score += int(5 * self.score_multiplier)
                     
-                    if dist < 45: # Perfect trace (was 30)
+                    if dist < 45 * getattr(self, 'adaptive_target_scale', 1.0): # Perfect trace (was 30)
                         self.combo += 1
                         self.particles.emit(int(self.trace_target_x), int(self.trace_target_y), COLOR_SUCCESS, 2)
                 else:
@@ -3557,7 +3573,7 @@ class PhysioSystem:
                 self.popups.append(ScorePopup(self.trace_target_x, self.trace_target_y - 40, "SMOOTH!"))
                 
         # End after 30 seconds or wall-clock safety ceiling
-        if (time.time() - self.session_start > 30) or (time.time() - getattr(self, 'level_wall_start', 0.0) > LEVEL_DURATION * 1.5):
+        if (time.time() - self.session_start > self.session_time_limit) or (time.time() - getattr(self, 'level_wall_start', 0.0) > self.session_time_limit * 1.5):
             self._end_level()
 
     def _update_level5(self, hand_data: HandData):
@@ -3598,7 +3614,7 @@ class PhysioSystem:
                 self._adjust_pacing("slow")
                 
         # End after 30 seconds
-        if (time.time() - self.session_start > 30) or (time.time() - getattr(self, 'level_wall_start', 0.0) > LEVEL_DURATION * 1.5):
+        if (time.time() - self.session_start > self.session_time_limit) or (time.time() - getattr(self, 'level_wall_start', 0.0) > self.session_time_limit * 1.5):
             self.accuracy_attempts = max(self.accuracy_attempts, 5) # Provide base attempts
             self._end_level()
 
@@ -3686,7 +3702,7 @@ class PhysioSystem:
                 self._last_hover = None
                 self.simon_active_pad = None
 
-        if (time.time() - self.session_start > 30) or (time.time() - getattr(self, 'level_wall_start', 0.0) > LEVEL_DURATION * 1.5):
+        if (time.time() - self.session_start > self.session_time_limit) or (time.time() - getattr(self, 'level_wall_start', 0.0) > self.session_time_limit * 1.5):
             self.accuracy_attempts = max(self.accuracy_attempts, 5)
             self._end_level()
 
@@ -3702,9 +3718,20 @@ class PhysioSystem:
 
         if not hand_data.index_tip or not hand_data.wrist: return
         
-        # We scale the physical rotation (-90 to +90) into a 360 degree orbit
-        # Physical rotation is usually smaller, so * 2 gives a full circle feel
-        current_angle = hand_data.wrist_rotation_angle * 2.0
+        if getattr(self, "wrist_rotation_baseline", None) is None:
+            self.wrist_rotation_baseline = hand_data.wrist_rotation_angle
+
+        relative_rotation = hand_data.wrist_rotation_angle - self.wrist_rotation_baseline
+        # Map patient movement relative to their starting posture. This keeps
+        # Level 7 hand-only and avoids camera/hand-label dependent absolute angles.
+        current_angle = relative_rotation * 2.0
+        self.forearm_angle_history.append(hand_data.wrist_rotation_angle)
+        self.forearm_assessment = self.forearm_classifier.classify(
+            hand_data.wrist_rotation_angle,
+            self.forearm_angle_history,
+            getattr(hand_data, 'wrist_deviation_angle', 0.0),
+            getattr(self, 'wrist_hold_time', 0.0),
+        )
         
         # Normalize angles to 0-360 for comparison
         target_norm = self.wrist_target_angle % 360
@@ -3713,9 +3740,9 @@ class PhysioSystem:
         diff = abs(current_norm - target_norm)
         if diff > 180: diff = 360 - diff
         
-        if diff < 25.0: # 25 degree tolerance for "locking on"
+        if diff < getattr(self, 'rotation_tolerance', 25.0): # tolerance adapts for "locking on"
             self.wrist_hold_time += 1/30.0
-            if self.wrist_hold_time > 1.5:
+            if self.wrist_hold_time > getattr(self, 'rotation_hold_required', 1.5):
                 # Success!
                 self.score += int(15 * getattr(self, 'score_multiplier', 1.0))
                 self.accuracy_hits += 1
@@ -3733,7 +3760,7 @@ class PhysioSystem:
             self.wrist_hold_time = 0.0
             
         import time
-        if (time.time() - getattr(self, 'session_start', 0)) > 60:
+        if (time.time() - getattr(self, 'session_start', 0)) > getattr(self, 'session_time_limit', 60):
             self.accuracy_attempts += 1
             self._end_level()
 
@@ -3750,7 +3777,7 @@ class PhysioSystem:
             for part in getattr(self, 'assembly_parts', []):
                 if not part.is_locked:
                     dist = ((part.current_pos[0] - hx)**2 + (part.current_pos[1] - hy)**2)**0.5
-                    if dist < 80:
+                    if dist < 80 * getattr(self, 'adaptive_target_scale', 1.0):
                         part.is_grabbed = True
                         self.sounds.play('select')
                         break
@@ -3763,7 +3790,7 @@ class PhysioSystem:
                     ang_diff = abs(part.current_angle - part.target_angle) % 360
                     if ang_diff > 180: ang_diff = 360 - ang_diff
                     
-                    if dist < 50 and ang_diff < 30:
+                    if dist < getattr(self, 'assembly_position_tolerance', 50.0) and ang_diff < getattr(self, 'assembly_angle_tolerance', 30.0):
                         part.is_locked = True
                         part.current_pos = list(part.target_pos)
                         part.current_angle = part.target_angle
@@ -3786,7 +3813,7 @@ class PhysioSystem:
         self.was_pinching = is_pinching
         
         import time
-        if (time.time() - self.session_start > 120):
+        if (time.time() - self.session_start > max(getattr(self, 'session_time_limit', 60), 60)):
             self.accuracy_attempts += 1
             self._end_level()
 
@@ -4699,8 +4726,8 @@ class PhysioSystem:
     def _spawn_bubbles(self):
         self.bubbles.clear()
         theme = self._get_theme()
-        spd = theme["speed_multiplier"]
-        sz = int(60 * theme["size_multiplier"])
+        spd = theme["speed_multiplier"] * getattr(self, 'adaptive_speed_scale', 1.0)
+        sz = int(60 * theme["size_multiplier"] * getattr(self, 'adaptive_target_scale', 1.0))
         bubble_color = theme["primary_color"]
 
         positions = [
@@ -4721,8 +4748,8 @@ class PhysioSystem:
 
     def _spawn_falling_item(self):
         theme = self._get_theme()
-        spd = theme["speed_multiplier"]
-        sz = int(25 * theme["size_multiplier"])
+        spd = theme["speed_multiplier"] * getattr(self, 'adaptive_speed_scale', 1.0)
+        sz = int(25 * theme["size_multiplier"] * getattr(self, 'adaptive_target_scale', 1.0))
 
         x = random.randint(100, GAME_AREA_WIDTH - 100)
         y = -30
@@ -4747,8 +4774,8 @@ class PhysioSystem:
 
     def _spawn_seed(self):
         theme = self._get_theme()
-        spd = theme["speed_multiplier"]
-        sz = int(18 * theme["size_multiplier"])
+        spd = theme["speed_multiplier"] * getattr(self, 'adaptive_speed_scale', 1.0)
+        sz = int(18 * theme["size_multiplier"] * getattr(self, 'adaptive_target_scale', 1.0))
 
         x = random.randint(100, GAME_AREA_WIDTH - 100)
         y = -30
@@ -4915,6 +4942,59 @@ class PhysioSystem:
                 self.reach_distance, avg_hand_angle,
                 pain_level=self.pain_level, patient_id=self.patient_name
             )
+            session_id = getattr(self.db, 'last_session_id', None)
+
+            rotation_smoothness = 0.7
+            if isinstance(getattr(self, 'forearm_assessment', None), dict):
+                rotation_smoothness = float(self.forearm_assessment.get('smoothness', 0.7))
+                try:
+                    self.forearm_classifier.save_assessment(
+                        self.db.db_path,
+                        self.patient_name or "Unknown",
+                        self.current_level,
+                        self.forearm_assessment,
+                        session_id=session_id,
+                    )
+                except Exception as exc:
+                    print(f"Forearm assessment save failed: {exc}")
+
+            movement_quality = min(1.0, max(0.0, (avg_accuracy / 100.0) * 0.65 + min(avg_hand_angle / 90.0, 1.0) * 0.35))
+            fatigue_index = 0.0
+            if duration > 0 and self.accuracy_attempts > 0:
+                fatigue_index = min(1.0, max(0.0, (duration / max(getattr(self, 'session_time_limit', LEVEL_DURATION), 1.0) - 1.0) * 0.5))
+            if self.pain_level >= 6:
+                fatigue_index = max(fatigue_index, min(1.0, self.pain_level / 10.0))
+
+            try:
+                recovery_prediction = self._get_recovery_prediction()
+                next_prescription = self.adaptive_engine.recommend(
+                    self.patient_name or "Unknown",
+                    self.current_level,
+                    avg_accuracy,
+                    avg_hand_angle,
+                    self.pain_level,
+                    duration,
+                    self.score,
+                    movement_quality=movement_quality,
+                    fatigue_index=fatigue_index,
+                    rotation_smoothness=rotation_smoothness,
+                    session_id=session_id,
+                    recovery_prediction=recovery_prediction,
+                )
+                self.adaptive_recommendation = next_prescription
+                sensei_message = self.adaptive_engine.coaching_message(
+                    self.patient_name or "Unknown",
+                    self.current_level,
+                    next_prescription,
+                    avg_accuracy,
+                    avg_hand_angle,
+                    self.pain_level,
+                    session_id=session_id,
+                )
+                self.adaptive_sensei_message = sensei_message
+                VOICE.speak(sensei_message)
+            except Exception as exc:
+                print(f"Adaptive recommendation failed: {exc}")
 
             self.session_data = self.db.get_last_session()
             if not self.session_data:
@@ -5472,8 +5552,8 @@ class PhysioSystem:
                 self.next_button.hover_start = None
                 
         # NEXT GAME
-        if hasattr(self, 'next_button') and getattr(self, 'current_level', 1) < 6 and self.next_button.update(hand_data.index_tip):
-            self.pending_level = min(6, self.current_level + 1)
+        if hasattr(self, 'next_button') and getattr(self, 'current_level', 1) < 8 and self.next_button.update(hand_data.index_tip):
+            self.pending_level = min(8, self.current_level + 1)
             self.sounds.play('select')
             self.menu_button.hover_start = None
             self.close_button.hover_start = None
@@ -5503,6 +5583,7 @@ class PhysioSystem:
         self.last_pacing_voice_time = 0.0
         self.recent_tracing_attempts = 0
         self.recent_tracing_hits = 0
+        self._apply_adaptive_prescription(lv)
         if lv == 1:
             self.state = GameState.LEVEL1_FLEXIBILITY
             self._spawn_bubbles()
@@ -5534,6 +5615,7 @@ class PhysioSystem:
             self.wrist_target_angle = 45.0
             self.wrist_hold_time = 0.0
             self.wrist_mode = "rotation"
+            self.wrist_rotation_baseline = None
             VOICE.speak("Level 7: Rotation Orbit. Rotate your forearm to align the satellite with the orbital target.")
         elif lv == 8:
             self.state = GameState.LEVEL8_SMART_ASSEMBLY
@@ -5551,6 +5633,36 @@ class PhysioSystem:
         self.sounds.play('select')
         self.popups.append(ScorePopup(GAME_AREA_WIDTH//2, WINDOW_HEIGHT//2 - 60, "POSTURE FIX: Sit up & keep shoulders relaxed!"))
 
+    def _apply_adaptive_prescription(self, level: int):
+        """Load the latest AI prescription and map it onto game parameters."""
+        try:
+            prescription = self.adaptive_engine.latest_prescription(self.patient_name or "Unknown", level)
+        except Exception as exc:
+            print(f"Adaptive prescription unavailable: {exc}")
+            prescription = None
+
+        self.active_prescription = prescription
+        self.adaptive_target_scale = getattr(prescription, "target_scale", 1.0)
+        self.adaptive_speed_scale = getattr(prescription, "speed_scale", 1.0)
+        self.session_time_limit = getattr(prescription, "time_limit", LEVEL_DURATION)
+        self.adaptive_guidance_level = getattr(prescription, "guidance_level", "standard")
+        self.rotation_tolerance = getattr(prescription, "rotation_tolerance", 25.0)
+        self.rotation_hold_required = getattr(prescription, "hold_seconds", 1.5)
+        self.assembly_position_tolerance = getattr(prescription, "assembly_position_tolerance", 50.0)
+        self.assembly_angle_tolerance = getattr(prescription, "assembly_angle_tolerance", 30.0)
+        self.forearm_angle_history.clear()
+        self.forearm_assessment = None
+
+        if prescription:
+            print(
+                "[ADAPTIVE] "
+                f"L{level} tier {prescription.difficulty_tier}: "
+                f"{prescription.progression} | {prescription.rationale}"
+            )
+            if prescription.guidance_level == "high":
+                VOICE.speak("Adaptive support is active. Targets are easier and pacing is slower for safer control.")
+            elif prescription.progression == "advance":
+                VOICE.speak("Adaptive challenge is active. The next task will be slightly harder.")
 
     def _update_pain_scale(self, hand_data: HandData):
         """Select a pain dot (0-10) using either hands-free hover (1.5s) or physical mouse click"""
@@ -6281,7 +6393,7 @@ class PhysioSystem:
             
             # PLAY AGAIN, NEXT, MAIN MENU, CLOSE buttons
             self.menu_button.draw(self.screen, self.font_small, text="PLAY AGAIN", base_col=(25,40,25), hov_col=(40,80,40))
-            if hasattr(self, 'next_button') and getattr(self, 'current_level', 1) < 6:
+            if hasattr(self, 'next_button') and getattr(self, 'current_level', 1) < 8:
                 self.next_button.draw(self.screen, self.font_small, text="NEXT GAME", base_col=(25,25,50), hov_col=(40,40,80))
             self.home_button.draw(self.screen, self.font_small, text="MAIN MENU", base_col=(60,30,90), hov_col=(100,50,150))
             self.close_button.draw(self.screen, self.font_small)

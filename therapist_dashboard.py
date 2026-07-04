@@ -11,6 +11,7 @@ from __future__ import annotations
 import base64
 import html
 import io
+import json
 import math
 import os
 import sqlite3
@@ -28,6 +29,7 @@ import matplotlib
 
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
+from digital_twin_rehab import DigitalTwinRehabModel
 
 
 DB_PATH = "rehab_data.db"
@@ -43,6 +45,8 @@ LEVEL_NAMES = {
     4: "Coordination - Path Tracing",
     5: "Grip Release - Open/Close Cycle",
     6: "Cognitive Motor - Sequence Tap",
+    7: "Forearm Rotation - Rotation Orbit",
+    8: "Functional Motor - Smart Assembly",
 }
 
 
@@ -126,6 +130,7 @@ class Page:
 class DashboardRepository:
     def __init__(self, db_path: str = DB_PATH):
         self.db_path = db_path
+        self.digital_twin = DigitalTwinRehabModel(db_path)
         self.ensure_schema()
 
     def connect(self) -> sqlite3.Connection:
@@ -158,6 +163,108 @@ class DashboardRepository:
                     note TEXT NOT NULL,
                     recommendation TEXT DEFAULT '',
                     next_plan TEXT DEFAULT '',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS adaptive_prescriptions (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    patient_id TEXT NOT NULL,
+                    session_id INTEGER,
+                    level INTEGER NOT NULL,
+                    difficulty_tier INTEGER NOT NULL,
+                    readiness_score REAL DEFAULT 50,
+                    target_scale REAL NOT NULL,
+                    speed_scale REAL NOT NULL,
+                    required_rom REAL NOT NULL,
+                    time_limit REAL NOT NULL,
+                    repetitions INTEGER NOT NULL,
+                    hold_seconds REAL NOT NULL,
+                    rotation_tolerance REAL NOT NULL,
+                    assembly_position_tolerance REAL NOT NULL,
+                    assembly_angle_tolerance REAL NOT NULL,
+                    guidance_level TEXT NOT NULL,
+                    progression TEXT NOT NULL,
+                    risk_level TEXT NOT NULL,
+                    recovery_trend TEXT DEFAULT 'stable',
+                    override_recommendation TEXT DEFAULT 'No therapist override suggested.',
+                    ai_confidence_score REAL DEFAULT 75,
+                    override_probability REAL DEFAULT 0.25,
+                    recommendation_reliability REAL DEFAULT 75,
+                    explanation_json TEXT DEFAULT '{}',
+                    rationale TEXT NOT NULL,
+                    metrics_json TEXT DEFAULT '{}',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS therapist_overrides (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    prescription_id INTEGER,
+                    patient_id TEXT NOT NULL,
+                    therapist_id TEXT DEFAULT 'Therapist',
+                    decision TEXT NOT NULL,
+                    reason TEXT NOT NULL,
+                    therapist_reason TEXT DEFAULT '',
+                    ai_recommendation_json TEXT DEFAULT '{}',
+                    modified_recommendation_json TEXT DEFAULT '{}',
+                    patient_context_json TEXT DEFAULT '{}',
+                    session_metrics_json TEXT DEFAULT '{}',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            for column, definition in [
+                ("readiness_score", "REAL DEFAULT 50"),
+                ("recovery_trend", "TEXT DEFAULT 'stable'"),
+                ("override_recommendation", "TEXT DEFAULT 'No therapist override suggested.'"),
+                ("ai_confidence_score", "REAL DEFAULT 75"),
+                ("override_probability", "REAL DEFAULT 0.25"),
+                ("recommendation_reliability", "REAL DEFAULT 75"),
+                ("explanation_json", "TEXT DEFAULT '{}'"),
+            ]:
+                try:
+                    conn.execute(f"SELECT {column} FROM adaptive_prescriptions LIMIT 1")
+                except sqlite3.OperationalError:
+                    conn.execute(f"ALTER TABLE adaptive_prescriptions ADD COLUMN {column} {definition}")
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS forearm_assessments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    patient_id TEXT NOT NULL,
+                    session_id INTEGER,
+                    level INTEGER,
+                    movement_class TEXT NOT NULL,
+                    rotation_angle REAL NOT NULL,
+                    smoothness REAL NOT NULL,
+                    compensation_score REAL NOT NULL,
+                    endurance_seconds REAL NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS upper_limb_assessments (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    patient_id TEXT NOT NULL,
+                    session_id INTEGER,
+                    level INTEGER,
+                    shoulder_angle REAL DEFAULT 0,
+                    elbow_angle REAL DEFAULT 0,
+                    forearm_rotation_angle REAL DEFAULT 0,
+                    trunk_lean_angle REAL DEFAULT 0,
+                    shoulder_compensation REAL DEFAULT 0,
+                    elbow_compensation REAL DEFAULT 0,
+                    trunk_compensation REAL DEFAULT 0,
+                    compensation_score REAL DEFAULT 0,
+                    movement_efficiency REAL DEFAULT 100,
+                    feedback TEXT DEFAULT '',
+                    side TEXT DEFAULT 'Unknown',
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
                 """
@@ -316,6 +423,305 @@ class DashboardRepository:
         rows = self.sessions(patient)
         return list(reversed(rows))
 
+    def latest_adaptive_prescription(self, patient: str, level: int | None = None) -> sqlite3.Row | None:
+        where = "WHERE patient_id = ?"
+        params: list[Any] = [patient]
+        if level is not None:
+            where += " AND level = ?"
+            params.append(level)
+        rows = self.query(
+            f"""
+            SELECT *
+            FROM adaptive_prescriptions
+            {where}
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            params,
+        )
+        return rows[0] if rows else None
+
+    def latest_forearm_assessment(self, patient: str) -> sqlite3.Row | None:
+        rows = self.query(
+            """
+            SELECT *
+            FROM forearm_assessments
+            WHERE patient_id = ?
+            ORDER BY id DESC
+            LIMIT 1
+            """,
+            (patient,),
+        )
+        return rows[0] if rows else None
+
+    def adaptive_history(self, patient: str = "", limit: int = 30) -> list[sqlite3.Row]:
+        params: list[Any] = []
+        where = ""
+        if patient:
+            where = "WHERE patient_id = ?"
+            params.append(patient)
+        params.append(limit)
+        return self.query(
+            f"""
+            SELECT *
+            FROM adaptive_prescriptions
+            {where}
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            params,
+        )
+
+    def adaptive_prescription(self, prescription_id: int) -> sqlite3.Row | None:
+        rows = self.query("SELECT * FROM adaptive_prescriptions WHERE id = ?", (prescription_id,))
+        return rows[0] if rows else None
+
+    def save_override(self, form: dict[str, str]) -> None:
+        prescription_id = int(number(form.get("prescription_id"), 0))
+        row = self.adaptive_prescription(prescription_id)
+        if not row:
+            return
+        ai_recommendation = {
+            "id": row["id"],
+            "patient_id": row["patient_id"],
+            "level": row["level"],
+            "difficulty_tier": row["difficulty_tier"],
+            "required_rom": row["required_rom"],
+            "repetitions": row["repetitions"],
+            "hold_seconds": row["hold_seconds"],
+            "progression": row["progression"],
+            "readiness_score": row["readiness_score"],
+            "risk_level": row["risk_level"],
+            "rationale": row["rationale"],
+        }
+        modified = {
+            "difficulty_tier": form.get("difficulty_tier", "").strip(),
+            "required_rom": form.get("required_rom", "").strip(),
+            "repetitions": form.get("repetitions", "").strip(),
+            "hold_seconds": form.get("hold_seconds", "").strip(),
+            "progression": form.get("progression", "").strip(),
+        }
+        patient_context = {
+            "patient_id": row["patient_id"],
+            "level": row["level"],
+            "risk_level": row["risk_level"],
+            "readiness_score": row["readiness_score"],
+            "recovery_trend": row["recovery_trend"],
+        }
+        self.execute(
+            """
+            INSERT INTO therapist_overrides (
+                prescription_id, patient_id, therapist_id, decision, reason,
+                therapist_reason, ai_recommendation_json, modified_recommendation_json,
+                patient_context_json, session_metrics_json
+            )
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+            """,
+            (
+                prescription_id,
+                row["patient_id"],
+                form.get("therapist_id", "Therapist").strip() or "Therapist",
+                form.get("decision", "accept").strip(),
+                form.get("reason", "Clinical judgement").strip(),
+                form.get("therapist_reason", "").strip(),
+                json.dumps(ai_recommendation, sort_keys=True),
+                json.dumps(modified, sort_keys=True),
+                json.dumps(patient_context, sort_keys=True),
+                row["metrics_json"] or "{}",
+            ),
+        )
+
+    def override_history(self, patient: str = "", limit: int = 50) -> list[sqlite3.Row]:
+        params: list[Any] = []
+        where = ""
+        if patient:
+            where = "WHERE patient_id = ?"
+            params.append(patient)
+        params.append(limit)
+        return self.query(
+            f"""
+            SELECT *
+            FROM therapist_overrides
+            {where}
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            params,
+        )
+
+    def override_stats(self, patient: str = "") -> dict[str, Any]:
+        rows = self.override_history(patient, limit=200)
+        total = len(rows)
+        if total == 0:
+            return {
+                "total": 0,
+                "agreement_rate": 100.0,
+                "override_rate": 0.0,
+                "ai_confidence": 78.0,
+                "override_probability": 0.22,
+                "recommendation_reliability": 78.0,
+                "common_reasons": [],
+            }
+        accepted = sum(1 for row in rows if str(row["decision"]).lower() == "accept")
+        modified = sum(1 for row in rows if str(row["decision"]).lower() == "modify")
+        rejected = sum(1 for row in rows if str(row["decision"]).lower() == "reject")
+        agreement_rate = accepted / total * 100.0
+        override_rate = (modified + rejected) / total * 100.0
+        reason_counts: dict[str, int] = {}
+        for row in rows:
+            reason = row["reason"] or "Clinical judgement"
+            reason_counts[reason] = reason_counts.get(reason, 0) + 1
+        common_reasons = sorted(reason_counts.items(), key=lambda item: item[1], reverse=True)[:5]
+        override_probability = min(0.95, max(0.02, override_rate / 100.0))
+        reliability = max(0.0, 100.0 - override_rate * 0.65 - (rejected / total * 100.0) * 0.25)
+        confidence = max(5.0, 100.0 * (1.0 - override_probability))
+        return {
+            "total": total,
+            "agreement_rate": agreement_rate,
+            "override_rate": override_rate,
+            "ai_confidence": confidence,
+            "override_probability": override_probability,
+            "recommendation_reliability": reliability,
+            "common_reasons": common_reasons,
+        }
+
+    def forearm_history(self, patient: str = "", limit: int = 30) -> list[sqlite3.Row]:
+        params: list[Any] = []
+        where = ""
+        if patient:
+            where = "WHERE patient_id = ?"
+            params.append(patient)
+        params.append(limit)
+        return self.query(
+            f"""
+            SELECT *
+            FROM forearm_assessments
+            {where}
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            params,
+        )
+
+    def upper_limb_history(self, patient: str = "", limit: int = 60) -> list[sqlite3.Row]:
+        params: list[Any] = []
+        where = ""
+        if patient:
+            where = "WHERE patient_id = ?"
+            params.append(patient)
+        params.append(limit)
+        return self.query(
+            f"""
+            SELECT *
+            FROM upper_limb_assessments
+            {where}
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            params,
+        )
+
+    def latest_upper_limb_assessment(self, patient: str) -> sqlite3.Row | None:
+        rows = self.upper_limb_history(patient, limit=1)
+        return rows[0] if rows else None
+
+    def research_metrics(self, patient: str = "") -> dict[str, float]:
+        sessions = self.sessions_chrono(patient)
+        prescriptions = list(reversed(self.adaptive_history(patient, limit=60)))
+        forearm = list(reversed(self.forearm_history(patient, limit=60)))
+        upper_limb = list(reversed(self.upper_limb_history(patient, limit=60)))
+        if not sessions:
+            return {
+                "weekly_rom_improvement": 0.0,
+                "accuracy_improvement": 0.0,
+                "pain_adjusted_performance": 0.0,
+                "session_adherence": 0.0,
+                "difficulty_progression": 0.0,
+                "forearm_progress": 0.0,
+                "compensation_frequency": 0.0,
+                "shoulder_compensation": 0.0,
+                "elbow_compensation": 0.0,
+                "trunk_compensation": 0.0,
+                "movement_efficiency": 0.0,
+            }
+
+        rom_values = [number(row["avg_hand_angle"]) for row in sessions]
+        acc_values = [number(row["avg_accuracy"]) for row in sessions]
+        pain_values = [number(row["pain_level"]) for row in sessions]
+        pain_adjusted = sum(
+            acc * max(0.0, min(1.0, (10.0 - pain) / 10.0))
+            for acc, pain in zip(acc_values, pain_values)
+        ) / len(sessions)
+        weekly_rom = self._weekly_rom_improvement(sessions)
+        adherence = self._session_adherence(sessions) * 100.0
+        difficulty_progression = 0.0
+        if len(prescriptions) >= 2:
+            difficulty_progression = number(prescriptions[-1]["difficulty_tier"]) - number(prescriptions[0]["difficulty_tier"])
+        forearm_progress = 0.0
+        if len(forearm) >= 2:
+            first = number(forearm[0]["smoothness"]) - number(forearm[0]["compensation_score"])
+            last = number(forearm[-1]["smoothness"]) - number(forearm[-1]["compensation_score"])
+            forearm_progress = (last - first) * 100.0
+        compensation_frequency = 0.0
+        shoulder_comp = 0.0
+        elbow_comp = 0.0
+        trunk_comp = 0.0
+        movement_efficiency = 0.0
+        if upper_limb:
+            compensation_frequency = sum(1 for row in upper_limb if number(row["compensation_score"]) >= 0.45) / len(upper_limb) * 100.0
+            shoulder_comp = sum(number(row["shoulder_compensation"]) for row in upper_limb) / len(upper_limb) * 100.0
+            elbow_comp = sum(number(row["elbow_compensation"]) for row in upper_limb) / len(upper_limb) * 100.0
+            trunk_comp = sum(number(row["trunk_compensation"]) for row in upper_limb) / len(upper_limb) * 100.0
+            movement_efficiency = sum(number(row["movement_efficiency"]) for row in upper_limb) / len(upper_limb)
+
+        return {
+            "weekly_rom_improvement": weekly_rom,
+            "accuracy_improvement": trend(acc_values),
+            "pain_adjusted_performance": pain_adjusted,
+            "session_adherence": adherence,
+            "difficulty_progression": difficulty_progression,
+            "forearm_progress": forearm_progress,
+            "compensation_frequency": compensation_frequency,
+            "shoulder_compensation": shoulder_comp,
+            "elbow_compensation": elbow_comp,
+            "trunk_compensation": trunk_comp,
+            "movement_efficiency": movement_efficiency,
+        }
+
+    def digital_twin_profile(self, patient: str):
+        if not patient:
+            return None
+        return self.digital_twin.build(patient, save=True)
+
+    def digital_twin_snapshots(self, patient: str, limit: int = 12) -> list[sqlite3.Row]:
+        if not patient:
+            return []
+        return self.digital_twin.snapshot_history(patient, limit=limit)
+
+    def _weekly_rom_improvement(self, sessions: list[sqlite3.Row]) -> float:
+        if len(sessions) < 2:
+            return 0.0
+        try:
+            start = datetime.fromisoformat(str(sessions[0]["timestamp"]))
+            end = datetime.fromisoformat(str(sessions[-1]["timestamp"]))
+            days = max((end - start).total_seconds() / 86400.0, 1.0)
+        except ValueError:
+            days = max(len(sessions) - 1, 1)
+        return (number(sessions[-1]["avg_hand_angle"]) - number(sessions[0]["avg_hand_angle"])) / days * 7.0
+
+    def _session_adherence(self, sessions: list[sqlite3.Row]) -> float:
+        stamps = []
+        for row in sessions:
+            try:
+                stamps.append(datetime.fromisoformat(str(row["timestamp"])))
+            except ValueError:
+                continue
+        if len(stamps) < 2:
+            return 0.5
+        gaps = [(b - a).total_seconds() / 86400.0 for a, b in zip(stamps, stamps[1:])]
+        avg_gap = sum(gaps) / len(gaps)
+        return max(0.0, min(1.0, 1.0 - avg_gap / 10.0))
+
     def notes(self, patient: str = "") -> list[sqlite3.Row]:
         params: list[Any] = []
         where = ""
@@ -395,6 +801,8 @@ class DashboardRenderer:
             ("patients", "/patients", "Patients"),
             ("sessions", "/sessions", "Sessions"),
             ("analytics", "/analytics", "Analytics"),
+            ("adaptive", "/adaptive", "Adaptive AI"),
+            ("digital_twin", "/digital-twin", "Digital Twin"),
             ("reports", "/reports", "Reports"),
             ("performance", "/performance", "Performance"),
             ("notes", "/notes", "Notes"),
@@ -766,10 +1174,65 @@ function sortTable(tableId, column) {
 
     def patient_profile(self, row: sqlite3.Row) -> str:
         sessions = self.repo.sessions(row["name"], limit=12)
+        adaptive = self.repo.latest_adaptive_prescription(row["name"])
+        forearm = self.repo.latest_forearm_assessment(row["name"])
+        upper_limb = self.repo.latest_upper_limb_assessment(row["name"])
         history = "".join(
             f"<tr><td>{esc(short_date(s['timestamp']))}</td><td>{esc(exercise_for_level(s['level']))}</td><td>{number(s['avg_accuracy']):.1f}%</td><td>{number(s['avg_hand_angle']):.1f} deg</td><td>{esc(format_duration(s['duration']))}</td></tr>"
             for s in sessions
         ) or '<tr><td colspan="5" class="muted">No rehabilitation history yet.</td></tr>'
+        if adaptive:
+            adaptive_panel = f"""
+            <div class="card" style="margin-top:16px">
+              <h2>Adaptive AI Recommendation</h2>
+              <div class="grid three">
+                {self.stat_card('Readiness Score', f"{number(adaptive['readiness_score']):.0f}/100", f"{adaptive['progression'].title()} progression")}
+                {self.stat_card('Risk Level', adaptive['risk_level'].title(), f"Recovery: {adaptive['recovery_trend']}")}
+                {self.stat_card('Next Time Limit', f"{number(adaptive['time_limit']):.0f}s", f"Target scale {number(adaptive['target_scale']):.2f}")}
+              </div>
+              <p class="muted" style="margin-top:12px">{esc(adaptive['rationale'])}</p>
+              <p><strong>Override recommendation:</strong> {esc(adaptive['override_recommendation'])}</p>
+            </div>
+            """
+        else:
+            adaptive_panel = '<div class="card muted" style="margin-top:16px">No adaptive AI recommendation has been generated yet.</div>'
+
+        if forearm:
+            forearm_panel = f"""
+            <div class="card" style="margin-top:16px">
+              <h2>Forearm Classification</h2>
+              <table>
+                <tbody>
+                  <tr><th>Latest Class</th><td>{esc(forearm['movement_class'])}</td></tr>
+                  <tr><th>Rotation Angle</th><td>{number(forearm['rotation_angle']):.1f} deg</td></tr>
+                  <tr><th>Smoothness</th><td>{number(forearm['smoothness']) * 100:.0f}%</td></tr>
+                  <tr><th>Compensation</th><td>{number(forearm['compensation_score']) * 100:.0f}%</td></tr>
+                </tbody>
+              </table>
+            </div>
+            """
+        else:
+            forearm_panel = '<div class="card muted" style="margin-top:16px">No forearm classification recorded yet.</div>'
+        if upper_limb:
+            upper_limb_panel = f"""
+            <div class="card" style="margin-top:16px">
+              <h2>Upper Limb Compensation</h2>
+              <div class="grid three">
+                {self.stat_card('Compensation', f"{number(upper_limb['compensation_score']) * 100:.0f}%", esc(upper_limb['feedback']))}
+                {self.stat_card('Efficiency', f"{number(upper_limb['movement_efficiency']):.0f}%", f"{esc(upper_limb['side'])} side")}
+                {self.stat_card('Trunk Lean', f"{number(upper_limb['trunk_lean_angle']):.1f} deg", 'Pose estimate')}
+              </div>
+              <table style="margin-top:12px">
+                <tbody>
+                  <tr><th>Shoulder Angle</th><td>{number(upper_limb['shoulder_angle']):.1f} deg</td></tr>
+                  <tr><th>Elbow Angle</th><td>{number(upper_limb['elbow_angle']):.1f} deg</td></tr>
+                  <tr><th>Shoulder / Elbow / Trunk Compensation</th><td>{number(upper_limb['shoulder_compensation']) * 100:.0f}% / {number(upper_limb['elbow_compensation']) * 100:.0f}% / {number(upper_limb['trunk_compensation']) * 100:.0f}%</td></tr>
+                </tbody>
+              </table>
+            </div>
+            """
+        else:
+            upper_limb_panel = '<div class="card muted" style="margin-top:16px">No upper limb compensation assessment recorded yet.</div>'
         return f"""
         <div>
           {self.patient_form(row)}
@@ -783,6 +1246,9 @@ function sortTable(tableId, column) {
             </div>
             <table><thead><tr><th>Date</th><th>Exercise</th><th>Accuracy</th><th>ROM</th><th>Duration</th></tr></thead><tbody>{history}</tbody></table>
           </div>
+          {adaptive_panel}
+          {forearm_panel}
+          {upper_limb_panel}
         </div>
         """
 
@@ -867,6 +1333,245 @@ function sortTable(tableId, column) {
         </section>
         """
         return Page("Progress Analytics", body, "analytics")
+
+    def adaptive_ai(self, params: dict[str, str]) -> Page:
+        patient = params.get("patient", "")
+        patient_options = "".join(self.option(row["name"], row["name"], patient) for row in self.repo.patients())
+        prescriptions = self.repo.adaptive_history(patient, limit=40)
+        metrics = self.repo.research_metrics(patient)
+        override_stats = self.repo.override_stats(patient)
+        overrides = self.repo.override_history(patient, limit=20)
+        upper_rows = list(reversed(self.repo.upper_limb_history(patient, limit=16)))
+        upper_labels = [short_date(row["created_at"]) for row in upper_rows]
+        compensation_series = [number(row["compensation_score"]) * 100.0 for row in upper_rows]
+        efficiency_series = [number(row["movement_efficiency"]) for row in upper_rows]
+
+        rows = "".join(
+            f"""
+            <tr>
+              <td>{esc(short_date(row['created_at']))}</td>
+              <td>{esc(row['patient_id'])}</td>
+              <td>{esc(exercise_for_level(row['level']))}</td>
+              <td>{number(row['readiness_score']):.0f}/100</td>
+              <td>{int(number(row['difficulty_tier']))}</td>
+              <td>{esc(str(row['progression']).title())}</td>
+              <td>{esc(str(row['risk_level']).title())}</td>
+              <td>{esc(row['recovery_trend'])}</td>
+              <td>{number(row['ai_confidence_score']):.0f}%</td>
+              <td>{number(row['recommendation_reliability']):.0f}%</td>
+            </tr>
+            """
+            for row in prescriptions
+        ) or '<tr><td colspan="10" class="muted">No adaptive prescriptions recorded.</td></tr>'
+
+        decision_cards = "".join(
+            f"""
+            <div class="card alert {'danger' if row['risk_level'] == 'high' else 'warning' if row['risk_level'] == 'moderate' else ''}">
+              <div class="toolbar"><h2>{esc(row['patient_id'])} · L{int(number(row['level']))}</h2><span class="badge">{number(row['readiness_score']):.0f}/100</span></div>
+              <p class="muted">{esc(row['rationale'])}</p>
+              <p><strong>Explainable AI:</strong> {esc(self.explainable_why(row))}</p>
+              <p><strong>Override:</strong> {esc(row['override_recommendation'])}</p>
+              {self.override_form(row)}
+            </div>
+            """
+            for row in prescriptions[:6]
+        ) or '<div class="card muted">Adaptive decisions will appear after completed sessions.</div>'
+        override_rows = "".join(
+            f"""
+            <tr>
+              <td>{esc(short_date(row['created_at']))}</td>
+              <td>{esc(row['patient_id'])}</td>
+              <td>{esc(row['therapist_id'])}</td>
+              <td>{esc(str(row['decision']).title())}</td>
+              <td>{esc(row['reason'])}</td>
+              <td>{esc(row['therapist_reason'])}</td>
+            </tr>
+            """
+            for row in overrides
+        ) or '<tr><td colspan="6" class="muted">No therapist overrides recorded.</td></tr>'
+        common_reasons = "".join(
+            f'<span class="pill">{esc(reason)} · {count}</span>'
+            for reason, count in override_stats["common_reasons"]
+        ) or '<span class="pill">No override patterns yet</span>'
+
+        body = f"""
+        <section class="card">
+          <form method="get" class="toolbar">
+            <h2>Adaptive AI Rehabilitation Engine</h2>
+            <select name="patient"><option value="">All patients</option>{patient_options}</select>
+            <button>Apply</button>
+          </form>
+        </section>
+        <section class="grid three" style="margin-top:16px">
+          {self.stat_card('Weekly ROM Gain', f"{metrics['weekly_rom_improvement']:+.1f} deg", 'Research endpoint')}
+          {self.stat_card('Accuracy Change', f"{metrics['accuracy_improvement']:+.1f}%", 'Recent performance delta')}
+          {self.stat_card('Pain-Adjusted Score', f"{metrics['pain_adjusted_performance']:.1f}", 'Accuracy weighted by pain')}
+          {self.stat_card('Session Adherence', f"{metrics['session_adherence']:.0f}%", 'Consistency estimate')}
+          {self.stat_card('Difficulty Progression', f"{metrics['difficulty_progression']:+.1f}", 'Tier movement')}
+          {self.stat_card('Forearm Progress', f"{metrics['forearm_progress']:+.1f}", 'Smoothness minus compensation')}
+          {self.stat_card('Compensation Frequency', f"{metrics['compensation_frequency']:.0f}%", 'Frames/sessions above threshold')}
+          {self.stat_card('Shoulder / Elbow / Trunk', f"{metrics['shoulder_compensation']:.0f}% / {metrics['elbow_compensation']:.0f}% / {metrics['trunk_compensation']:.0f}%", 'Average compensation')}
+          {self.stat_card('Movement Efficiency', f"{metrics['movement_efficiency']:.0f}%", 'Upper limb quality')}
+        </section>
+        <section class="grid three" style="margin-top:16px">
+          {self.stat_card('AI Confidence', f"{override_stats['ai_confidence']:.0f}%", 'Learned from therapist decisions')}
+          {self.stat_card('Override Probability', f"{override_stats['override_probability'] * 100:.0f}%", 'Human-in-the-loop estimate')}
+          {self.stat_card('Recommendation Reliability', f"{override_stats['recommendation_reliability']:.0f}%", f"{override_stats['agreement_rate']:.0f}% agreement")}
+        </section>
+        <section class="card" style="margin-top:16px">
+          <h2>Most Common Override Reasons</h2>
+          <div class="toolbar" style="justify-content:flex-start">{common_reasons}</div>
+        </section>
+        <section class="grid two" style="margin-top:16px">
+          <div class="card">{self.chart('Biomechanical Compensation Trend', {'Compensation': compensation_series, 'Efficiency': efficiency_series}, upper_labels, '%')}</div>
+          <div class="card">{self.chart('Adaptive Readiness Trend', {'Readiness': [number(row['readiness_score']) for row in reversed(prescriptions[-16:])]}, [short_date(row['created_at']) for row in reversed(prescriptions[-16:])], 'score')}</div>
+        </section>
+        <section class="grid two" style="margin-top:16px">{decision_cards}</section>
+        <section class="card" style="margin-top:16px">
+          <h2>Prescription History</h2>
+          <table>
+            <thead><tr><th>Date</th><th>Patient</th><th>Exercise</th><th>Readiness</th><th>Tier</th><th>Decision</th><th>Risk</th><th>Recovery</th><th>AI Confidence</th><th>Reliability</th></tr></thead>
+            <tbody>{rows}</tbody>
+          </table>
+        </section>
+        <section class="card" style="margin-top:16px">
+          <h2>Override History</h2>
+          <table>
+            <thead><tr><th>Date</th><th>Patient</th><th>Therapist</th><th>Decision</th><th>Reason</th><th>Notes</th></tr></thead>
+            <tbody>{override_rows}</tbody>
+          </table>
+        </section>
+        """
+        return Page("Adaptive AI", body, "adaptive")
+
+    def explainable_why(self, row: sqlite3.Row) -> str:
+        try:
+            data = json.loads(row["explanation_json"] or "{}")
+            if data.get("why"):
+                return str(data["why"])
+        except Exception:
+            pass
+        return row["rationale"]
+
+    def override_form(self, row: sqlite3.Row) -> str:
+        reasons = [
+            "Patient Pain Too High",
+            "Fatigue Detected",
+            "Therapist Observed Compensation",
+            "Patient Motivation Issues",
+            "Clinical Safety Concern",
+            "Progression Too Conservative",
+            "Clinical judgement",
+        ]
+        reason_options = "".join(f"<option>{esc(reason)}</option>" for reason in reasons)
+        return f"""
+        <form method="post" action="/adaptive/override" class="form-grid">
+          <input type="hidden" name="prescription_id" value="{int(number(row['id']))}">
+          <label>Therapist<input name="therapist_id" value="Therapist"></label>
+          <label>Decision<select name="decision"><option value="accept">Accept</option><option value="modify">Modify</option><option value="reject">Reject</option></select></label>
+          <label>Reason<select name="reason">{reason_options}</select></label>
+          <label>Difficulty Tier<input name="difficulty_tier" type="number" min="1" max="5" value="{int(number(row['difficulty_tier']))}"></label>
+          <label>ROM Requirement<input name="required_rom" type="number" step="0.1" value="{number(row['required_rom']):.1f}"></label>
+          <label>Repetitions<input name="repetitions" type="number" min="1" value="{int(number(row['repetitions']))}"></label>
+          <label>Hold Duration<input name="hold_seconds" type="number" step="0.1" value="{number(row['hold_seconds']):.1f}"></label>
+          <label>Progression<select name="progression">
+            {self.option('advance', 'Advance', row['progression'])}
+            {self.option('maintain', 'Maintain', row['progression'])}
+            {self.option('support', 'Support', row['progression'])}
+            {self.option('regress', 'Regress', row['progression'])}
+          </select></label>
+          <label class="full">Therapist Reason<textarea name="therapist_reason" placeholder="Clinical reasoning, observation, or safety note"></textarea></label>
+          <button class="full">Store Therapist Decision</button>
+        </form>
+        """
+
+    def digital_twin_page(self, params: dict[str, str]) -> Page:
+        patients = self.repo.patients()
+        selected = params.get("patient", "")
+        if not selected and patients:
+            selected = patients[0]["name"]
+        patient_options = "".join(self.option(row["name"], row["name"], selected) for row in patients)
+        if not selected:
+            body = """
+            <section class="card">
+              <h2>Personalized Rehabilitation Digital Twin</h2>
+              <p class="muted">Register a patient and complete sessions to generate a digital twin.</p>
+            </section>
+            """
+            return Page("Digital Twin", body, "digital_twin")
+
+        twin = self.repo.digital_twin_profile(selected)
+        snapshots = list(reversed(self.repo.digital_twin_snapshots(selected, limit=16)))
+        snap_labels = [short_date(row["created_at"]) for row in snapshots]
+        readiness_series = [number(row["readiness_score"]) for row in snapshots]
+        rom_series = [number(row["current_rom"]) for row in snapshots]
+        risk_series = [number(row["stagnation_risk"]) for row in snapshots]
+
+        scenario_cards = "".join(
+            f"""
+            <div class="card alert {'danger' if item.risk_level == 'High' else 'warning' if item.risk_level == 'Moderate' else ''}">
+              <h2>{esc(item.name)} · {esc(item.strategy)}</h2>
+              <div class="grid three">
+                {self.stat_card('Timeline', f"{item.recovery_timeline_weeks:.1f} wk", 'To functional ROM target')}
+                {self.stat_card('Expected ROM', f"{item.expected_rom:.1f} deg", '4-week forecast')}
+                {self.stat_card('Expected Accuracy', f"{item.expected_accuracy:.1f}%", '4-week forecast')}
+                {self.stat_card('Risk Level', item.risk_level, 'Scenario risk')}
+                {self.stat_card('Fatigue Risk', f"{item.fatigue_risk:.0f}%", 'Load tolerance')}
+                {self.stat_card('Compensation Risk', f"{item.compensation_risk:.0f}%", 'Movement quality')}
+              </div>
+              <p class="muted" style="margin-top:12px">{esc(item.explanation)}</p>
+              <p><strong>Adherence:</strong> {esc(item.adherence_impact)}</p>
+            </div>
+            """
+            for item in twin.scenarios
+        )
+        risk_cards = "".join(
+            self.stat_card(label.replace("_", " ").title(), f"{value:.0f}%", "Predicted risk")
+            for label, value in twin.risks.items()
+        )
+        milestones = "".join(f"<li>{esc(item)}</li>" for item in twin.milestones)
+        exercise_mix = ", ".join(twin.recommendations.get("best_exercise_mix", []))
+        weekly = twin.recommendations.get("weekly_targets", {})
+        body = f"""
+        <section class="card">
+          <form method="get" class="toolbar">
+            <h2>Personalized Rehabilitation Digital Twin</h2>
+            <select name="patient">{patient_options}</select>
+            <button>Build Twin</button>
+          </form>
+          <p class="muted">{esc(twin.explanation)}</p>
+        </section>
+        <section class="grid three" style="margin-top:16px">
+          {self.stat_card('Current ROM', f"{twin.current_rom:.1f} deg", f"Velocity {twin.recovery_velocity:+.1f} deg/wk")}
+          {self.stat_card('Current Accuracy', f"{twin.current_accuracy:.1f}%", f"Pain {twin.current_pain:.0f}/10")}
+          {self.stat_card('Readiness', f"{twin.readiness_score:.0f}/100", f"Consistency {twin.consistency_score:.0f}%")}
+          {self.stat_card('Fatigue', f"{twin.fatigue_index:.0f}%", 'Recent load estimate')}
+          {self.stat_card('Compensation', f"{twin.compensation_score:.0f}%", 'Historical movement quality')}
+          {self.stat_card('Forearm Quality', f"{twin.forearm_quality:.0f}%", 'Smoothness minus compensation')}
+        </section>
+        <section class="grid two" style="margin-top:16px">
+          <div class="card">{self.chart('Digital Twin Snapshot Trend', {'Readiness': readiness_series, 'ROM': rom_series, 'Stagnation Risk': risk_series}, snap_labels, 'score')}</div>
+          <div class="card">
+            <h2>Personalized Recommendations</h2>
+            <table>
+              <tbody>
+                <tr><th>Best Strategy</th><td>{esc(twin.recommendations.get('best_strategy', '-'))}</td></tr>
+                <tr><th>Exercise Mix</th><td>{esc(exercise_mix)}</td></tr>
+                <tr><th>Optimal Duration</th><td>{esc(twin.recommendations.get('optimal_session_duration', '-'))}</td></tr>
+                <tr><th>Weekly Targets</th><td>{esc(json.dumps(weekly, sort_keys=True))}</td></tr>
+                <tr><th>Progression Plan</th><td>{esc(twin.recommendations.get('difficulty_progression_plan', '-'))}</td></tr>
+              </tbody>
+            </table>
+          </div>
+        </section>
+        <section class="grid three" style="margin-top:16px">{risk_cards}</section>
+        <section class="grid" style="margin-top:16px">{scenario_cards}</section>
+        <section class="card" style="margin-top:16px">
+          <h2>Milestone Predictions</h2>
+          <ul>{milestones}</ul>
+        </section>
+        """
+        return Page("Digital Twin", body, "digital_twin")
 
     def bucket_progress(self, sessions: list[sqlite3.Row], fmt: str) -> tuple[list[str], list[float]]:
         buckets: dict[str, list[float]] = {}
@@ -1026,6 +1731,15 @@ function sortTable(tableId, column) {
                 alerts.append((f"{name}: high pain score", f"Latest pain score is {int(number(last['pain_level']))}/10.", "danger"))
             if number(last["avg_accuracy"]) < 50:
                 alerts.append((f"{name}: low exercise accuracy", f"Latest accuracy is {number(last['avg_accuracy']):.1f}%.", "danger"))
+            adaptive = self.repo.latest_adaptive_prescription(name)
+            if adaptive:
+                if str(adaptive["risk_level"]).lower() == "high":
+                    alerts.append((f"{name}: adaptive high risk", esc(adaptive["override_recommendation"]), "danger"))
+                elif number(adaptive["readiness_score"]) < 45:
+                    alerts.append((f"{name}: low readiness score", f"Readiness is {number(adaptive['readiness_score']):.0f}/100.", "warning"))
+            upper_limb = self.repo.latest_upper_limb_assessment(name)
+            if upper_limb and number(upper_limb["compensation_score"]) >= 0.55:
+                alerts.append((f"{name}: compensation detected", str(upper_limb["feedback"]), "warning"))
             if len(sessions) >= 2:
                 delta = number(sessions[-1]["avg_hand_angle"]) - number(sessions[-2]["avg_hand_angle"])
                 if delta >= 10:
@@ -1044,6 +1758,8 @@ function sortTable(tableId, column) {
         patient = self.repo.patient(patient_name)
         sessions = self.repo.sessions_chrono(patient_name)
         notes = self.repo.notes(patient_name)
+        adaptive = self.repo.latest_adaptive_prescription(patient_name)
+        metrics = self.repo.research_metrics(patient_name)
         pred = recovery_prediction(sessions)
         buf = io.BytesIO()
         pdf = canvas.Canvas(buf, pagesize=letter)
@@ -1083,6 +1799,41 @@ function sortTable(tableId, column) {
         for line in summary:
             pdf.drawString(60, y, line)
             y -= 15
+        if adaptive:
+            y -= 8
+            pdf.setFont("Helvetica-Bold", 13)
+            pdf.drawString(50, y, "Adaptive AI Prescription")
+            y -= 18
+            pdf.setFont("Helvetica", 9)
+            adaptive_lines = [
+                f"Readiness Score: {number(adaptive['readiness_score']):.0f}/100",
+                f"Difficulty Tier: {int(number(adaptive['difficulty_tier']))}",
+                f"Risk Level: {adaptive['risk_level']}",
+                f"Recovery Trend: {adaptive['recovery_trend']}",
+                f"Override Recommendation: {adaptive['override_recommendation']}",
+            ]
+            for line in adaptive_lines:
+                pdf.drawString(60, y, str(line)[:110])
+                y -= 13
+        y -= 8
+        pdf.setFont("Helvetica-Bold", 13)
+        pdf.drawString(50, y, "Research Metrics")
+        y -= 18
+        pdf.setFont("Helvetica", 9)
+        research_lines = [
+            f"Weekly ROM Improvement: {metrics['weekly_rom_improvement']:+.1f} degrees",
+            f"Accuracy Improvement: {metrics['accuracy_improvement']:+.1f}%",
+            f"Pain-Adjusted Performance: {metrics['pain_adjusted_performance']:.1f}",
+            f"Session Adherence: {metrics['session_adherence']:.0f}%",
+            f"Difficulty Progression: {metrics['difficulty_progression']:+.1f}",
+            f"Forearm Progress: {metrics['forearm_progress']:+.1f}",
+            f"Compensation Frequency: {metrics['compensation_frequency']:.0f}%",
+            f"Shoulder / Elbow / Trunk Compensation: {metrics['shoulder_compensation']:.0f}% / {metrics['elbow_compensation']:.0f}% / {metrics['trunk_compensation']:.0f}%",
+            f"Movement Efficiency: {metrics['movement_efficiency']:.0f}%",
+        ]
+        for line in research_lines:
+            pdf.drawString(60, y, line)
+            y -= 13
         y -= 8
         pdf.setFont("Helvetica-Bold", 13)
         pdf.drawString(50, y, "Recent Sessions")
@@ -1142,6 +1893,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             "/patients": lambda: self.renderer.patients(params),
             "/sessions": lambda: self.renderer.sessions_page(params),
             "/analytics": lambda: self.renderer.analytics(params),
+            "/adaptive": lambda: self.renderer.adaptive_ai(params),
+            "/digital-twin": lambda: self.renderer.digital_twin_page(params),
             "/reports": lambda: self.renderer.reports(params),
             "/performance": lambda: self.renderer.performance(params),
             "/notes": lambda: self.renderer.notes(params),
@@ -1173,6 +1926,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self.repo.save_note(form)
             patient = form.get("patient_name", "")
             self.redirect(f"/notes?patient={quote(patient)}")
+        elif path == "/adaptive/override":
+            self.repo.save_override(form)
+            self.redirect("/adaptive")
         else:
             self.send_error(HTTPStatus.NOT_FOUND, "Action not found")
 
