@@ -24,6 +24,7 @@ Here is an honest evaluation of how well our current AI Hand Rehabilitation Syst
 **Status: Partially Satisfied (60% Completion)**
 - **What we have:** We built `VoiceEngine` (using `pyttsx3`) and the `VirtualSensei` module. Instead of just saying "good job," it provides contextual feedback based on live joint angles (e.g., "Bend further," "Hold it there"). We also implemented rate-limiting so it doesn't overwhelm the user. 
 - **Accuracy:** The timing of the feedback is **~85% accurate**, but the voice itself is still synthesized (robotic) and lacks the conversational intelligence of an LLM.
+- **Report Summary & Future Scope:** The current system provides real-time context-aware voice feedback using an offline text-to-speech engine. Future enhancements will include history-aware coaching (e.g., tracking improvements over previous sessions using the local SQLite database), adaptive communication based on patient performance, and local large language model integration (e.g., Ollama + Llama 3) for personalized conversational rehabilitation assistance while maintaining offline functionality, zero API costs, and patient privacy.
 
 ### 3. No accessibility for severely impaired patients.
 **Status: Highly Satisfied (90% Completion)**

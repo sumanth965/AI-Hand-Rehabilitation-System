@@ -4989,6 +4989,8 @@ class PhysioSystem:
                     avg_accuracy,
                     avg_hand_angle,
                     self.pain_level,
+                    fatigue_index=fatigue_index,
+                    recovery_prediction=recovery_prediction,
                     session_id=session_id,
                 )
                 self.adaptive_sensei_message = sensei_message

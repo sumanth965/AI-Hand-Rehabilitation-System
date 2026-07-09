@@ -30,6 +30,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from digital_twin_rehab import DigitalTwinRehabModel
+from clinical_intelligence import ClinicalIntelligenceLayer
 
 
 DB_PATH = "rehab_data.db"
@@ -131,6 +132,7 @@ class DashboardRepository:
     def __init__(self, db_path: str = DB_PATH):
         self.db_path = db_path
         self.digital_twin = DigitalTwinRehabModel(db_path)
+        self.clinical_intel = ClinicalIntelligenceLayer(db_path)
         self.ensure_schema()
 
     def connect(self) -> sqlite3.Connection:
@@ -243,6 +245,19 @@ class DashboardRepository:
                     smoothness REAL NOT NULL,
                     compensation_score REAL NOT NULL,
                     endurance_seconds REAL NOT NULL,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS sensei_messages (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    patient_id TEXT NOT NULL,
+                    session_id INTEGER,
+                    level INTEGER,
+                    message TEXT NOT NULL,
+                    context_json TEXT DEFAULT '{}',
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
                 """
@@ -614,6 +629,24 @@ class DashboardRepository:
             f"""
             SELECT *
             FROM upper_limb_assessments
+            {where}
+            ORDER BY id DESC
+            LIMIT ?
+            """,
+            params,
+        )
+
+    def sensei_history(self, patient: str = "", limit: int = 30) -> list[sqlite3.Row]:
+        params: list[Any] = []
+        where = ""
+        if patient:
+            where = "WHERE patient_id = ?"
+            params.append(patient)
+        params.append(limit)
+        return self.query(
+            f"""
+            SELECT *
+            FROM sensei_messages
             {where}
             ORDER BY id DESC
             LIMIT ?
@@ -1177,6 +1210,8 @@ function sortTable(tableId, column) {
         adaptive = self.repo.latest_adaptive_prescription(row["name"])
         forearm = self.repo.latest_forearm_assessment(row["name"])
         upper_limb = self.repo.latest_upper_limb_assessment(row["name"])
+        coaching = self.repo.sensei_history(row["name"], limit=10)
+        clinical = self.repo.clinical_intel.get_clinical_profile(row["name"])
         history = "".join(
             f"<tr><td>{esc(short_date(s['timestamp']))}</td><td>{esc(exercise_for_level(s['level']))}</td><td>{number(s['avg_accuracy']):.1f}%</td><td>{number(s['avg_hand_angle']):.1f} deg</td><td>{esc(format_duration(s['duration']))}</td></tr>"
             for s in sessions
@@ -1233,9 +1268,54 @@ function sortTable(tableId, column) {
             """
         else:
             upper_limb_panel = '<div class="card muted" style="margin-top:16px">No upper limb compensation assessment recorded yet.</div>'
+
+        if coaching:
+            coaching_rows = "".join(
+                f"<tr><td>{{esc(short_date(c['created_at']))}}</td><td>{{esc(exercise_for_level(c['level']))}}</td><td>{{esc(c['message'])}}</td></tr>"
+                for c in coaching
+            )
+            coaching_panel = f"""
+            <div class="card" style="margin-top:16px">
+              <h2>Coaching History & Generated Feedback</h2>
+              <table><thead><tr><th>Date</th><th>Exercise</th><th>Sensei Feedback</th></tr></thead><tbody>{{coaching_rows}}</tbody></table>
+            </div>
+            """
+        else:
+            coaching_panel = '<div class="card muted" style="margin-top:16px">No coaching history generated yet.</div>'
+
+        insights_html = "".join(f"<li>{esc(i)}</li>" for i in clinical["insights"])
+        recs_html = "".join(f"<li>{esc(r)}</li>" for r in clinical["recommendations"])
+        risks_html = "".join(f'<span class="badge" style="color:var(--danger)">{esc(r)}</span>' for r in clinical["detected_risks"]) or '<span class="muted">No immediate risks detected.</span>'
+        
+        clinical_panel = f"""
+        <div class="card" style="margin-top:16px; border-left: 4px solid var(--primary)">
+          <h2>Clinical Health & Decision Support</h2>
+          <div class="grid three">
+            {self.stat_card('Health Score', f"{clinical['health_score']}/100", f"Trend: {clinical['trend']}")}
+            {self.stat_card('Recovery Stage', clinical['recovery_stage'], 'Based on ROM progression')}
+            {self.stat_card('Risk Level', clinical['risk_level'], 'Clinical risk assessment')}
+          </div>
+          <div style="margin-top:16px">
+            <h3>Detected Risks</h3>
+            <div style="display:flex; gap:8px; flex-wrap:wrap">{risks_html}</div>
+          </div>
+          <div class="grid two" style="margin-top:16px">
+            <div>
+              <h3>Rehabilitation Insights</h3>
+              <ul style="margin:0; padding-left:20px">{insights_html}</ul>
+            </div>
+            <div>
+              <h3>Therapist Recommendations</h3>
+              <ul style="margin:0; padding-left:20px">{recs_html}</ul>
+            </div>
+          </div>
+        </div>
+        """
+
         return f"""
         <div>
           {self.patient_form(row)}
+          {clinical_panel}
           <div class="card" style="margin-top:16px">
             <div class="toolbar">
               <h2>Complete Rehabilitation History</h2>
@@ -1247,6 +1327,7 @@ function sortTable(tableId, column) {
             <table><thead><tr><th>Date</th><th>Exercise</th><th>Accuracy</th><th>ROM</th><th>Duration</th></tr></thead><tbody>{history}</tbody></table>
           </div>
           {adaptive_panel}
+          {coaching_panel}
           {forearm_panel}
           {upper_limb_panel}
         </div>

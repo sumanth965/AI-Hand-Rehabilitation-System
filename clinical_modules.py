@@ -173,11 +173,18 @@ class VirtualSensei:
         self._success_triggered = False
 
         if diff < -self.tolerance:
-            self._speak("Bend further.")
+            # self._speak("Bend further.")
             return "bend_further"
         else:
-            self._speak("Too far, relax slightly.")
+            # self._speak("Too far, relax slightly.")
             return "too_far"
+
+    def deliver_coaching(self, message: str):
+        """
+        Deliver a generated coaching message using pyttsx3.
+        Respects the same speech cooldown to avoid spam.
+        """
+        self._speak(message)
 
     def reset(self):
         """Reset for a new session / exercise."""

@@ -17,6 +17,8 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any, Iterable
 
+from llm_wrapper import generate_llm_coaching
+
 
 DB_PATH = "rehab_data.db"
 
@@ -470,6 +472,8 @@ class AdaptiveRehabEngine:
         accuracy: float,
         rom: float,
         pain_level: int,
+        fatigue_index: float = 0.0,
+        recovery_prediction: float | None = None,
         session_id: int | None = None,
     ) -> str:
         previous = self._sessions(patient_id, limit=2)
@@ -479,28 +483,89 @@ class AdaptiveRehabEngine:
             delta_rom = rom - number(previous[-2]["avg_hand_angle"])
             delta_acc = accuracy - number(previous[-2]["avg_accuracy"])
 
-        if prescription.risk_level == "high":
-            message = (
-                f"Readiness is {prescription.readiness_score:.0f}/100 and pain is {pain_level}/10, so I reduced the challenge. "
-                "Move slowly, keep the shoulder relaxed, and stop if pain increases."
-            )
-        elif prescription.progression == "advance":
-            message = (
-                f"Excellent progress. Readiness is {prescription.readiness_score:.0f}/100. Your ROM changed by {delta_rom:+.1f} degrees "
-                f"and accuracy changed by {delta_acc:+.1f}% compared with the previous session. "
-                "I am increasing the next challenge."
-            )
-        elif prescription.progression in ("support", "regress"):
-            message = (
-                f"Readiness is {prescription.readiness_score:.0f}/100, so I adapted this session to support cleaner movement. "
-                f"Targets will be larger and slower while you rebuild control at {accuracy:.0f}% accuracy."
-            )
-        else:
-            message = (
-                f"Good controlled work. Readiness is {prescription.readiness_score:.0f}/100, ROM is {rom:.1f} degrees, and accuracy is {accuracy:.0f}%. "
-                "We will hold this difficulty until the trend is stronger."
-            )
+        # Fetch Context for RAG
+        clinical = None
+        therapist_notes = ""
+        latest_forearm = None
+        
+        try:
+            from clinical_intelligence import ClinicalIntelligenceLayer
+            clinical = ClinicalIntelligenceLayer(self.db_path).get_clinical_profile(patient_id)
+            
+            with self.connect() as conn:
+                profile_row = conn.execute("SELECT therapist_notes FROM dashboard_patient_profiles WHERE name = ?", (patient_id,)).fetchone()
+                if profile_row and profile_row["therapist_notes"]:
+                    therapist_notes = profile_row["therapist_notes"]
+                    
+                forearm_row = conn.execute("SELECT movement_class, compensation_score FROM forearm_assessments WHERE patient_id = ? ORDER BY id DESC LIMIT 1", (patient_id,)).fetchone()
+                if forearm_row:
+                    latest_forearm = f"{forearm_row['movement_class']} (Compensation Score: {forearm_row['compensation_score']*100:.0f}%)"
+        except Exception as e:
+            print(f"Error fetching RAG context: {e}")
 
+        # Attempt to use local LLM
+        metrics = {
+            "Patient ID": patient_id,
+            "Exercise Level": level,
+            "Accuracy": f"{accuracy:.1f}%",
+            "Range of Motion (ROM)": f"{rom:.1f} degrees",
+            "Pain Score (0-10)": pain_level,
+            "Fatigue Index (0-1)": f"{fatigue_index:.2f}",
+            "Recovery Prediction": f"{recovery_prediction:.1f}%" if recovery_prediction else "Unknown",
+            "Readiness Score": f"{prescription.readiness_score:.0f}/100",
+            "AI Prescription Rationale": f"Progression: {prescription.progression}. {prescription.rationale}"
+        }
+        
+        if len(previous) >= 2:
+            metrics["Previous ROM"] = f"{number(previous[-2]['avg_hand_angle']):.1f} degrees"
+            metrics["Previous Accuracy"] = f"{number(previous[-2]['avg_accuracy']):.1f}%"
+            
+        if clinical:
+            metrics["Recovery Trend"] = f"{clinical['trend']} ({clinical['recovery_stage']})"
+            if clinical["detected_risks"]:
+                metrics["Active Risks"] = ", ".join(clinical["detected_risks"])
+            else:
+                metrics["Active Risks"] = "None detected"
+                
+        if therapist_notes:
+            metrics["Therapist Notes"] = therapist_notes
+            
+        if latest_forearm:
+            metrics["Latest Forearm Assessment"] = latest_forearm
+
+        message = generate_llm_coaching(metrics)
+        
+        # Determine the core coaching message based on conditions (Fallback)
+        if not message:
+            if pain_level >= 7:
+                message = "Take the movement slowly. Do not force the rotation. Focus on comfort and control."
+            elif fatigue_index >= 0.75:
+                message = "Movement speed is decreasing. Consider taking a short rest. Let's prioritize quality over speed."
+            elif prescription.progression == "advance" and accuracy >= 80:
+                if delta_rom > 0:
+                    message = f"Excellent progress. Your wrist rotation improved by {delta_rom:+.1f} degrees compared to your previous session. You are ready for a greater challenge."
+                else:
+                    message = f"Excellent work. Your accuracy increased by {delta_acc:+.1f}% this week. Keep maintaining smooth movements."
+            elif prescription.progression in ("support", "regress"):
+                message = "Recovery is progressing slower than expected. Let's focus on movement quality before increasing difficulty."
+            else:
+                # Recovery-aware fallback
+                if recovery_prediction is not None:
+                    if rom > recovery_prediction:
+                        message = "You are recovering faster than the projected trend."
+                    else:
+                        message = "Recovery remains stable and on target."
+                else:
+                    message = "Good controlled work. We will hold this difficulty until the trend is stronger."
+
+            # Prepend Readiness Score context for fallback
+            readiness = prescription.readiness_score
+            if readiness > 80:
+                message = f"Readiness is high ({readiness:.0f}/100). {message}"
+            elif readiness >= 50:
+                message = f"Readiness is moderate ({readiness:.0f}/100). {message}"
+            else:
+                message = f"Readiness is low ({readiness:.0f}/100). {message}"
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 """
