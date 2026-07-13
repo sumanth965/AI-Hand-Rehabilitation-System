@@ -830,20 +830,19 @@ class DashboardRenderer:
         params = params or {}
         theme = params.get("theme", "light")
         nav = [
-            ("home", "/", "Dashboard"),
-            ("patients", "/patients", "Patients"),
-            ("sessions", "/sessions", "Sessions"),
-            ("analytics", "/analytics", "Analytics"),
-            ("adaptive", "/adaptive", "Adaptive AI"),
-            ("digital_twin", "/digital-twin", "Digital Twin"),
-            ("reports", "/reports", "Reports"),
-            ("performance", "/performance", "Performance"),
-            ("notes", "/notes", "Notes"),
-            ("notifications", "/notifications", "Alerts"),
+            ("home", "/", "Dashboard", ""),
+            ("patients", "/patients", "Patients", ""),
+            ("sessions", "/sessions", "Rehabilitation Sessions", ""),
+            ("analytics", "/analytics", "Analytics", ""),
+            ("reports", "/reports", "Reports", ""),
+            ("adaptive", "/adaptive", "Virtual Sensei", ""),
+            ("digital_twin", "/digital-twin", "Digital Twin", ""),
+            ("performance", "/performance", "Performance", ""),
+            ("notes", "/notes", "Notes", ""),
         ]
         nav_html = "".join(
-            f'<a class="nav-item {"active" if key == page.active else ""}" href="{href}">{label}</a>'
-            for key, href, label in nav
+            f'<a class="nav-item {"active" if key == page.active else ""}" href="{href}"><span class="nav-icon">{icon}</span> {label}</a>'
+            for key, href, label, icon in nav
         )
         toggled_theme = "dark" if theme != "dark" else "light"
         html_doc = f"""<!doctype html>
@@ -855,7 +854,7 @@ class DashboardRenderer:
   <style>{self.css()}</style>
 </head>
 <body>
-  <aside class="sidebar">
+  <aside class="sidebar glass-panel">
     <div class="brand">
       <div class="brand-mark">HR</div>
       <div>
@@ -863,17 +862,40 @@ class DashboardRenderer:
         <span>Therapist Console</span>
       </div>
     </div>
-    <nav>{nav_html}</nav>
-    <a class="theme-toggle" href="?theme={toggled_theme}">{'Dark' if toggled_theme == 'dark' else 'Light'} mode</a>
+    <nav class="nav-menu">
+      {nav_html}
+      <div class="nav-divider"></div>
+      <a class="nav-item" href="#"><span class="nav-icon">⚙️</span> Settings</a>
+      <a class="nav-item text-danger" href="#"><span class="nav-icon">🚪</span> Logout</a>
+    </nav>
   </aside>
   <main class="main">
-    <header class="topbar">
+    <header class="topbar glass-panel">
+      <div class="search-bar">
+        <span class="search-icon">🔍</span>
+        <input type="text" placeholder="Search patients, sessions..." class="search-input">
+      </div>
+      <div class="topbar-actions">
+        <a class="icon-btn" href="/notifications" title="Notifications">🔔</a>
+        <a class="icon-btn theme-toggle-btn" href="?theme={toggled_theme}" title="Toggle Theme">
+          {'🌙' if theme == 'light' else '☀️'}
+        </a>
+        <div class="therapist-profile">
+          <div class="avatar">Dr</div>
+          <div class="profile-info">
+            <strong>Therapist Profile</strong>
+            <span>Admin</span>
+          </div>
+        </div>
+      </div>
+    </header>
+    <div class="page-header">
       <div>
         <h1>{esc(page.title)}</h1>
         <p>Centralized rehabilitation monitoring for clinical review and decision support.</p>
       </div>
       <div class="date-chip">{datetime.now().strftime('%d %b %Y, %I:%M %p')}</div>
-    </header>
+    </div>
     {page.body}
   </main>
   <script>{self.js()}</script>
@@ -884,140 +906,222 @@ class DashboardRenderer:
 
     def css(self) -> str:
         return """
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 :root {
-  --bg: #f5f8fc;
-  --panel: #ffffff;
-  --panel-2: #eef5fa;
-  --text: #1c2735;
-  --muted: #66778a;
-  --line: #d2e0ec;
-  --primary: #0077b6;
-  --primary-2: #00a0a8;
-  --success: #1da365;
-  --warning: #dc8f14;
-  --danger: #cc404a;
-  --shadow: 0 14px 34px rgba(39, 64, 91, .10);
+  --bg: #f8fafc;
+  --panel: rgba(255, 255, 255, 0.85);
+  --panel-2: rgba(241, 245, 249, 0.8);
+  --text: #0f172a;
+  --muted: #64748b;
+  --line: rgba(226, 232, 240, 0.8);
+  --primary: #2563EB;
+  --primary-2: #06B6D4;
+  --success: #22C55E;
+  --warning: #F59E0B;
+  --danger: #EF4444;
+  --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
+  --shadow-hover: 0 20px 25px -5px rgba(37, 99, 235, 0.1), 0 10px 10px -5px rgba(37, 99, 235, 0.04);
+  --glass-border: rgba(255, 255, 255, 0.5);
 }
 [data-theme="dark"] {
-  --bg: #101820;
-  --panel: #172432;
-  --panel-2: #1d3040;
-  --text: #ecf4fb;
-  --muted: #a6b6c6;
-  --line: #2b4256;
-  --shadow: 0 18px 42px rgba(0, 0, 0, .28);
+  --bg: #0f172a;
+  --panel: rgba(30, 41, 59, 0.85);
+  --panel-2: rgba(51, 65, 85, 0.8);
+  --text: #f8fafc;
+  --muted: #94a3b8;
+  --line: rgba(51, 65, 85, 0.8);
+  --primary: #3b82f6;
+  --primary-2: #22d3ee;
+  --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
+  --shadow-hover: 0 20px 25px -5px rgba(59, 130, 246, 0.2);
+  --glass-border: rgba(255, 255, 255, 0.05);
 }
 * { box-sizing: border-box; }
 body {
   margin: 0;
-  font-family: "Segoe UI", Arial, sans-serif;
+  font-family: 'Inter', system-ui, -apple-system, sans-serif;
   background: var(--bg);
   color: var(--text);
+  line-height: 1.5;
+  transition: background-color 0.3s ease, color 0.3s ease;
 }
 a { color: inherit; text-decoration: none; }
-.sidebar {
-  position: fixed;
-  inset: 0 auto 0 0;
-  width: 250px;
-  padding: 22px 16px;
+
+/* Layout Elements */
+.glass-panel {
   background: var(--panel);
-  border-right: 1px solid var(--line);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--glass-border);
 }
-.brand { display: flex; gap: 12px; align-items: center; margin-bottom: 28px; }
+.sidebar {
+  position: fixed; inset: 0 auto 0 0; width: 280px; padding: 24px 20px;
+  display: flex; flex-direction: column;
+  border-right: 1px solid var(--line);
+  z-index: 100;
+  box-shadow: 4px 0 24px rgba(0,0,0,0.02);
+}
+.brand { display: flex; gap: 14px; align-items: center; margin-bottom: 36px; padding: 0 8px; }
 .brand-mark {
-  width: 42px; height: 42px; border-radius: 8px;
+  width: 46px; height: 46px; border-radius: 14px;
   display: grid; place-items: center;
   color: white; background: linear-gradient(135deg, var(--primary), var(--primary-2));
-  font-weight: 800;
+  font-weight: 800; font-size: 18px;
+  box-shadow: 0 8px 16px rgba(37, 99, 235, 0.25);
 }
-.brand strong { display: block; }
-.brand span, .topbar p, .muted { color: var(--muted); font-size: 13px; }
-.nav-item, .theme-toggle {
-  display: block;
-  padding: 11px 12px;
-  border-radius: 8px;
-  margin: 4px 0;
-  color: var(--muted);
+.brand strong { display: block; font-size: 18px; font-weight: 700; color: var(--text); letter-spacing: -0.01em; }
+.brand span, .topbar p, .muted { color: var(--muted); font-size: 13px; font-weight: 500; }
+
+.nav-menu { display: flex; flex-direction: column; gap: 4px; flex-grow: 1; overflow-y: auto; }
+.nav-item {
+  display: flex; align-items: center; gap: 12px;
+  padding: 12px 16px; border-radius: 12px;
+  color: var(--muted); font-weight: 600; font-size: 14px;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.nav-item.active, .nav-item:hover, .theme-toggle:hover {
-  background: var(--panel-2);
-  color: var(--primary);
+.nav-icon { font-size: 18px; opacity: 0.8; }
+.nav-item.active, .nav-item:hover {
+  background: var(--panel-2); color: var(--primary);
+  transform: translateX(4px);
 }
-.theme-toggle { position: absolute; bottom: 18px; left: 16px; right: 16px; }
-.main { margin-left: 250px; padding: 26px; min-height: 100vh; }
+.nav-item.active .nav-icon { opacity: 1; }
+.nav-divider { height: 1px; background: var(--line); margin: 16px 0; }
+.text-danger:hover { color: var(--danger) !important; background: rgba(239, 68, 68, 0.1) !important; }
+
+.main { margin-left: 280px; padding: 0; min-height: 100vh; display: flex; flex-direction: column; }
 .topbar {
-  display: flex; align-items: center; justify-content: space-between; gap: 20px;
-  margin-bottom: 22px;
+  display: flex; align-items: center; justify-content: space-between; gap: 24px;
+  padding: 16px 40px; border-bottom: 1px solid var(--line);
+  position: sticky; top: 0; z-index: 90;
 }
-h1 { margin: 0 0 6px; font-size: 28px; letter-spacing: 0; }
-h2 { margin: 0 0 14px; font-size: 19px; }
+.search-bar {
+  display: flex; align-items: center; gap: 10px;
+  background: var(--bg); border: 1px solid var(--line);
+  padding: 8px 16px; border-radius: 99px;
+  width: 100%; max-width: 400px; transition: all 0.2s ease;
+}
+.search-bar:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
+.search-input { border: none; background: transparent; width: 100%; outline: none; padding: 0; color: var(--text); font-family: 'Inter', sans-serif;}
+.search-input:focus { box-shadow: none; }
+
+.topbar-actions { display: flex; align-items: center; gap: 16px; }
+.icon-btn {
+  display: grid; place-items: center;
+  width: 40px; height: 40px; border-radius: 50%;
+  background: var(--bg); color: var(--text); border: 1px solid var(--line);
+  font-size: 16px; transition: all 0.2s ease;
+}
+.icon-btn:hover { background: var(--panel-2); transform: translateY(-2px); }
+
+.therapist-profile { display: flex; align-items: center; gap: 12px; margin-left: 12px; padding-left: 16px; border-left: 1px solid var(--line); cursor: pointer; }
+.avatar {
+  width: 42px; height: 42px; border-radius: 14px;
+  background: linear-gradient(135deg, var(--primary-2), var(--primary));
+  color: white; display: grid; place-items: center; font-weight: 700;
+}
+.profile-info { display: flex; flex-direction: column; }
+.profile-info strong { font-size: 14px; font-weight: 600; color: var(--text); }
+.profile-info span { font-size: 12px; color: var(--muted); }
+
+.page-header { padding: 32px 40px 16px; display: flex; align-items: center; justify-content: space-between; }
+h1 { margin: 0 0 8px; font-size: 32px; font-weight: 800; letter-spacing: -0.03em; }
+h2 { margin: 0 0 16px; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
 .date-chip, .pill {
-  padding: 9px 12px;
-  border: 1px solid var(--line);
-  background: var(--panel);
-  border-radius: 8px;
-  color: var(--muted);
+  padding: 8px 16px; border: 1px solid var(--line);
+  background: var(--panel); border-radius: 20px;
+  color: var(--primary); font-size: 13px; font-weight: 600;
+  box-shadow: 0 2px 8px rgba(0,0,0,0.02);
 }
-.grid { display: grid; gap: 16px; }
-.stats { grid-template-columns: repeat(4, minmax(160px, 1fr)); }
-.two { grid-template-columns: minmax(0, 1.15fr) minmax(320px, .85fr); }
-.three { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+
+/* Sections */
+.main > section { padding: 0 40px 32px; }
+.grid { display: grid; gap: 24px; }
+.stats { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+.two { grid-template-columns: minmax(0, 1.2fr) minmax(360px, 0.8fr); }
+.three { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+
 .card {
   background: var(--panel);
-  border: 1px solid var(--line);
-  border-radius: 8px;
-  padding: 18px;
+  border: 1px solid var(--glass-border);
+  border-radius: 20px;
+  padding: 24px;
   box-shadow: var(--shadow);
+  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
 }
-.stat-label { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .08em; }
-.stat-value { margin-top: 8px; font-size: 30px; font-weight: 800; }
-.stat-sub { margin-top: 6px; color: var(--muted); font-size: 13px; }
-.toolbar {
-  display: flex; gap: 10px; align-items: center; justify-content: space-between;
-  margin-bottom: 14px; flex-wrap: wrap;
+.card:hover { transform: translateY(-4px); box-shadow: var(--shadow-hover); }
+
+.stat-label { color: var(--muted); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 8px; }
+.stat-value { margin-top: 12px; font-size: 36px; font-weight: 800; color: var(--text); line-height: 1; letter-spacing: -0.02em; }
+.stat-sub { margin-top: 8px; color: var(--muted); font-size: 13px; font-weight: 500; }
+
+.toolbar { display: flex; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; }
+input:not(.search-input), select, textarea {
+  width: 100%; border: 1px solid var(--line);
+  background: var(--bg); color: var(--text);
+  border-radius: 12px; padding: 12px 16px;
+  font: inherit; font-size: 14px;
+  transition: all 0.2s ease; outline: none;
 }
-input, select, textarea {
-  width: 100%;
-  border: 1px solid var(--line);
-  background: var(--panel);
-  color: var(--text);
-  border-radius: 8px;
-  padding: 10px 11px;
-  font: inherit;
-}
-textarea { min-height: 96px; resize: vertical; }
-.form-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px; }
+input:focus:not(.search-input), select:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15); }
+textarea { min-height: 120px; resize: vertical; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; }
 .full { grid-column: 1 / -1; }
+label { display: flex; flex-direction: column; gap: 8px; font-size: 13px; font-weight: 600; color: var(--text); }
+
 button, .button {
-  border: 0;
-  border-radius: 8px;
-  padding: 10px 13px;
-  background: var(--primary);
-  color: white;
-  font-weight: 700;
-  cursor: pointer;
+  display: inline-flex; align-items: center; justify-content: center;
+  border: 0; border-radius: 12px; padding: 12px 24px;
+  background: linear-gradient(135deg, var(--primary), var(--primary-2));
+  color: white; font-weight: 600; font-size: 14px; cursor: pointer;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
 }
-.button.secondary { background: var(--panel-2); color: var(--primary); border: 1px solid var(--line); }
-.button.danger, button.danger { background: var(--danger); }
-table { width: 100%; border-collapse: collapse; }
-th, td { padding: 11px 10px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: top; }
-th { color: var(--muted); font-size: 12px; text-transform: uppercase; letter-spacing: .05em; }
-tr:hover td { background: var(--panel-2); }
-.progress { height: 9px; border-radius: 999px; background: var(--panel-2); overflow: hidden; }
-.progress span { display: block; height: 100%; background: linear-gradient(90deg, var(--primary), var(--success)); }
-.badge { padding: 4px 8px; border-radius: 999px; font-size: 12px; background: var(--panel-2); color: var(--primary); }
-.alert { border-left: 4px solid var(--primary); }
-.alert.warning { border-left-color: var(--warning); }
-.alert.danger { border-left-color: var(--danger); }
-.chart { width: 100%; border-radius: 8px; border: 1px solid var(--line); background: white; }
-.tabs { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
-.pagination { display: flex; justify-content: flex-end; gap: 8px; margin-top: 14px; }
-@media (max-width: 980px) {
-  .sidebar { position: static; width: auto; }
-  .theme-toggle { position: static; }
-  .main { margin-left: 0; padding: 18px; }
+button:hover, .button:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3); }
+button:active, .button:active { transform: translateY(0); }
+.button.secondary { background: var(--bg); color: var(--text); border: 1px solid var(--line); box-shadow: none; }
+.button.secondary:hover { background: var(--panel-2); border-color: var(--primary); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
+.button.danger, button.danger { background: linear-gradient(135deg, var(--danger), #b91c1c); box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2); }
+
+table { width: 100%; border-collapse: separate; border-spacing: 0; margin-top: 8px; }
+th, td { padding: 16px 16px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
+th { color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; border-bottom-width: 2px; }
+tr:last-child td { border-bottom: none; }
+tr { transition: background-color 0.15s ease; }
+tr:hover td { background: var(--bg); }
+
+.progress { height: 8px; border-radius: 999px; background: var(--bg); overflow: hidden; margin-top: 8px; border: 1px solid var(--line); }
+.progress span { display: block; height: 100%; background: linear-gradient(90deg, var(--primary), var(--success)); border-radius: 999px; }
+.badge { padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; background: rgba(37, 99, 235, 0.1); color: var(--primary); display: inline-block; }
+
+.alert { border-left: 5px solid var(--primary); padding-left: 20px; border-radius: 16px; background: rgba(37, 99, 235, 0.03); }
+.alert.warning { border-left-color: var(--warning); background: rgba(245, 158, 11, 0.03); }
+.alert.warning .badge { color: var(--warning); background: rgba(245, 158, 11, 0.1); }
+.alert.danger { border-left-color: var(--danger); background: rgba(239, 68, 68, 0.03); }
+.alert.danger .badge { color: var(--danger); background: rgba(239, 68, 68, 0.1); }
+
+.chart { width: 100%; border-radius: 12px; border: 1px solid var(--line); background: #ffffff; mix-blend-mode: normal; box-shadow: 0 4px 12px rgba(0,0,0,0.02); }
+[data-theme="dark"] .chart { filter: brightness(0.9) contrast(1.1); }
+.tabs { display: flex; gap: 10px; margin-bottom: 24px; flex-wrap: wrap; }
+.pagination { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+
+@media (max-width: 1024px) {
+  .sidebar { width: 240px; }
+  .main { margin-left: 240px; }
+  .topbar, .page-header, .main > section { padding-left: 24px; padding-right: 24px; }
+}
+@media (max-width: 768px) {
+  .sidebar { position: static; width: 100%; border-right: none; border-bottom: 1px solid var(--line); padding: 20px; }
+  .nav-menu { flex-direction: row; flex-wrap: wrap; gap: 8px; }
+  .nav-item { padding: 10px 14px; flex: 1; min-width: 140px; justify-content: center; }
+  .nav-divider { display: none; }
+  .main { margin-left: 0; }
+  .topbar { flex-direction: column; align-items: stretch; gap: 16px; }
+  .search-bar { max-width: none; }
+  .therapist-profile { border-left: none; padding-left: 0; margin-left: auto; }
   .stats, .two, .three, .form-grid { grid-template-columns: 1fr; }
-  .topbar { align-items: flex-start; flex-direction: column; }
+  .page-header { flex-direction: column; align-items: flex-start; gap: 16px; }
 }
 """
 
