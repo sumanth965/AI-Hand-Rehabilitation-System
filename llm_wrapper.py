@@ -1,146 +1,224 @@
 import json
-import urllib.request
+import os
 import urllib.error
+import urllib.request
 
-SENSEI_SYSTEM_PROMPT = """You are Virtual Sensei, an intelligent AI Rehabilitation Coach integrated into the AI Hand Rehabilitation System.
 
-Your purpose is to assist patients undergoing hand, wrist, and forearm rehabilitation through positive, personalized, and evidence-informed coaching.
+DEFAULT_OLLAMA_MODEL = os.getenv("OLLAMA_SENSEI_MODEL", "qwen2.5:0.5b")
+DEFAULT_OLLAMA_TIMEOUT = float(os.getenv("OLLAMA_SENSEI_TIMEOUT", "8"))
+USE_LLM_ENHANCER = os.getenv("OLLAMA_SENSEI_USE_LLM", "0").lower() in {"1", "true", "yes", "on"}
+FALLBACK_OLLAMA_MODELS = [
+    model.strip()
+    for model in os.getenv("OLLAMA_SENSEI_FALLBACK_MODELS", "smollm2:135m,llama3.2:1b,llama3").split(",")
+    if model.strip()
+]
 
-ROLE
+SUPPORTED_OLLAMA_MODELS = {"qwen2.5:0.5b", "smollm2:135m", "llama3.2:1b", "llama3"}
 
-You act like a supportive physiotherapist assistant who helps patients perform rehabilitation exercises safely and consistently.
+SENSEI_RULES = (
+    "You are Virtual Sensei. Rewrite the provided deterministic rehab coaching "
+    "message as one short spoken sentence. Preserve every clinical decision, "
+    "number, risk level, readiness score, and safety instruction. Do not add "
+    "diagnosis, medication advice, new exercises, prescriptions, difficulty "
+    "changes, or risk-score changes."
+)
 
-You are NOT a doctor and you must NEVER claim to provide medical diagnosis, treatment, prescriptions, or emergency medical advice.
 
-PRIMARY RESPONSIBILITIES
+def _model_candidates(requested_model: str | None) -> list[str]:
+    candidates = [requested_model or DEFAULT_OLLAMA_MODEL, *FALLBACK_OLLAMA_MODELS]
+    unique: list[str] = []
+    for candidate in candidates:
+        if candidate and candidate in SUPPORTED_OLLAMA_MODELS and candidate not in unique:
+            unique.append(candidate)
+    return unique
 
-1. Analyze patient rehabilitation performance.
-2. Provide encouraging and personalized coaching.
-3. Explain progress in simple language.
-4. Motivate patients to continue therapy.
-5. Promote correct exercise execution.
-6. Warn patients when performance suggests excessive fatigue, pain, or reduced movement quality.
-7. Support therapist-guided rehabilitation.
 
-AVAILABLE PATIENT DATA
-
-You will receive JSON containing metrics like ROM, Pain Score, Fatigue Score, Accuracy, Recovery Prediction, Readiness Score, etc.
-Use this information to generate personalized coaching.
-
-COACHING RULES
-
-Always:
-- Be supportive and encouraging.
-- Use simple and clear English.
-- Focus on rehabilitation progress.
-- Mention improvements when present.
-- Explain setbacks constructively.
-- Encourage consistency and safe practice.
-- Compare current performance with previous sessions when data is available.
-
-Never:
-- Diagnose diseases.
-- Recommend medication.
-- Replace a physiotherapist.
-- Predict guaranteed recovery.
-- Create fear or anxiety.
-- Give unsafe medical advice.
-
-PAIN MANAGEMENT
-If Pain Score >= 7:
-- Encourage slower movements.
-- Prioritize comfort and safety.
-- Recommend consulting a physiotherapist if pain persists.
-- Avoid suggesting increased difficulty.
-
-FATIGUE MANAGEMENT
-If Fatigue Score is high:
-- Suggest short rest periods.
-- Emphasize quality over speed.
-- Avoid encouraging excessive repetition.
-
-RECOVERY-AWARE COACHING
-When improvement is detected:
-Example: "Excellent work. Your wrist rotation improved by 8 degrees compared to your previous session."
-
-When progress is stable:
-Example: "Your performance remains consistent. Continue practicing regularly to build strength and control."
-
-When performance declines:
-Example: "Today's movement quality is slightly lower than your recent average. Focus on controlled movements."
-
-READINESS SCORE GUIDANCE
-Readiness > 80: Encourage progression.
-Readiness 50–80: Encourage consistency.
-Readiness < 50: Encourage caution, prioritize movement quality.
-
-FOREARM REHABILITATION
-For pronation/supination:
-- Encourage smooth rotation.
-- Discourage compensatory shoulder movement.
-- Emphasize control and endurance.
-
-COMPENSATION DETECTION
-If compensatory movement is detected:
-Example: "Try to reduce shoulder involvement and let the forearm perform the movement naturally."
-
-THERAPIST RESPECT
-Always support therapist-directed care.
-
-RESPONSE STYLE
-- Maximum 2-3 sentences.
-- Professional but friendly.
-- Encouraging and motivating.
-- Easy for elderly patients to understand.
-- Never use complex medical terminology unless explicitly requested.
-- OUTPUT ONLY THE DIRECT QUOTE TO BE SPOKEN. No conversational filler (like "Here is the response:").
-"""
-
-def generate_llm_coaching(metrics: dict, model: str = "llama3", timeout: float = 3.0) -> str | None:
-    """
-    Attempts to generate a coaching message using a local Ollama LLM.
-    Returns the message string if successful, or None if Ollama is unreachable or fails.
-    """
-    url = "http://127.0.0.1:11434/api/generate"
-    
-    # Format the user prompt from the metrics dictionary
-    user_prompt = "Generate a coaching message for this patient based on the following session metrics:\n"
-    for k, v in metrics.items():
-        user_prompt += f"- {k}: {v}\n"
-        
-    payload = {
-        "model": model,
-        "system": SENSEI_SYSTEM_PROMPT,
-        "prompt": user_prompt,
-        "stream": False,
-        "options": {
-            "temperature": 0.7,
-            "num_predict": 100 # Keep response short (2-3 sentences)
-        }
-    }
-    
-    data = json.dumps(payload).encode('utf-8')
-    req = urllib.request.Request(
-        url, 
-        data=data, 
-        headers={'Content-Type': 'application/json'}
+def _compact_metrics(metrics: dict) -> dict:
+    important_keys = (
+        "Exercise",
+        "ROM",
+        "Previous ROM",
+        "Accuracy",
+        "Pain Score (0-10)",
+        "Pain Score",
+        "Fatigue Index (0-1)",
+        "Fatigue Score",
+        "Readiness Score",
+        "Recovery Prediction",
+        "Compensation",
     )
-    
+    compact = {key: metrics[key] for key in important_keys if key in metrics}
+    return compact or dict(list(metrics.items())[:10])
+
+
+def _clean_response(text: str) -> str:
+    text = " ".join(text.strip().split())
+    if text.startswith('"'):
+        text = text[1:]
+    if text.endswith('"'):
+        text = text[:-1]
+    for stop in (". ", "! ", "? "):
+        index = text.find(stop)
+        if index > 0:
+            return text[: index + 1]
+    return text[:220].rstrip(" ,;:")
+
+
+def _as_float(value: object, default: float = 0.0) -> float:
     try:
-        # We use a short timeout so the UI/game loop doesn't freeze if Ollama isn't running
-        with urllib.request.urlopen(req, timeout=timeout) as response:
-            if response.status == 200:
-                result = json.loads(response.read().decode('utf-8'))
-                text = result.get("response", "").strip()
-                # Clean up quotes if the model wraps it in them
-                if text.startswith('"') and text.endswith('"'):
-                    text = text[1:-1]
-                print(f"[Virtual Sensei] Successfully generated RAG coaching via local Llama 3.")
+        text = str(value).replace("%", "").replace("degrees", "").replace("degree", "").strip()
+        return float(text.split("/")[0])
+    except Exception:
+        return default
+
+
+def generate_rule_based_coaching(metrics: dict) -> str:
+    exercise = str(metrics.get("Exercise", "the exercise"))
+    rom = _as_float(metrics.get("ROM", metrics.get("Current ROM", 0)))
+    previous_rom = _as_float(metrics.get("Previous ROM", 0))
+    accuracy = _as_float(metrics.get("Accuracy", 0))
+    pain = _as_float(metrics.get("Pain Score (0-10)", metrics.get("Pain Score", 0)))
+    fatigue = _as_float(metrics.get("Fatigue Score", metrics.get("Fatigue Index (0-1)", 0)))
+    if fatigue <= 1:
+        fatigue *= 10
+
+    if pain >= 7:
+        return "Move slowly and stay within a comfortable range today; if the pain continues, please check with your physiotherapist."
+    if fatigue >= 7:
+        return "You are showing signs of fatigue, so take a short rest and focus on smooth, controlled movement."
+    if previous_rom > 0 and rom >= previous_rom + 3:
+        return f"Excellent progress: your movement improved from {previous_rom:.0f} to {rom:.0f} degrees during {exercise}."
+    if accuracy >= 80:
+        return f"Great control in {exercise}; keep the same smooth pace and steady accuracy."
+    if accuracy and accuracy < 55:
+        return f"Focus on slower, smoother movement in {exercise}; quality matters more than speed right now."
+    return f"Good work on {exercise}; continue with controlled movement and consistent practice."
+
+
+def enhance_coaching_message(
+    deterministic_message: str,
+    metrics: dict,
+    model: str | None = None,
+    timeout: float | None = None,
+) -> str | None:
+    """
+    Optionally rewrite deterministic Virtual Sensei coaching using local Ollama.
+
+    Environment overrides:
+    - OLLAMA_HOST, default http://127.0.0.1:11434
+    - OLLAMA_SENSEI_MODEL, default qwen2.5:0.5b
+    - OLLAMA_SENSEI_TIMEOUT, default 8 seconds
+    - OLLAMA_SENSEI_USE_LLM=1 enables optional LLM enhancement
+
+    This function never creates rehabilitation decisions. It only receives a
+    completed deterministic message and may return a communication rewrite.
+    Return None when disabled, unavailable, timed out, or unsafe.
+    """
+    if not USE_LLM_ENHANCER:
+        return None
+
+    host = os.getenv("OLLAMA_HOST", "http://127.0.0.1:11434").rstrip("/")
+    url = f"{host}/api/generate"
+    request_timeout = DEFAULT_OLLAMA_TIMEOUT if timeout is None else timeout
+
+    compact_metrics = _compact_metrics(metrics)
+    user_prompt = (
+        f"{SENSEI_RULES}\n"
+        f"Deterministic coaching message: {deterministic_message}\n"
+        "Context for tone only, not decision-making: "
+        f"{json.dumps(compact_metrics, ensure_ascii=True)}"
+    )
+
+    last_error: Exception | None = None
+    for model_name in _model_candidates(model):
+        payload = {
+            "model": model_name,
+            "prompt": user_prompt,
+            "stream": False,
+            "keep_alive": "10m",
+            "options": {
+                "temperature": 0.4,
+                "num_ctx": 512,
+                "num_predict": 24,
+            },
+        }
+
+        req = urllib.request.Request(
+            url,
+            data=json.dumps(payload).encode("utf-8"),
+            headers={"Content-Type": "application/json"},
+        )
+
+        try:
+            with urllib.request.urlopen(req, timeout=request_timeout) as response:
+                if response.status != 200:
+                    continue
+                result = json.loads(response.read().decode("utf-8"))
+                text = _clean_response(result.get("response", ""))
+                if not text:
+                    continue
+                if _looks_clinically_changed(deterministic_message, text):
+                    print(f"[Virtual Sensei] Rejected unsafe LLM rewrite from {model_name}.")
+                    continue
+                if len(text.split()) < 5 or "I " in text[:12] or "I'm " in text[:16]:
+                    continue
+                print(f"[Virtual Sensei] Enhanced coaching language with {model_name}.")
                 return text
-    except Exception as e:
-        # Silently fail (ConnectionRefused, Timeout, HTTPError)
-        # We rely on the fallback logic in AdaptiveRehabEngine
-        print(f"[Virtual Sensei] Local LLM unreachable ({e}). Falling back to rule-based engine.")
-        pass
-        
+        except urllib.error.HTTPError as exc:
+            last_error = exc
+            if exc.code == 404:
+                print(f"[Virtual Sensei] Ollama model {model_name} is not installed. Trying fallback.")
+                continue
+            break
+        except Exception as exc:
+            last_error = exc
+            break
+
+    print(
+        f"[Virtual Sensei] Local LLM unavailable ({last_error}). "
+        "Using deterministic coaching."
+    )
     return None
+
+
+def _looks_clinically_changed(source: str, rewritten: str) -> bool:
+    """Block obvious prescription/risk/safety edits in optional LLM output."""
+    source_lower = source.lower()
+    rewritten_lower = rewritten.lower()
+    protected_terms = (
+        "pain",
+        "therapist",
+        "difficulty",
+        "readiness",
+        "risk",
+        "degrees",
+        "/100",
+        "rest",
+        "slow",
+        "comfortable",
+    )
+    for term in protected_terms:
+        if term in source_lower and term not in rewritten_lower:
+            return True
+    blocked_terms = (
+        "medication",
+        "diagnose",
+        "diagnosis",
+        "increase difficulty",
+        "decrease difficulty",
+        "change your prescription",
+        "ignore",
+    )
+    return any(term in rewritten_lower for term in blocked_terms)
+
+
+def generate_llm_coaching(
+    metrics: dict,
+    model: str | None = None,
+    timeout: float | None = None,
+) -> str | None:
+    """
+    Backward-compatible helper. Prefer enhance_coaching_message for new code.
+    """
+    deterministic_message = generate_rule_based_coaching(metrics)
+    return enhance_coaching_message(deterministic_message, metrics, model, timeout) or deterministic_message

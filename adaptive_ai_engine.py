@@ -17,7 +17,7 @@ from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any, Iterable
 
-from llm_wrapper import generate_llm_coaching
+from llm_wrapper import enhance_coaching_message
 
 
 DB_PATH = "rehab_data.db"
@@ -131,11 +131,27 @@ class AdaptiveRehabEngine:
                     session_id INTEGER,
                     level INTEGER,
                     message TEXT NOT NULL,
+                    deterministic_message TEXT DEFAULT '',
+                    llm_enhanced_message TEXT DEFAULT '',
+                    coaching_trigger TEXT DEFAULT '',
+                    decision_source TEXT DEFAULT 'Adaptive AI Engine',
+                    llm_status TEXT DEFAULT 'not_requested',
                     context_json TEXT DEFAULT '{}',
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
                 """
             )
+            for column, definition in [
+                ("deterministic_message", "TEXT DEFAULT ''"),
+                ("llm_enhanced_message", "TEXT DEFAULT ''"),
+                ("coaching_trigger", "TEXT DEFAULT ''"),
+                ("decision_source", "TEXT DEFAULT 'Adaptive AI Engine'"),
+                ("llm_status", "TEXT DEFAULT 'not_requested'"),
+            ]:
+                try:
+                    conn.execute(f"SELECT {column} FROM sensei_messages LIMIT 1")
+                except sqlite3.OperationalError:
+                    conn.execute(f"ALTER TABLE sensei_messages ADD COLUMN {column} {definition}")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS therapist_overrides (
@@ -226,6 +242,7 @@ class AdaptiveRehabEngine:
         fatigue_index: float = 0.0,
         rotation_smoothness: float = 0.7,
         recovery_prediction: float | None = None,
+        functional_recovery_score: float | None = None,
         session_id: int | None = None,
     ) -> AdaptivePrescription:
         history = self._sessions(patient_id, limit=12)
@@ -387,6 +404,7 @@ class AdaptiveRehabEngine:
             "pain_trend": pain_trend,
             "recovery_trend": recovery_trend,
             "recovery_prediction": recovery_prediction,
+            "functional_recovery_score": functional_recovery_score,
             "safety_blocks": safety_blocks,
         }, explanation=explanation)
         return prescription
@@ -491,28 +509,56 @@ class AdaptiveRehabEngine:
         try:
             from clinical_intelligence import ClinicalIntelligenceLayer
             clinical = ClinicalIntelligenceLayer(self.db_path).get_clinical_profile(patient_id)
-            
-            with self.connect() as conn:
-                profile_row = conn.execute("SELECT therapist_notes FROM dashboard_patient_profiles WHERE name = ?", (patient_id,)).fetchone()
+        except Exception:
+            clinical = None
+
+        with self.connect() as conn:
+            try:
+                profile_row = conn.execute(
+                    "SELECT therapist_notes FROM dashboard_patient_profiles WHERE name = ?",
+                    (patient_id,),
+                ).fetchone()
                 if profile_row and profile_row["therapist_notes"]:
                     therapist_notes = profile_row["therapist_notes"]
-                    
-                forearm_row = conn.execute("SELECT movement_class, compensation_score FROM forearm_assessments WHERE patient_id = ? ORDER BY id DESC LIMIT 1", (patient_id,)).fetchone()
+            except sqlite3.OperationalError:
+                pass
+
+            try:
+                forearm_row = conn.execute(
+                    """
+                    SELECT movement_class, compensation_score
+                    FROM forearm_assessments
+                    WHERE patient_id = ?
+                    ORDER BY id DESC
+                    LIMIT 1
+                    """,
+                    (patient_id,),
+                ).fetchone()
                 if forearm_row:
                     latest_forearm = f"{forearm_row['movement_class']} (Compensation Score: {forearm_row['compensation_score']*100:.0f}%)"
-        except Exception as e:
-            print(f"Error fetching RAG context: {e}")
+            except sqlite3.OperationalError:
+                pass
 
-        # Attempt to use local LLM
         metrics = {
             "Patient ID": patient_id,
             "Exercise Level": level,
             "Accuracy": f"{accuracy:.1f}%",
-            "Range of Motion (ROM)": f"{rom:.1f} degrees",
+            "ROM": f"{rom:.1f} degrees",
             "Pain Score (0-10)": pain_level,
             "Fatigue Index (0-1)": f"{fatigue_index:.2f}",
             "Recovery Prediction": f"{recovery_prediction:.1f}%" if recovery_prediction else "Unknown",
             "Readiness Score": f"{prescription.readiness_score:.0f}/100",
+            "Risk Level": prescription.risk_level,
+            "Recovery State": prescription.recovery_trend,
+            "Difficulty Tier": prescription.difficulty_tier,
+            "Adaptive Prescription": {
+                "target_scale": prescription.target_scale,
+                "speed_scale": prescription.speed_scale,
+                "required_rom": prescription.required_rom,
+                "repetitions": prescription.repetitions,
+                "hold_seconds": prescription.hold_seconds,
+                "rotation_tolerance": prescription.rotation_tolerance,
+            },
             "AI Prescription Rationale": f"Progression: {prescription.progression}. {prescription.rationale}"
         }
         
@@ -533,51 +579,73 @@ class AdaptiveRehabEngine:
         if latest_forearm:
             metrics["Latest Forearm Assessment"] = latest_forearm
 
-        message = generate_llm_coaching(metrics)
-        
-        # Determine the core coaching message based on conditions (Fallback)
-        if not message:
-            if pain_level >= 7:
-                message = "Take the movement slowly. Do not force the rotation. Focus on comfort and control."
-            elif fatigue_index >= 0.75:
-                message = "Movement speed is decreasing. Consider taking a short rest. Let's prioritize quality over speed."
-            elif prescription.progression == "advance" and accuracy >= 80:
-                if delta_rom > 0:
-                    message = f"Excellent progress. Your wrist rotation improved by {delta_rom:+.1f} degrees compared to your previous session. You are ready for a greater challenge."
-                else:
-                    message = f"Excellent work. Your accuracy increased by {delta_acc:+.1f}% this week. Keep maintaining smooth movements."
-            elif prescription.progression in ("support", "regress"):
-                message = "Recovery is progressing slower than expected. Let's focus on movement quality before increasing difficulty."
+        coaching_trigger = "stable_recovery"
+        if pain_level >= 7:
+            core_message = "Take the movement slowly. Do not force the rotation. Focus on comfort and control."
+            coaching_trigger = "elevated_pain"
+        elif fatigue_index >= 0.75:
+            core_message = "Movement speed is decreasing. Consider taking a short rest. Let's prioritize quality over speed."
+            coaching_trigger = "fatigue"
+        elif prescription.progression == "advance" and accuracy >= 80:
+            coaching_trigger = "safe_progression"
+            if delta_rom > 0:
+                core_message = f"Excellent progress. Your wrist rotation improved by {delta_rom:+.1f} degrees compared to your previous session. You are ready for a greater challenge."
             else:
-                # Recovery-aware fallback
-                if recovery_prediction is not None:
-                    if rom > recovery_prediction:
-                        message = "You are recovering faster than the projected trend."
-                    else:
-                        message = "Recovery remains stable and on target."
+                core_message = f"Excellent work. Your accuracy increased by {delta_acc:+.1f}% this week. Keep maintaining smooth movements."
+        elif prescription.progression in ("support", "regress"):
+            core_message = "Recovery is progressing slower than expected. Let's focus on movement quality before increasing difficulty."
+            coaching_trigger = "support_or_regress"
+        else:
+            if recovery_prediction is not None:
+                if rom > recovery_prediction:
+                    core_message = "You are recovering faster than the projected trend."
+                    coaching_trigger = "above_recovery_prediction"
                 else:
-                    message = "Good controlled work. We will hold this difficulty until the trend is stronger."
+                    core_message = "Recovery remains stable and on target."
+            else:
+                core_message = "Good controlled work. We will hold this difficulty until the trend is stronger."
 
-            # Prepend Readiness Score context for fallback
-            readiness = prescription.readiness_score
-            if readiness > 80:
-                message = f"Readiness is high ({readiness:.0f}/100). {message}"
-            elif readiness >= 50:
-                message = f"Readiness is moderate ({readiness:.0f}/100). {message}"
-            else:
-                message = f"Readiness is low ({readiness:.0f}/100). {message}"
+        readiness = prescription.readiness_score
+        if readiness > 80:
+            deterministic_message = f"Readiness is high ({readiness:.0f}/100). {core_message}"
+        elif readiness >= 50:
+            deterministic_message = f"Readiness is moderate ({readiness:.0f}/100). {core_message}"
+        else:
+            deterministic_message = f"Readiness is low ({readiness:.0f}/100). {core_message}"
+
+        enhanced_message = enhance_coaching_message(deterministic_message, metrics)
+        message = enhanced_message or deterministic_message
+        llm_status = "enhanced" if enhanced_message else "deterministic_fallback"
+
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 """
-                INSERT INTO sensei_messages (patient_id, session_id, level, message, context_json)
-                VALUES (?, ?, ?, ?, ?)
+                INSERT INTO sensei_messages (
+                    patient_id, session_id, level, message, deterministic_message,
+                    llm_enhanced_message, coaching_trigger, decision_source,
+                    llm_status, context_json
+                )
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
                     patient_id,
                     session_id,
                     level,
                     message,
-                    json.dumps({"prescription": asdict(prescription)}, sort_keys=True),
+                    deterministic_message,
+                    enhanced_message or "",
+                    coaching_trigger,
+                    "Adaptive AI Engine + Rule-Based Logic",
+                    llm_status,
+                    json.dumps(
+                        {
+                            "prescription": asdict(prescription),
+                            "metrics": metrics,
+                            "decision_source": "Adaptive AI Rehabilitation Engine",
+                            "communication_layer": "Optional Local LLM Enhancement" if enhanced_message else "Deterministic Coaching",
+                        },
+                        sort_keys=True,
+                    ),
                 ),
             )
             conn.commit()

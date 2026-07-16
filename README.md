@@ -52,6 +52,14 @@ Navigate menus, play games, and track your recovery — **using only your hands.
 
 The project is split into two integrated components:
 
+### Adaptive AI Rehabilitation Platform Flow
+
+Patient exercise data flows through session metrics collection into the local SQLite database. Recovery prediction and forearm classification feed the `AdaptiveRehabEngine`, which generates the rehabilitation prescription: difficulty tier, target size, speed scale, ROM requirement, repetition count, hold duration, rotation tolerance, risk level, recovery state, readiness score, and therapist recommendations.
+
+The Virtual Sensei consumes the current session, previous session history, recovery prediction, forearm classification, readiness score, risk level, and adaptive prescription to generate deterministic coaching. Optional Ollama support is limited to rewriting that finished coaching message for clearer communication. The local LLM must not change prescriptions, difficulty, risk scores, safety decisions, diagnosis, medication advice, or progression recommendations.
+
+All adaptive prescriptions and Virtual Sensei audit details are stored in SQLite for therapist review, including decision source, rule-based safety logic, optional LLM enhancement status, rationale, trigger, and timestamp.
+
 ### 1. The Rehabilitation Game (`zero_keyboard_physio.py`)
 A Pygame-based, interactive computer vision game for patients. It features:
 - Hand tracking using Google MediaPipe.
@@ -81,7 +89,7 @@ pip install -r requirements.txt
 ```bash
 python therapist_dashboard.py
 ```
-*(This will automatically open http://127.0.0.1:8000 in your browser)*
+*(This will automatically open the local dashboard URL printed in the terminal, usually http://127.0.0.1:8080. `start_dashboard.bat` launches on http://127.0.0.1:8081.)*
 
 **4. Launch the Rehabilitation Session**
 ```bash
@@ -127,7 +135,5 @@ This system is designed as a **local prototype** and is currently rated for non-
 *Made with 🖐️ for patients on the road to recovery.*
 
 </div>
-
-
 
 

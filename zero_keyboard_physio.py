@@ -444,6 +444,32 @@ def distance(p1: Tuple[float, float], p2: Tuple[float, float]) -> float:
     """Calculate Euclidean distance"""
     return math.sqrt((p1[0] - p2[0])**2 + (p1[1] - p2[1])**2)
 
+def recovery_category(score: float) -> str:
+    if score <= 25:
+        return "Poor"
+    if score <= 50:
+        return "Fair"
+    if score <= 75:
+        return "Good"
+    return "Excellent"
+
+def functional_recovery_score(
+    rom: float,
+    accuracy: float,
+    pain_after: float,
+    consistency: float,
+    movement_smoothness: float,
+) -> float:
+    """Simple 0-100 clinical monitoring score; does not replace readiness logic."""
+    score = (
+        0.30 * max(0.0, min(1.0, rom / 90.0))
+        + 0.25 * max(0.0, min(1.0, accuracy / 100.0))
+        + 0.20 * max(0.0, min(1.0, (10.0 - pain_after) / 10.0))
+        + 0.15 * max(0.0, min(1.0, consistency))
+        + 0.10 * max(0.0, min(1.0, movement_smoothness))
+    ) * 100.0
+    return round(max(0.0, min(100.0, score)), 1)
+
 # ============================================================================
 # ENUMS & DATA CLASSES
 # ============================================================================
@@ -457,6 +483,7 @@ class GameState(Enum):
     PROGRESS = 3
     PAIN_SCALE = 4       # ← NEW: pain 0-10 before session
     HISTORY = 5          # ← NEW: full session history screen
+    PAIN_AFTER_SESSION = 6
     LEVEL1_FLEXIBILITY = 10
     LEVEL2_STRENGTH = 11
     LEVEL3_FINEMOTOR = 12
@@ -896,7 +923,13 @@ class DatabaseManager:
                     max_finger_extension REAL,
                     reach_distance REAL,
                     avg_hand_angle REAL DEFAULT 0,
-                    pain_level INTEGER DEFAULT 0
+                    pain_level INTEGER DEFAULT 0,
+                    pain_before_session INTEGER DEFAULT 0,
+                    pain_after_session INTEGER DEFAULT 0,
+                    pain_difference INTEGER DEFAULT 0,
+                    functional_recovery_score REAL DEFAULT 0,
+                    recovery_category TEXT DEFAULT 'Not recorded',
+                    movement_smoothness REAL DEFAULT 0
                 )
             """)
             cursor.execute("""
@@ -921,7 +954,13 @@ class DatabaseManager:
                               ("reach_distance", "REAL DEFAULT 0"),
                               ("patient_id",     "TEXT DEFAULT 'Unknown'"),
                               ("avg_hand_angle", "REAL DEFAULT 0"),
-                              ("pain_level",     "INTEGER DEFAULT 0")]:
+                              ("pain_level",     "INTEGER DEFAULT 0"),
+                              ("pain_before_session", "INTEGER DEFAULT 0"),
+                              ("pain_after_session", "INTEGER DEFAULT 0"),
+                              ("pain_difference", "INTEGER DEFAULT 0"),
+                              ("functional_recovery_score", "REAL DEFAULT 0"),
+                              ("recovery_category", "TEXT DEFAULT 'Not recorded'"),
+                              ("movement_smoothness", "REAL DEFAULT 0")]:
                 try:
                     cursor.execute(f"SELECT {col} FROM sessions LIMIT 1")
                 except sqlite3.OperationalError:
@@ -1053,17 +1092,29 @@ class DatabaseManager:
     def save_session(self, level: int, score: int, duration: float,
                     avg_accuracy: float, max_extension: float,
                     reach_distance: float = 0, avg_hand_angle: float = 0,
-                    pain_level: int = 0, patient_id: str = "Unknown"):
+                    pain_level: int = 0, patient_id: str = "Unknown",
+                    pain_before_session: int | None = None,
+                    pain_after_session: int | None = None,
+                    functional_recovery_score: float = 0.0,
+                    recovery_category: str = "Not recorded",
+                    movement_smoothness: float = 0.0):
         try:
+            pain_before = int(pain_level if pain_before_session is None else pain_before_session)
+            pain_after = int(pain_before if pain_after_session is None else pain_after_session)
+            pain_difference = pain_after - pain_before
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             cursor.execute("""
                 INSERT INTO sessions
                   (patient_id, level, score, duration, avg_accuracy,
-                   max_finger_extension, reach_distance, avg_hand_angle, pain_level)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   max_finger_extension, reach_distance, avg_hand_angle, pain_level,
+                   pain_before_session, pain_after_session, pain_difference,
+                   functional_recovery_score, recovery_category, movement_smoothness)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (patient_id, level, score, duration, avg_accuracy,
-                   max_extension, reach_distance, avg_hand_angle, pain_level))
+                   max_extension, reach_distance, avg_hand_angle, pain_before,
+                   pain_before, pain_after, pain_difference,
+                   functional_recovery_score, recovery_category, movement_smoothness))
             
             self.last_session_id = cursor.lastrowid
             
@@ -2581,6 +2632,11 @@ class PhysioSystem:
 
         # Pain scale (before each session)
         self.pain_level = 0          # 0-10 NRS score
+        self.pain_before_session = 0
+        self.pain_after_session = 0
+        self.pain_difference = 0
+        self.functional_recovery_score = 0.0
+        self.recovery_category = "Not recorded"
         self.pending_level = None    # which level player picked (before pain screen)
 
         # Power-ups and game modifiers
@@ -3035,6 +3091,8 @@ class PhysioSystem:
         elif self.state == GameState.MAIN_MENU:
             self._update_menu(hand_data)
         elif self.state == GameState.PAIN_SCALE:
+            self._update_pain_scale(hand_data)
+        elif self.state == GameState.PAIN_AFTER_SESSION:
             self._update_pain_scale(hand_data)
         elif self.state == GameState.HISTORY:
             self._update_history(hand_data)
@@ -3841,6 +3899,8 @@ class PhysioSystem:
         elif self.state == GameState.MAIN_MENU:
             self._draw_menu()
         elif self.state == GameState.PAIN_SCALE:
+            self._draw_pain_scale()
+        elif self.state == GameState.PAIN_AFTER_SESSION:
             self._draw_pain_scale()
         elif self.state == GameState.HISTORY:
             self._draw_history()
@@ -4931,16 +4991,64 @@ class PhysioSystem:
     
     def _end_level(self):
         try:
-            duration = time.time() - self.session_start
-            avg_accuracy = (self.accuracy_hits / self.accuracy_attempts * 100) if self.accuracy_attempts > 0 else 0
+            pending_summary = getattr(self, "_pending_session_summary", None)
+            if pending_summary is None:
+                duration = time.time() - self.session_start
+                avg_accuracy = (self.accuracy_hits / self.accuracy_attempts * 100) if self.accuracy_attempts > 0 else 0
+                avg_hand_angle = sum(self.angle_history) / len(self.angle_history) if len(self.angle_history) > 0 else 0
+                self._pending_session_summary = {
+                    "duration": duration,
+                    "avg_accuracy": avg_accuracy,
+                    "avg_hand_angle": avg_hand_angle,
+                    "score": self.score,
+                    "max_extension": self.max_extension,
+                    "reach_distance": self.reach_distance,
+                    "accuracy_hits": self.accuracy_hits,
+                    "accuracy_attempts": self.accuracy_attempts,
+                    "angle_history": list(self.angle_history),
+                    "pain_before_session": int(getattr(self, "pain_before_session", self.pain_level)),
+                }
+                self.pain_after_session = int(getattr(self, "pain_before_session", self.pain_level))
+                self.state = GameState.PAIN_AFTER_SESSION
+                VOICE.speak("Please rate your pain level after completing today's exercises.")
+                return
 
-            avg_hand_angle = sum(self.angle_history) / len(self.angle_history) if len(self.angle_history) > 0 else 0
+            duration = pending_summary["duration"]
+            avg_accuracy = pending_summary["avg_accuracy"]
+            avg_hand_angle = pending_summary["avg_hand_angle"]
+            self.score = pending_summary["score"]
+            self.max_extension = pending_summary["max_extension"]
+            self.reach_distance = pending_summary["reach_distance"]
+            pain_before_session = int(pending_summary.get("pain_before_session", self.pain_level))
+            pain_after_session = int(getattr(self, "pain_after_session", pain_before_session))
+            pain_difference = pain_after_session - pain_before_session
+            movement_smoothness = 0.7
+            if isinstance(getattr(self, "forearm_assessment", None), dict):
+                movement_smoothness = float(self.forearm_assessment.get("smoothness", 0.7))
+            recovery_score_value = functional_recovery_score(
+                avg_hand_angle,
+                avg_accuracy,
+                pain_after_session,
+                1.0,
+                movement_smoothness,
+            )
+            recovery_category_value = recovery_category(recovery_score_value)
+            self.pain_before_session = pain_before_session
+            self.pain_after_session = pain_after_session
+            self.pain_difference = pain_difference
+            self.functional_recovery_score = recovery_score_value
+            self.recovery_category = recovery_category_value
 
             self.db.save_session(
                 self.current_level, self.score, duration,
                 avg_accuracy, self.max_extension,
                 self.reach_distance, avg_hand_angle,
-                pain_level=self.pain_level, patient_id=self.patient_name
+                pain_level=pain_before_session, patient_id=self.patient_name,
+                pain_before_session=pain_before_session,
+                pain_after_session=pain_after_session,
+                functional_recovery_score=recovery_score_value,
+                recovery_category=recovery_category_value,
+                movement_smoothness=movement_smoothness,
             )
             session_id = getattr(self.db, 'last_session_id', None)
 
@@ -4980,6 +5088,7 @@ class PhysioSystem:
                     rotation_smoothness=rotation_smoothness,
                     session_id=session_id,
                     recovery_prediction=recovery_prediction,
+                    functional_recovery_score=recovery_score_value,
                 )
                 self.adaptive_recommendation = next_prescription
                 sensei_message = self.adaptive_engine.coaching_message(
@@ -5031,7 +5140,10 @@ class PhysioSystem:
                     f.write(f"Patient  : {self.patient_name or 'Unknown'}\n")
                     f.write(f"Date     : {datetime.now().strftime('%d %B %Y  %H:%M')}\n")
                     f.write(f"Level    : {self.current_level}\n")
-                    f.write(f"Pain NRS : {self.pain_level}/10\n")
+                    f.write(f"Pain Before: {pain_before_session}/10\n")
+                    f.write(f"Pain After : {pain_after_session}/10\n")
+                    f.write(f"Pain Change: {pain_difference:+d}\n")
+                    f.write(f"Recovery Score: {recovery_score_value:.1f}/100 ({recovery_category_value})\n")
                     f.write(f"\n-- Performance --\n")
                     f.write(f"Score    : {sd.get('score', self.score)}\n")
                     f.write(f"Accuracy : {sd.get('avg_accuracy', 0):.1f}%\n")
@@ -5342,8 +5454,8 @@ class PhysioSystem:
             </div>
             <div class="metric-card">
                 <div class="metric-details">
-                    <h3>Pre-Session Pain / Time</h3>
-                    <div class="value">{self.pain_level}/10 <span style="font-size: 16px; font-weight: normal; color: var(--text-secondary);">({dur_val:.0f}s)</span></div>
+                    <h3>Pain Before / After</h3>
+                    <div class="value">{pain_before_session}/10 to {pain_after_session}/10 <span style="font-size: 16px; font-weight: normal; color: var(--text-secondary);">({pain_difference:+d})</span></div>
                 </div>
                 <div style="font-size: 24px;">⚡</div>
             </div>
@@ -5382,7 +5494,9 @@ class PhysioSystem:
                     c.drawString(50, 710, f"Patient Name: {self.patient_name or 'Unknown'}")
                     c.drawString(50, 690, f"Date: {datetime.now().strftime('%d %B %Y  %H:%M')}")
                     c.drawString(50, 670, f"Diagnostic Level: {self.current_level}")
-                    c.drawString(50, 650, f"Pre-Session Pain NRS: {self.pain_level}/10")
+                    c.drawString(50, 650, f"Pain Before Session: {pain_before_session}/10")
+                    c.drawString(50, 632, f"Pain After Session: {pain_after_session}/10")
+                    c.drawString(50, 614, f"Pain Difference: {pain_difference:+d}")
                     
                     c.setFont("Helvetica-Bold", 16)
                     c.setFillColorRGB(0, 0.3, 0.5)
@@ -5394,6 +5508,7 @@ class PhysioSystem:
                     c.drawString(50, 560, f"Target Accuracy: {acc_val:.1f}%")
                     c.drawString(50, 540, f"Average Range of Motion: {rom_val:.1f} degrees")
                     c.drawString(50, 520, f"Therapy Duration: {dur_val:.0f} seconds")
+                    c.drawString(50, 500, f"Functional Recovery Score: {recovery_score_value:.1f}/100 ({recovery_category_value})")
                     
                     c.save()
                     print(f"PDF Report saved: {pdf_fname}")
@@ -5413,6 +5528,7 @@ class PhysioSystem:
                                     30)
 
             # Go to LEVEL_COMPLETE celebration screen first
+            self._pending_session_summary = None
             self._level_complete_time = time.time()
             self.state = GameState.LEVEL_COMPLETE
             self.sounds.play('level_complete')
@@ -5683,9 +5799,7 @@ class PhysioSystem:
                 dx = start_x + i * dot_spacing
                 dist = math.sqrt((m_pos[0] - dx)**2 + (m_pos[1] - dy)**2)
                 if dist < 32:  # Expanded hit radius to 32px for easy touch clicks
-                    self.pain_level = i
-                    self.pain_checked = True
-                    self._start_level()
+                    self._accept_pain_score(i)
                     # Clear hover cache
                     if hasattr(self, '_pain_hover'):
                         del self._pain_hover
@@ -5703,15 +5817,26 @@ class PhysioSystem:
                         self._pain_hover    = i
                         self._pain_hover_t  = time.time()
                     elif time.time() - self._pain_hover_t > 1.5:
-                        self.pain_level = i
-                        self.pain_checked = True
-                        self._start_level()
+                        self._accept_pain_score(i)
                     return
 
         # No dot hovered
         if hasattr(self, '_pain_hover'):
             del self._pain_hover
             del self._pain_hover_t
+
+    def _accept_pain_score(self, score: int):
+        if self.state == GameState.PAIN_AFTER_SESSION:
+            self.pain_after_session = int(score)
+            self._end_level()
+            return
+        self.pain_level = int(score)
+        self.pain_before_session = int(score)
+        self.pain_after_session = int(score)
+        self.pain_difference = 0
+        self.pain_checked = True
+        VOICE.speak("Pain score recorded. Starting your rehabilitation exercise.")
+        self._start_level()
 
     def _draw_pain_scale(self):
         """Full-screen NRS 0-10 pain scale with visual indicators"""
@@ -5724,12 +5849,17 @@ class PhysioSystem:
         # Header
         pygame.draw.rect(self.screen, (15, 25, 55),
                          pygame.Rect(0, 0, WINDOW_WIDTH, 80))
-        h1 = self.font_large.render("Pain Level Assessment", True, (0, 200, 255))
+        after_session = self.state == GameState.PAIN_AFTER_SESSION
+        title = "Post-Session Pain Assessment" if after_session else "Pain Level Assessment"
+        h1 = self.font_large.render(title, True, (0, 200, 255))
         self.screen.blit(h1, h1.get_rect(center=(cx, 40)))
 
-        sub = self.font_small.render(
-            "Hover your finger over a number to rate your current pain  (0 = No Pain   10 = Worst Pain)",
-            True, (130, 160, 200))
+        prompt = (
+            "Please rate your pain level after completing today's exercises.  (0 = No Pain   10 = Worst Pain)"
+            if after_session
+            else "Please rate your current pain level from 0 to 10.  (0 = No Pain   10 = Worst Pain)"
+        )
+        sub = self.font_small.render(prompt, True, (130, 160, 200))
         self.screen.blit(sub, sub.get_rect(center=(cx, cy - 160)))
 
         # WHO NRS descriptors

@@ -64,6 +64,13 @@ def number(value: Any, default: float = 0.0) -> float:
         return default
 
 
+def row_value(row: sqlite3.Row, key: str, default: Any = "") -> Any:
+    try:
+        return row[key]
+    except (IndexError, KeyError):
+        return default
+
+
 def short_date(value: str | None) -> str:
     if not value:
         return "-"
@@ -120,6 +127,56 @@ def tremor_rating_for_sessions(sessions: list[sqlite3.Row]) -> str:
     return "High"
 
 
+def fatigue_score(row: sqlite3.Row) -> float:
+    """Derive a 0-10 fatigue indicator from stored session metrics."""
+    pain = number(row["pain_level"])
+    accuracy_load = max(0.0, (70.0 - number(row["avg_accuracy"])) / 70.0) * 4.0
+    duration_load = min(3.0, minutes(row["duration"]) / 8.0 * 3.0)
+    pain_load = pain * 0.35
+    return max(0.0, min(10.0, accuracy_load + duration_load + pain_load))
+
+
+def recovery_status_from_metrics(avg_accuracy: float, avg_rom: float, risk_level: str, sessions_count: int) -> str:
+    if sessions_count == 0:
+        return "Not started"
+    if str(risk_level).lower() == "high":
+        return "At risk"
+    if avg_accuracy >= 75 and avg_rom >= 75:
+        return "Progressing well"
+    if avg_accuracy >= 55 and avg_rom >= 45:
+        return "Active recovery"
+    return "Needs review"
+
+
+def recovery_category(score: float) -> str:
+    if score <= 25:
+        return "Poor"
+    if score <= 50:
+        return "Fair"
+    if score <= 75:
+        return "Good"
+    return "Excellent"
+
+
+def calculated_functional_recovery_score(row: sqlite3.Row, consistency: float = 1.0) -> float:
+    try:
+        stored = number(row["functional_recovery_score"], -1)
+        if stored > 0:
+            return round(stored, 1)
+    except (IndexError, KeyError):
+        pass
+    pain_after = row_value(row, "pain_after_session", row_value(row, "pain_level", 0))
+    smoothness = row_value(row, "movement_smoothness", 0.7)
+    score = (
+        0.30 * max(0.0, min(1.0, number(row["avg_hand_angle"]) / 90.0))
+        + 0.25 * max(0.0, min(1.0, number(row["avg_accuracy"]) / 100.0))
+        + 0.20 * max(0.0, min(1.0, (10.0 - number(pain_after)) / 10.0))
+        + 0.15 * max(0.0, min(1.0, consistency))
+        + 0.10 * max(0.0, min(1.0, number(smoothness, 0.7)))
+    ) * 100.0
+    return round(max(0.0, min(100.0, score)), 1)
+
+
 @dataclass
 class Page:
     title: str
@@ -169,6 +226,64 @@ class DashboardRepository:
                 )
                 """
             )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS therapist_notes (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    patient_id TEXT NOT NULL,
+                    session_id INTEGER,
+                    therapist_name TEXT DEFAULT 'Therapist',
+                    note_text TEXT NOT NULL,
+                    recommendation TEXT DEFAULT '',
+                    clinical_observation TEXT DEFAULT '',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    modified_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS exercise_compliance (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    patient_id TEXT NOT NULL,
+                    assigned_sessions INTEGER DEFAULT 0,
+                    completed_sessions INTEGER DEFAULT 0,
+                    missed_sessions INTEGER DEFAULT 0,
+                    compliance_percentage REAL DEFAULT 0,
+                    updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            conn.execute(
+                """
+                CREATE TABLE IF NOT EXISTS compensation_analysis_placeholders (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    patient_id TEXT NOT NULL,
+                    session_id INTEGER,
+                    shoulder_lifting REAL DEFAULT 0,
+                    elbow_drift REAL DEFAULT 0,
+                    trunk_leaning REAL DEFAULT 0,
+                    compensatory_movement_score REAL DEFAULT 0,
+                    status TEXT DEFAULT 'Coming Soon',
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+                """
+            )
+            for column, definition in [
+                ("pain_before_session", "INTEGER DEFAULT 0"),
+                ("pain_after_session", "INTEGER DEFAULT 0"),
+                ("pain_difference", "INTEGER DEFAULT 0"),
+                ("functional_recovery_score", "REAL DEFAULT 0"),
+                ("recovery_category", "TEXT DEFAULT 'Not recorded'"),
+                ("movement_smoothness", "REAL DEFAULT 0"),
+            ]:
+                try:
+                    conn.execute(f"SELECT {column} FROM sessions LIMIT 1")
+                except sqlite3.OperationalError:
+                    try:
+                        conn.execute(f"ALTER TABLE sessions ADD COLUMN {column} {definition}")
+                    except sqlite3.OperationalError:
+                        pass
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS adaptive_prescriptions (
@@ -257,11 +372,27 @@ class DashboardRepository:
                     session_id INTEGER,
                     level INTEGER,
                     message TEXT NOT NULL,
+                    deterministic_message TEXT DEFAULT '',
+                    llm_enhanced_message TEXT DEFAULT '',
+                    coaching_trigger TEXT DEFAULT '',
+                    decision_source TEXT DEFAULT 'Adaptive AI Engine',
+                    llm_status TEXT DEFAULT 'not_requested',
                     context_json TEXT DEFAULT '{}',
                     created_at DATETIME DEFAULT CURRENT_TIMESTAMP
                 )
                 """
             )
+            for column, definition in [
+                ("deterministic_message", "TEXT DEFAULT ''"),
+                ("llm_enhanced_message", "TEXT DEFAULT ''"),
+                ("coaching_trigger", "TEXT DEFAULT ''"),
+                ("decision_source", "TEXT DEFAULT 'Adaptive AI Engine'"),
+                ("llm_status", "TEXT DEFAULT 'not_requested'"),
+            ]:
+                try:
+                    conn.execute(f"SELECT {column} FROM sensei_messages LIMIT 1")
+                except sqlite3.OperationalError:
+                    conn.execute(f"ALTER TABLE sensei_messages ADD COLUMN {column} {definition}")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS upper_limb_assessments (
@@ -337,9 +468,12 @@ class DashboardRepository:
                 COALESCE(d.rehab_stage, '') AS rehab_stage,
                 COALESCE(d.assigned_exercises, '') AS assigned_exercises,
                 COALESCE(d.therapist_notes, '') AS therapist_notes,
+                COALESCE(MIN(s.timestamp), d.updated_at, '') AS registration_date,
                 COUNT(s.id) AS sessions_count,
                 COALESCE(AVG(s.avg_accuracy), 0) AS avg_accuracy,
                 COALESCE(AVG(s.avg_hand_angle), 0) AS avg_rom,
+                COALESCE(MAX(s.avg_hand_angle), 0) AS max_rom,
+                COALESCE(AVG(s.pain_level), 0) AS avg_pain,
                 MAX(s.timestamp) AS last_session
             FROM patients p
             LEFT JOIN dashboard_patient_profiles d ON d.patient_name = p.name
@@ -356,9 +490,12 @@ class DashboardRepository:
                 COALESCE(d.rehab_stage, '') AS rehab_stage,
                 COALESCE(d.assigned_exercises, '') AS assigned_exercises,
                 COALESCE(d.therapist_notes, '') AS therapist_notes,
+                COALESCE(MIN(s.timestamp), d.updated_at, '') AS registration_date,
                 COUNT(s.id) AS sessions_count,
                 COALESCE(AVG(s.avg_accuracy), 0) AS avg_accuracy,
                 COALESCE(AVG(s.avg_hand_angle), 0) AS avg_rom,
+                COALESCE(MAX(s.avg_hand_angle), 0) AS max_rom,
+                COALESCE(AVG(s.pain_level), 0) AS avg_pain,
                 MAX(s.timestamp) AS last_session
             FROM sessions s
             LEFT JOIN patients p ON p.name = s.patient_id
@@ -755,16 +892,27 @@ class DashboardRepository:
         avg_gap = sum(gaps) / len(gaps)
         return max(0.0, min(1.0, 1.0 - avg_gap / 10.0))
 
-    def notes(self, patient: str = "") -> list[sqlite3.Row]:
+    def notes(self, patient: str = "", session_id: str = "", date_filter: str = "") -> list[sqlite3.Row]:
         params: list[Any] = []
-        where = ""
+        clauses: list[str] = []
         if patient:
-            where = "WHERE n.patient_name = ?"
+            clauses.append("n.patient_id = ?")
             params.append(patient)
+        if session_id:
+            clauses.append("n.session_id = ?")
+            params.append(int(number(session_id)))
+        if date_filter:
+            clauses.append("date(n.created_at) = date(?)")
+            params.append(date_filter)
+        where = "WHERE " + " AND ".join(clauses) if clauses else ""
         return self.query(
             f"""
-            SELECT n.*, s.timestamp, s.level
-            FROM dashboard_notes n
+            SELECT
+                n.id, n.patient_id AS patient_name, n.patient_id, n.session_id,
+                'Clinical Note' AS note_type, n.note_text AS note,
+                n.recommendation, '' AS next_plan, n.clinical_observation,
+                n.therapist_name, n.created_at, n.modified_at, s.timestamp, s.level
+            FROM therapist_notes n
             LEFT JOIN sessions s ON s.id = n.session_id
             {where}
             ORDER BY datetime(n.created_at) DESC, n.id DESC
@@ -778,20 +926,34 @@ class DashboardRepository:
         if not patient or not note:
             return
         session_id = form.get("session_id", "").strip()
+        note_id = form.get("note_id", "").strip()
+        values = (
+            patient,
+            int(session_id) if session_id.isdigit() else None,
+            form.get("therapist_name", "Therapist").strip() or "Therapist",
+            note,
+            form.get("recommendation", "").strip(),
+            form.get("clinical_observation", form.get("next_plan", "")).strip(),
+        )
+        if note_id.isdigit():
+            self.execute(
+                """
+                UPDATE therapist_notes
+                SET patient_id = ?, session_id = ?, therapist_name = ?,
+                    note_text = ?, recommendation = ?, clinical_observation = ?,
+                    modified_at = CURRENT_TIMESTAMP
+                WHERE id = ?
+                """,
+                (*values, int(note_id)),
+            )
+            return
         self.execute(
             """
-            INSERT INTO dashboard_notes
-                (patient_name, session_id, note_type, note, recommendation, next_plan)
+            INSERT INTO therapist_notes
+                (patient_id, session_id, therapist_name, note_text, recommendation, clinical_observation)
             VALUES (?, ?, ?, ?, ?, ?)
             """,
-            (
-                patient,
-                int(session_id) if session_id.isdigit() else None,
-                form.get("note_type", "Observation").strip(),
-                note,
-                form.get("recommendation", "").strip(),
-                form.get("next_plan", "").strip(),
-            ),
+            values,
         )
 
     def dashboard_stats(self) -> dict[str, Any]:
@@ -804,20 +966,32 @@ class DashboardRepository:
         ]
         predictions = [p for p in patient_predictions if p >= 0]
         seven_days_ago = datetime.now() - timedelta(days=7)
-        active = 0
+        active_sessions = 0
+        active_patient_names: set[str] = set()
         for row in sessions:
             try:
                 if datetime.fromisoformat(str(row["timestamp"])) >= seven_days_ago:
-                    active += 1
+                    active_sessions += 1
+                    active_patient_names.add(str(row["patient_id"]))
             except ValueError:
                 pass
+        patients_at_risk = 0
+        for row in patients:
+            clinical = self.clinical_intel.get_clinical_profile(row["name"])
+            adaptive = self.latest_adaptive_prescription(row["name"])
+            high_adaptive = adaptive and str(adaptive["risk_level"]).lower() == "high"
+            if clinical["risk_level"] == "High" or high_adaptive or number(row["avg_pain"]) >= 6:
+                patients_at_risk += 1
         return {
             "patients": len(patients),
-            "active_sessions": active,
+            "active_patients": len(active_patient_names),
+            "active_sessions": active_sessions,
             "completed_sessions": len(sessions),
             "avg_recovery": sum(predictions) / len(predictions) if predictions else 0,
             "overall_accuracy": sum(number(r["avg_accuracy"]) for r in sessions) / len(sessions) if sessions else 0,
             "avg_rom": sum(number(r["avg_hand_angle"]) for r in sessions) / len(sessions) if sessions else 0,
+            "patients_at_risk": patients_at_risk,
+            "avg_pain": sum(number(r["pain_level"]) for r in sessions) / len(sessions) if sessions else 0,
             "therapy_hours": total_seconds / 3600.0,
         }
 
@@ -830,15 +1004,17 @@ class DashboardRenderer:
         params = params or {}
         theme = params.get("theme", "light")
         nav = [
-            ("home", "/", "Dashboard", ""),
-            ("patients", "/patients", "Patients", ""),
-            ("sessions", "/sessions", "Rehabilitation Sessions", ""),
-            ("analytics", "/analytics", "Analytics", ""),
-            ("reports", "/reports", "Reports", ""),
-            ("adaptive", "/adaptive", "Virtual Sensei", ""),
-            ("digital_twin", "/digital-twin", "Digital Twin", ""),
-            ("performance", "/performance", "Performance", ""),
-            ("notes", "/notes", "Notes", ""),
+            ("home", "/", "Overview", "D"),
+            ("patients", "/patients", "Patients", "P"),
+            ("sessions", "/sessions", "Sessions", "S"),
+            ("analytics", "/analytics", "Analytics", "A"),
+            ("adaptive", "/adaptive", "AI Insights", "AI"),
+            ("sensei", "/sensei", "Sensei Review", "V"),
+            ("risks", "/risks", "Risk Detection", "R"),
+            ("reports", "/reports", "Reports", "PDF"),
+            ("digital_twin", "/digital-twin", "Digital Twin", "DT"),
+            ("performance", "/performance", "Performance", "E"),
+            ("notes", "/notes", "Notes", "N"),
         ]
         nav_html = "".join(
             f'<a class="nav-item {"active" if key == page.active else ""}" href="{href}"><span class="nav-icon">{icon}</span> {label}</a>'
@@ -963,7 +1139,7 @@ a { color: inherit; text-decoration: none; }
 }
 .brand { display: flex; gap: 14px; align-items: center; margin-bottom: 36px; padding: 0 8px; }
 .brand-mark {
-  width: 46px; height: 46px; border-radius: 14px;
+  width: 46px; height: 46px; border-radius: 8px;
   display: grid; place-items: center;
   color: white; background: linear-gradient(135deg, var(--primary), var(--primary-2));
   font-weight: 800; font-size: 18px;
@@ -975,7 +1151,7 @@ a { color: inherit; text-decoration: none; }
 .nav-menu { display: flex; flex-direction: column; gap: 4px; flex-grow: 1; overflow-y: auto; }
 .nav-item {
   display: flex; align-items: center; gap: 12px;
-  padding: 12px 16px; border-radius: 12px;
+  padding: 12px 16px; border-radius: 8px;
   color: var(--muted); font-weight: 600; font-size: 14px;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
@@ -997,7 +1173,7 @@ a { color: inherit; text-decoration: none; }
 .search-bar {
   display: flex; align-items: center; gap: 10px;
   background: var(--bg); border: 1px solid var(--line);
-  padding: 8px 16px; border-radius: 99px;
+  padding: 8px 16px; border-radius: 8px;
   width: 100%; max-width: 400px; transition: all 0.2s ease;
 }
 .search-bar:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
@@ -1007,7 +1183,7 @@ a { color: inherit; text-decoration: none; }
 .topbar-actions { display: flex; align-items: center; gap: 16px; }
 .icon-btn {
   display: grid; place-items: center;
-  width: 40px; height: 40px; border-radius: 50%;
+  width: 40px; height: 40px; border-radius: 8px;
   background: var(--bg); color: var(--text); border: 1px solid var(--line);
   font-size: 16px; transition: all 0.2s ease;
 }
@@ -1015,7 +1191,7 @@ a { color: inherit; text-decoration: none; }
 
 .therapist-profile { display: flex; align-items: center; gap: 12px; margin-left: 12px; padding-left: 16px; border-left: 1px solid var(--line); cursor: pointer; }
 .avatar {
-  width: 42px; height: 42px; border-radius: 14px;
+  width: 42px; height: 42px; border-radius: 8px;
   background: linear-gradient(135deg, var(--primary-2), var(--primary));
   color: white; display: grid; place-items: center; font-weight: 700;
 }
@@ -1028,7 +1204,7 @@ h1 { margin: 0 0 8px; font-size: 32px; font-weight: 800; letter-spacing: -0.03em
 h2 { margin: 0 0 16px; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
 .date-chip, .pill {
   padding: 8px 16px; border: 1px solid var(--line);
-  background: var(--panel); border-radius: 20px;
+  background: var(--panel); border-radius: 8px;
   color: var(--primary); font-size: 13px; font-weight: 600;
   box-shadow: 0 2px 8px rgba(0,0,0,0.02);
 }
@@ -1043,7 +1219,7 @@ h2 { margin: 0 0 16px; font-size: 18px; font-weight: 700; letter-spacing: -0.01e
 .card {
   background: var(--panel);
   border: 1px solid var(--glass-border);
-  border-radius: 20px;
+  border-radius: 8px;
   padding: 24px;
   box-shadow: var(--shadow);
   transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
@@ -1060,7 +1236,7 @@ h2 { margin: 0 0 16px; font-size: 18px; font-weight: 700; letter-spacing: -0.01e
 input:not(.search-input), select, textarea {
   width: 100%; border: 1px solid var(--line);
   background: var(--bg); color: var(--text);
-  border-radius: 12px; padding: 12px 16px;
+  border-radius: 8px; padding: 12px 16px;
   font: inherit; font-size: 14px;
   transition: all 0.2s ease; outline: none;
 }
@@ -1072,7 +1248,7 @@ label { display: flex; flex-direction: column; gap: 8px; font-size: 13px; font-w
 
 button, .button {
   display: inline-flex; align-items: center; justify-content: center;
-  border: 0; border-radius: 12px; padding: 12px 24px;
+  border: 0; border-radius: 8px; padding: 12px 24px;
   background: linear-gradient(135deg, var(--primary), var(--primary-2));
   color: white; font-weight: 600; font-size: 14px; cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
@@ -1091,17 +1267,17 @@ tr:last-child td { border-bottom: none; }
 tr { transition: background-color 0.15s ease; }
 tr:hover td { background: var(--bg); }
 
-.progress { height: 8px; border-radius: 999px; background: var(--bg); overflow: hidden; margin-top: 8px; border: 1px solid var(--line); }
-.progress span { display: block; height: 100%; background: linear-gradient(90deg, var(--primary), var(--success)); border-radius: 999px; }
-.badge { padding: 6px 12px; border-radius: 20px; font-size: 12px; font-weight: 600; background: rgba(37, 99, 235, 0.1); color: var(--primary); display: inline-block; }
+.progress { height: 8px; border-radius: 8px; background: var(--bg); overflow: hidden; margin-top: 8px; border: 1px solid var(--line); }
+.progress span { display: block; height: 100%; background: linear-gradient(90deg, var(--primary), var(--success)); border-radius: 8px; }
+.badge { padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; background: rgba(37, 99, 235, 0.1); color: var(--primary); display: inline-block; }
 
-.alert { border-left: 5px solid var(--primary); padding-left: 20px; border-radius: 16px; background: rgba(37, 99, 235, 0.03); }
+.alert { border-left: 5px solid var(--primary); padding-left: 20px; border-radius: 8px; background: rgba(37, 99, 235, 0.03); }
 .alert.warning { border-left-color: var(--warning); background: rgba(245, 158, 11, 0.03); }
 .alert.warning .badge { color: var(--warning); background: rgba(245, 158, 11, 0.1); }
 .alert.danger { border-left-color: var(--danger); background: rgba(239, 68, 68, 0.03); }
 .alert.danger .badge { color: var(--danger); background: rgba(239, 68, 68, 0.1); }
 
-.chart { width: 100%; border-radius: 12px; border: 1px solid var(--line); background: #ffffff; mix-blend-mode: normal; box-shadow: 0 4px 12px rgba(0,0,0,0.02); }
+.chart { width: 100%; border-radius: 8px; border: 1px solid var(--line); background: #ffffff; mix-blend-mode: normal; box-shadow: 0 4px 12px rgba(0,0,0,0.02); }
 [data-theme="dark"] .chart { filter: brightness(0.9) contrast(1.1); }
 .tabs { display: flex; gap: 10px; margin-bottom: 24px; flex-wrap: wrap; }
 .pagination { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
@@ -1203,13 +1379,13 @@ function sortTable(tableId, column) {
         body = f"""
         <section class="grid stats">
           {self.stat_card('Total Patients', str(stats['patients']), 'Registered or session-linked patients')}
-          {self.stat_card('Active Sessions', str(stats['active_sessions']), 'Sessions recorded in the last 7 days')}
-          {self.stat_card('Completed Sessions', str(stats['completed_sessions']), 'All stored rehabilitation sessions')}
-          {self.stat_card('Avg Recovery', f"{stats['avg_recovery']:.1f}%", 'Linear trend projection where available')}
-          {self.stat_card('Overall Accuracy', f"{stats['overall_accuracy']:.1f}%", 'Average exercise success rate')}
+          {self.stat_card('Active Patients', str(stats['active_patients']), 'Patients seen in the last 7 days')}
+          {self.stat_card('Total Rehabilitation Sessions', str(stats['completed_sessions']), f"{stats['active_sessions']} sessions this week")}
+          {self.stat_card('Average Recovery Progress', f"{stats['avg_recovery']:.1f}%", 'Linear trend projection where available')}
+          {self.stat_card('Average Accuracy', f"{stats['overall_accuracy']:.1f}%", 'Average exercise success rate')}
           {self.stat_card('Average ROM', f"{stats['avg_rom']:.1f} deg", 'Mean recorded hand angle')}
-          {self.stat_card('Therapy Hours', f"{stats['therapy_hours']:.1f}", 'Total guided session duration')}
-          {self.stat_card('Profiles Reviewed', str(len(patients)), 'Available patient records')}
+          {self.stat_card('Patients At Risk', str(stats['patients_at_risk']), 'High pain, high risk, or flagged trend')}
+          {self.stat_card('Average Pain Score', f"{stats['avg_pain']:.1f}/10", 'Mean recorded pre-session NRS')}
         </section>
         <section class="grid two" style="margin-top:16px">
           <div class="card">
@@ -1237,19 +1413,21 @@ function sortTable(tableId, column) {
         table_rows = "".join(
             f"""
             <tr>
-              <td><a href="/patients?patient={quote(row['name'])}"><strong>{esc(row['name'])}</strong></a><div class="muted">{esc(row['injury_type'] or 'No injury type set')}</div></td>
               <td>{esc(row['id_number'] or '-')}</td>
+              <td><a href="/patients?patient={quote(row['name'])}"><strong>{esc(row['name'])}</strong></a><div class="muted">{esc(row['gender'] or 'Gender not set')}</div></td>
               <td>{esc(row['age'] or '-')}</td>
-              <td>{esc(row['gender'] or '-')}</td>
-              <td>{esc(row['rehab_stage'] or '-')}</td>
+              <td>{esc(row['injury_type'] or row['age_group'] or 'Not specified')}</td>
+              <td>{esc(short_date(row['registration_date']))}</td>
+              <td>{esc(short_date(row['last_session']))}</td>
+              <td><span class="badge">{esc(self.recovery_status(row))}</span></td>
               <td>{int(row['sessions_count'])}</td>
               <td>{number(row['avg_accuracy']):.1f}%</td>
               <td>{number(row['avg_rom']):.1f} deg</td>
-              <td>{esc(short_date(row['last_session']))}</td>
+              <td><a class="button secondary" href="/patients?patient={quote(row['name'])}">View Profile</a></td>
             </tr>
             """
             for row in rows
-        ) or '<tr><td colspan="8" class="muted">No matching patients.</td></tr>'
+        ) or '<tr><td colspan="11" class="muted">No matching patients.</td></tr>'
         profile = self.patient_profile(selected_row) if selected_row else self.patient_form(None)
         body = f"""
         <section class="grid two">
@@ -1269,7 +1447,7 @@ function sortTable(tableId, column) {
               </form>
             </div>
             <table id="patientsTable">
-              <thead><tr><th onclick="sortTable('patientsTable',0)">Name</th><th>ID Number</th><th>Age</th><th>Gender</th><th>Stage</th><th>Sessions</th><th>Accuracy</th><th>ROM</th><th>Last Visit</th></tr></thead>
+              <thead><tr><th onclick="sortTable('patientsTable',0)">Patient ID</th><th onclick="sortTable('patientsTable',1)">Patient Name</th><th>Age</th><th>Condition / Injury</th><th>Registration Date</th><th>Last Session Date</th><th>Recovery Status</th><th>Sessions</th><th>Accuracy</th><th>ROM</th><th></th></tr></thead>
               <tbody>{table_rows}</tbody>
             </table>
           </div>
@@ -1311,11 +1489,25 @@ function sortTable(tableId, column) {
 
     def patient_profile(self, row: sqlite3.Row) -> str:
         sessions = self.repo.sessions(row["name"], limit=12)
+        sessions_chrono = self.repo.sessions_chrono(row["name"])
         adaptive = self.repo.latest_adaptive_prescription(row["name"])
         forearm = self.repo.latest_forearm_assessment(row["name"])
         upper_limb = self.repo.latest_upper_limb_assessment(row["name"])
         coaching = self.repo.sensei_history(row["name"], limit=10)
         clinical = self.repo.clinical_intel.get_clinical_profile(row["name"])
+        pred = recovery_prediction(sessions_chrono)
+        readiness = number(adaptive["readiness_score"]) if adaptive else clinical["health_score"]
+        latest_session = sessions_chrono[-1] if sessions_chrono else None
+        recovery_score_value = calculated_functional_recovery_score(latest_session) if latest_session else 0.0
+        recovery_category_value = recovery_category(recovery_score_value) if latest_session else "Not started"
+        pain_before = number(row_value(latest_session, "pain_before_session", row_value(latest_session, "pain_level", 0))) if latest_session else 0
+        pain_after = number(row_value(latest_session, "pain_after_session", row_value(latest_session, "pain_level", 0))) if latest_session else 0
+        pain_delta = number(row_value(latest_session, "pain_difference", 0)) if latest_session else 0
+        recent_notes = self.repo.notes(row["name"])[:5]
+        notes_rows = "".join(
+            f"<tr><td>{esc(short_date(note['created_at']))}</td><td>{esc(note['therapist_name'])}</td><td>{esc(note['note'])}</td><td>{esc(note['recommendation'])}</td></tr>"
+            for note in recent_notes
+        ) or '<tr><td colspan="4" class="muted">No therapist notes recorded.</td></tr>'
         history = "".join(
             f"<tr><td>{esc(short_date(s['timestamp']))}</td><td>{esc(exercise_for_level(s['level']))}</td><td>{number(s['avg_accuracy']):.1f}%</td><td>{number(s['avg_hand_angle']):.1f} deg</td><td>{esc(format_duration(s['duration']))}</td></tr>"
             for s in sessions
@@ -1323,14 +1515,18 @@ function sortTable(tableId, column) {
         if adaptive:
             adaptive_panel = f"""
             <div class="card" style="margin-top:16px">
-              <h2>Adaptive AI Recommendation</h2>
+              <h2>AI Prescription Panel</h2>
               <div class="grid three">
-                {self.stat_card('Readiness Score', f"{number(adaptive['readiness_score']):.0f}/100", f"{adaptive['progression'].title()} progression")}
+                {self.stat_card('Difficulty Tier', str(int(number(adaptive['difficulty_tier']))), f"{adaptive['progression'].title()} progression")}
+                {self.stat_card('Readiness Score', f"{number(adaptive['readiness_score']):.0f}/100", 'Adaptive AI Engine')}
                 {self.stat_card('Risk Level', adaptive['risk_level'].title(), f"Recovery: {adaptive['recovery_trend']}")}
-                {self.stat_card('Next Time Limit', f"{number(adaptive['time_limit']):.0f}s", f"Target scale {number(adaptive['target_scale']):.2f}")}
+                {self.stat_card('Target / Speed', f"{number(adaptive['target_scale']):.2f}x / {number(adaptive['speed_scale']):.2f}x", 'Exercise adaptation')}
+                {self.stat_card('ROM / Reps', f"{number(adaptive['required_rom']):.0f} deg / {int(number(adaptive['repetitions']))}", f"{number(adaptive['hold_seconds']):.1f}s hold")}
+                {self.stat_card('Rotation Tolerance', f"{number(adaptive['rotation_tolerance']):.0f} deg", f"{number(adaptive['time_limit']):.0f}s time limit")}
               </div>
               <p class="muted" style="margin-top:12px">{esc(adaptive['rationale'])}</p>
               <p><strong>Override recommendation:</strong> {esc(adaptive['override_recommendation'])}</p>
+              <p><strong>Decision source:</strong> Adaptive AI Engine; <strong>Safety logic:</strong> Rule-Based Logic; <strong>LLM:</strong> Optional communication enhancement only.</p>
             </div>
             """
         else:
@@ -1375,13 +1571,13 @@ function sortTable(tableId, column) {
 
         if coaching:
             coaching_rows = "".join(
-                f"<tr><td>{{esc(short_date(c['created_at']))}}</td><td>{{esc(exercise_for_level(c['level']))}}</td><td>{{esc(c['message'])}}</td></tr>"
+                f"<tr><td>{esc(short_date(c['created_at']))}</td><td>{esc(exercise_for_level(c['level']))}</td><td>{esc(row_value(c, 'deterministic_message', c['message']))}</td><td>{esc(row_value(c, 'llm_enhanced_message', ''))}</td><td>{esc(row_value(c, 'coaching_trigger', self.sensei_trigger(c)))}</td></tr>"
                 for c in coaching
             )
             coaching_panel = f"""
             <div class="card" style="margin-top:16px">
-              <h2>Coaching History & Generated Feedback</h2>
-              <table><thead><tr><th>Date</th><th>Exercise</th><th>Sensei Feedback</th></tr></thead><tbody>{{coaching_rows}}</tbody></table>
+              <h2>Virtual Sensei Panel</h2>
+              <table><thead><tr><th>Date</th><th>Exercise</th><th>Generated Coaching Message</th><th>LLM Enhanced Message</th><th>Coaching Trigger</th></tr></thead><tbody>{coaching_rows}</tbody></table>
             </div>
             """
         else:
@@ -1418,6 +1614,38 @@ function sortTable(tableId, column) {
 
         return f"""
         <div>
+          <div class="card" style="margin-bottom:16px">
+            <div class="toolbar">
+              <h2>Patient Profile</h2>
+              <a class="button" href="/report.pdf?patient={quote(row['name'])}">Download PDF Report</a>
+            </div>
+            <table>
+              <tbody>
+                <tr><th>Patient ID</th><td>{esc(row['id_number'] or row['name'])}</td><th>Name</th><td>{esc(row['name'])}</td></tr>
+                <tr><th>Age</th><td>{esc(row['age'] or '-')}</td><th>Gender</th><td>{esc(row['gender'] or '-')}</td></tr>
+                <tr><th>Condition</th><td>{esc(row['injury_type'] or '-')}</td><th>Registration Date</th><td>{esc(short_date(row['registration_date']))}</td></tr>
+              </tbody>
+            </table>
+          </div>
+          <div class="grid three" style="margin-bottom:16px">
+            {self.stat_card('Total Sessions', str(int(number(row['sessions_count']))), 'Stored rehabilitation sessions')}
+            {self.stat_card('Recovery Prediction', f"{pred:.1f}%" if pred >= 0 else 'Need more data', 'Projected ROM trend')}
+            {self.stat_card('Current Recovery Stage', clinical['recovery_stage'], f"Status: {self.recovery_status(row)}")}
+            {self.stat_card('Readiness Score', f"{readiness:.0f}/100", 'Adaptive or clinical readiness')}
+            {self.stat_card('Overall Accuracy', f"{number(row['avg_accuracy']):.1f}%", 'Average across sessions')}
+            {self.stat_card('Maximum ROM Achieved', f"{number(row['max_rom']):.1f} deg", 'Best recorded hand angle')}
+            {self.stat_card('Recovery Score', f"{recovery_score_value:.0f}/100", recovery_category_value)}
+            {self.stat_card('Pain Summary', f"{pain_before:.0f}/10 to {pain_after:.0f}/10", f"Difference {pain_delta:+.0f}")}
+            {self.stat_card('Exercise Compliance', 'Future Feature', 'Assigned vs completed sessions')}
+          </div>
+          <div class="card" style="margin-top:16px">
+            <h2>Therapist Notes Panel</h2>
+            <table><thead><tr><th>Date</th><th>Therapist</th><th>Clinical Observations</th><th>Latest Recommendations</th></tr></thead><tbody>{notes_rows}</tbody></table>
+          </div>
+          <div class="card muted" style="margin-top:16px">
+            <h2>Compensation Analysis (Coming Soon)</h2>
+            <p>Future MediaPipe Hands + MediaPipe Pose integration for shoulder lifting, elbow drift, trunk leaning, and compensatory movement score.</p>
+          </div>
           {self.patient_form(row)}
           {clinical_panel}
           <div class="card" style="margin-top:16px">
@@ -1440,10 +1668,43 @@ function sortTable(tableId, column) {
     def option(self, value: str, label: str, selected: str) -> str:
         return f'<option value="{esc(value)}" {"selected" if value == selected else ""}>{esc(label)}</option>'
 
+    def recovery_status(self, row: sqlite3.Row) -> str:
+        clinical = self.repo.clinical_intel.get_clinical_profile(row["name"])
+        return recovery_status_from_metrics(
+            number(row["avg_accuracy"]),
+            number(row["avg_rom"]),
+            clinical["risk_level"],
+            int(number(row["sessions_count"])),
+        )
+
+    def short_text(self, value: Any, max_words: int = 18) -> str:
+        words = str(value or "").split()
+        if len(words) <= max_words:
+            return " ".join(words) if words else "-"
+        return " ".join(words[:max_words]) + "..."
+
     def sessions_page(self, params: dict[str, str]) -> Page:
         patient = params.get("patient", "")
+        exercise_filter = params.get("exercise", "")
+        min_pain = number(params.get("min_pain"), -1)
         rows = self.repo.sessions(patient)
+        if exercise_filter:
+            rows = [row for row in rows if str(int(number(row["level"]))) == exercise_filter]
+        if min_pain >= 0:
+            rows = [row for row in rows if number(row["pain_level"]) >= min_pain]
         patient_options = "".join(self.option(row["name"], row["name"], patient) for row in self.repo.patients())
+        exercise_options = "".join(self.option(str(level), name, exercise_filter) for level, name in LEVEL_NAMES.items())
+        comparison_rows = rows[:2]
+        comparison = ""
+        if len(comparison_rows) == 2:
+            a, b = comparison_rows[1], comparison_rows[0]
+            comparison = f"""
+            <div class="grid three" style="margin-top:16px">
+              {self.stat_card('Accuracy Change', f"{number(b['avg_accuracy']) - number(a['avg_accuracy']):+.1f}%", 'Latest vs previous filtered session')}
+              {self.stat_card('ROM Change', f"{number(b['avg_hand_angle']) - number(a['avg_hand_angle']):+.1f} deg", 'Latest vs previous filtered session')}
+              {self.stat_card('Pain Change', f"{number(b['pain_level']) - number(a['pain_level']):+.0f}/10", 'Latest vs previous filtered session')}
+            </div>
+            """
         table_rows = "".join(
             f"""
             <tr>
@@ -1454,27 +1715,38 @@ function sortTable(tableId, column) {
               <td>{number(row['max_finger_extension']):.1f}px</td>
               <td>{number(row['avg_hand_angle']):.1f} deg</td>
               <td>{number(row['avg_accuracy']):.1f}%</td>
-              <td>{int(number(row['pain_level']))}/10</td>
+              <td>{int(number(row_value(row, 'pain_before_session', row['pain_level'])))}/10</td>
+              <td>{int(number(row_value(row, 'pain_after_session', row['pain_level'])))}/10</td>
+              <td>{int(number(row_value(row, 'pain_difference', 0))):+d}</td>
+              <td>{calculated_functional_recovery_score(row):.1f}/100</td>
+              <td>{fatigue_score(row):.1f}/10</td>
               <td>{esc(tremor_rating_for_sessions(self.repo.sessions_chrono(row['patient_id'])))}</td>
               <td>{int(number(row['score']))}</td>
               <td>{self.prediction_badge(row['patient_id'])}</td>
             </tr>
             """
             for row in rows
-        ) or '<tr><td colspan="11" class="muted">No sessions found.</td></tr>'
+        ) or '<tr><td colspan="15" class="muted">No sessions found.</td></tr>'
         body = f"""
         <section class="card">
           <div class="toolbar">
             <h2>Session History</h2>
             <form method="get" class="toolbar">
               <select name="patient"><option value="">All patients</option>{patient_options}</select>
+              <select name="exercise"><option value="">All exercises</option>{exercise_options}</select>
+              <select name="min_pain">
+                {self.option('-1', 'Any pain score', params.get('min_pain', '-1'))}
+                {self.option('4', 'Pain 4+', params.get('min_pain', '-1'))}
+                {self.option('7', 'Pain 7+', params.get('min_pain', '-1'))}
+              </select>
               <button>Filter</button>
             </form>
           </div>
           <input id="sessionSearch" oninput="filterTable('sessionSearch','sessionsTable')" placeholder="Search session table">
+          {comparison}
           <table id="sessionsTable" style="margin-top:12px">
             <thead><tr>
-              <th onclick="sortTable('sessionsTable',0)">Date</th><th>Patient</th><th>Exercise</th><th>Duration</th><th>Max ROM</th><th>Avg ROM</th><th>Accuracy</th><th>Pain</th><th>Tremor</th><th>Score</th><th>Recovery</th>
+              <th onclick="sortTable('sessionsTable',0)">Session Date</th><th>Patient</th><th>Exercise Name</th><th>Duration</th><th>Max Extension</th><th>ROM</th><th>Accuracy</th><th>Pain Before</th><th>Pain After</th><th>Pain Difference</th><th>Recovery Score</th><th>Fatigue Score</th><th>Tremor</th><th>Score</th><th>Recovery Prediction</th>
             </tr></thead>
             <tbody>{table_rows}</tbody>
           </table>
@@ -1496,9 +1768,33 @@ function sortTable(tableId, column) {
         acc = [number(row["avg_accuracy"]) for row in sessions[-16:]]
         rom = [number(row["avg_hand_angle"]) for row in sessions[-16:]]
         pain = [number(row["pain_level"]) for row in sessions[-16:]]
-        completion = [1 if number(row["avg_accuracy"]) >= 60 else 0 for row in sessions[-16:]]
+        pain_before = [number(row_value(row, "pain_before_session", row["pain_level"])) for row in sessions[-16:]]
+        pain_after = [number(row_value(row, "pain_after_session", row["pain_level"])) for row in sessions[-16:]]
+        pain_difference = [number(row_value(row, "pain_difference", 0)) for row in sessions[-16:]]
+        recovery_scores = [calculated_functional_recovery_score(row) for row in sessions[-16:]]
+        latest = sessions[-1] if sessions else None
+        latest_recovery = calculated_functional_recovery_score(latest) if latest else 0.0
+        latest_category = recovery_category(latest_recovery) if latest else "Not started"
+        avg_pain_delta = sum(pain_difference) / len(pain_difference) if pain_difference else 0.0
+        actual_recovery = [min(100.0, number(row["avg_hand_angle"]) / 90.0 * 100.0) for row in sessions[-16:]]
+        predicted_recovery = []
+        for index in range(len(sessions[-16:])):
+            pred = recovery_prediction(sessions[: max(0, len(sessions) - len(sessions[-16:])) + index + 1])
+            predicted_recovery.append(pred if pred >= 0 else actual_recovery[index] if index < len(actual_recovery) else 0)
+        prescriptions = list(reversed(self.repo.adaptive_history(patient, limit=16)))
+        readiness_labels = [short_date(row["created_at"]) for row in prescriptions]
+        readiness = [number(row["readiness_score"]) for row in prescriptions]
+        daily_rom = self.bucket_metric(sessions, "%d %b", "avg_hand_angle")
+        weekly_rom = self.bucket_metric(sessions, "%Y-W%W", "avg_hand_angle")
+        monthly_rom = self.bucket_metric(sessions, "%Y-%m", "avg_hand_angle")
         weekly = self.bucket_progress(sessions, "%Y-W%W")
         monthly = self.bucket_progress(sessions, "%Y-%m")
+        daily_pain = self.bucket_derived(sessions, "%d %b", lambda row: number(row_value(row, "pain_difference", 0)))
+        weekly_pain = self.bucket_derived(sessions, "%Y-W%W", lambda row: number(row_value(row, "pain_difference", 0)))
+        monthly_pain = self.bucket_derived(sessions, "%Y-%m", lambda row: number(row_value(row, "pain_difference", 0)))
+        daily_recovery = self.bucket_derived(sessions, "%d %b", calculated_functional_recovery_score)
+        weekly_recovery = self.bucket_derived(sessions, "%Y-W%W", calculated_functional_recovery_score)
+        monthly_recovery = self.bucket_derived(sessions, "%Y-%m", calculated_functional_recovery_score)
         patient_options = "".join(self.option(row["name"], row["name"], patient) for row in self.repo.patients())
         body = f"""
         <section class="card">
@@ -1508,13 +1804,30 @@ function sortTable(tableId, column) {
             <button>Apply</button>
           </form>
         </section>
+        <section class="grid three" style="margin-top:16px">
+          {self.stat_card('Recovery Score', f"{latest_recovery:.0f}/100", latest_category)}
+          {self.stat_card('Pain Improvement', f"{avg_pain_delta:+.1f}", 'Average after-before change')}
+          {self.stat_card('Latest Pain Summary', f"{pain_before[-1]:.0f}/10 to {pain_after[-1]:.0f}/10" if pain_before else '-', f"Difference {pain_difference[-1]:+.0f}" if pain_difference else 'No pain data')}
+        </section>
         <section class="grid two" style="margin-top:16px">
-          <div class="card">{self.chart('ROM Improvement', {'Average ROM': rom}, labels, 'degrees')}</div>
-          <div class="card">{self.chart('Accuracy Trend', {'Accuracy': acc}, labels, '%')}</div>
-          <div class="card">{self.chart('Pain Level Trend', {'Pain': pain}, labels, 'NRS')}</div>
-          <div class="card">{self.chart('Exercise Completion Rate', {'Completed': completion}, labels, 'completed')}</div>
-          <div class="card">{self.chart('Weekly Progress', {'Weekly Accuracy': weekly[1]}, weekly[0], '%')}</div>
-          <div class="card">{self.chart('Monthly Progress', {'Monthly Accuracy': monthly[1]}, monthly[0], '%')}</div>
+          <div class="card">{self.chart('ROM Progress - Daily', {'Daily ROM': daily_rom[1]}, daily_rom[0], 'degrees')}</div>
+          <div class="card">{self.chart('ROM Progress - Weekly', {'Weekly ROM': weekly_rom[1]}, weekly_rom[0], 'degrees')}</div>
+          <div class="card">{self.chart('ROM Progress - Monthly', {'Monthly ROM': monthly_rom[1]}, monthly_rom[0], 'degrees')}</div>
+          <div class="card">{self.chart('Accuracy Trends', {'Session Accuracy': acc}, labels, '%')}</div>
+          <div class="card">{self.chart('Weekly Improvement', {'Weekly Accuracy': weekly[1]}, weekly[0], '%')}</div>
+          <div class="card">{self.chart('Monthly Accuracy', {'Monthly Accuracy': monthly[1]}, monthly[0], '%')}</div>
+          <div class="card">{self.chart('Pain Reduction Over Time', {'Pain Score': pain}, labels, 'NRS')}</div>
+          <div class="card">{self.chart('Pain Before vs Pain After', {'Before': pain_before, 'After': pain_after}, labels, 'NRS')}</div>
+          <div class="card">{self.chart('Daily Pain Trend', {'Pain Difference': daily_pain[1]}, daily_pain[0], 'after-before')}</div>
+          <div class="card">{self.chart('Weekly Pain Trend', {'Pain Difference': weekly_pain[1]}, weekly_pain[0], 'after-before')}</div>
+          <div class="card">{self.chart('Monthly Pain Trend', {'Pain Difference': monthly_pain[1]}, monthly_pain[0], 'after-before')}</div>
+          <div class="card">{self.chart('Functional Recovery Score', {'Recovery Score': recovery_scores}, labels, 'score')}</div>
+          <div class="card">{self.chart('Daily Recovery Score', {'Recovery Score': daily_recovery[1]}, daily_recovery[0], 'score')}</div>
+          <div class="card">{self.chart('Weekly Recovery Score', {'Recovery Score': weekly_recovery[1]}, weekly_recovery[0], 'score')}</div>
+          <div class="card">{self.chart('Monthly Recovery Score', {'Recovery Score': monthly_recovery[1]}, monthly_recovery[0], 'score')}</div>
+          <div class="card">{self.chart('Recovery Prediction Trends', {'Predicted Recovery': predicted_recovery, 'Actual Recovery': actual_recovery}, labels, '%')}</div>
+          <div class="card">{self.chart('Readiness Score Trends', {'Readiness Score': readiness}, readiness_labels, 'score')}</div>
+          <div class="card">{self.chart('Session ROM and Accuracy', {'ROM': rom, 'Accuracy': acc}, labels, 'value')}</div>
         </section>
         """
         return Page("Progress Analytics", body, "analytics")
@@ -1530,6 +1843,26 @@ function sortTable(tableId, column) {
         upper_labels = [short_date(row["created_at"]) for row in upper_rows]
         compensation_series = [number(row["compensation_score"]) * 100.0 for row in upper_rows]
         efficiency_series = [number(row["movement_efficiency"]) for row in upper_rows]
+        current = prescriptions[0] if prescriptions else None
+        current_panel = ""
+        if current:
+            current_panel = f"""
+            <section class="card" style="margin-top:16px">
+              <h2>AI Prescription Panel</h2>
+              <p class="muted">Decision Source: Adaptive AI Rehabilitation Engine</p>
+            </section>
+            <section class="grid three" style="margin-top:16px">
+              {self.stat_card('Current Difficulty Tier', str(int(number(current['difficulty_tier']))), esc(exercise_for_level(current['level'])))}
+              {self.stat_card('Readiness Score', f"{number(current['readiness_score']):.0f}/100", f"Recovery: {esc(current['recovery_trend'])}")}
+              {self.stat_card('Risk Level', str(current['risk_level']).title(), 'Safety decision from engine')}
+              {self.stat_card('Target Size', f"{number(current['target_scale']):.2f}x", f"Speed {number(current['speed_scale']):.2f}x")}
+              {self.stat_card('ROM Requirement', f"{number(current['required_rom']):.0f} deg", f"Tolerance {number(current['rotation_tolerance']):.0f} deg")}
+              {self.stat_card('Repetitions / Hold', f"{int(number(current['repetitions']))} reps", f"{number(current['hold_seconds']):.1f}s holds")}
+              {self.stat_card('Progression Recommendation', str(current['progression']).title(), esc(current['override_recommendation']))}
+              {self.stat_card('Guidance Level', str(current['guidance_level']).title(), f"{number(current['time_limit']):.0f}s time limit")}
+              {self.stat_card('Adaptive Rationale', self.short_text(current['rationale'], 32), 'Explainable AI decision')}
+            </section>
+            """
 
         rows = "".join(
             f"""
@@ -1586,6 +1919,15 @@ function sortTable(tableId, column) {
             <select name="patient"><option value="">All patients</option>{patient_options}</select>
             <button>Apply</button>
           </form>
+        </section>
+        {current_panel}
+        <section class="card" style="margin-top:16px">
+          <h2>System Transparency</h2>
+          <div class="toolbar" style="justify-content:flex-start">
+            <span class="pill">Decision Source: Adaptive AI Engine</span>
+            <span class="pill">Safety Logic: Rule-Based Logic</span>
+            <span class="pill">Communication: Optional LLM Enhancement</span>
+          </div>
         </section>
         <section class="grid three" style="margin-top:16px">
           {self.stat_card('Weekly ROM Gain', f"{metrics['weekly_rom_improvement']:+.1f} deg", 'Research endpoint')}
@@ -1759,16 +2101,155 @@ function sortTable(tableId, column) {
         return Page("Digital Twin", body, "digital_twin")
 
     def bucket_progress(self, sessions: list[sqlite3.Row], fmt: str) -> tuple[list[str], list[float]]:
+        return self.bucket_metric(sessions, fmt, "avg_accuracy")
+
+    def bucket_metric(self, sessions: list[sqlite3.Row], fmt: str, column: str) -> tuple[list[str], list[float]]:
         buckets: dict[str, list[float]] = {}
         for row in sessions:
             try:
                 key = datetime.fromisoformat(str(row["timestamp"])).strftime(fmt)
             except ValueError:
                 key = str(row["timestamp"])[:7]
-            buckets.setdefault(key, []).append(number(row["avg_accuracy"]))
+            buckets.setdefault(key, []).append(number(row[column]))
         labels = list(buckets.keys())[-12:]
         values = [sum(buckets[label]) / len(buckets[label]) for label in labels]
         return labels, values
+
+    def bucket_derived(self, sessions: list[sqlite3.Row], fmt: str, value_fn) -> tuple[list[str], list[float]]:
+        buckets: dict[str, list[float]] = {}
+        for row in sessions:
+            try:
+                key = datetime.fromisoformat(str(row["timestamp"])).strftime(fmt)
+            except ValueError:
+                key = str(row["timestamp"])[:7]
+            buckets.setdefault(key, []).append(number(value_fn(row)))
+        labels = list(buckets.keys())[-12:]
+        values = [sum(buckets[label]) / len(buckets[label]) for label in labels]
+        return labels, values
+
+    def sensei_review(self, params: dict[str, str]) -> Page:
+        patient = params.get("patient", "")
+        patient_options = "".join(self.option(row["name"], row["name"], patient) for row in self.repo.patients())
+        rows = self.repo.sensei_history(patient, limit=120)
+        table_rows = "".join(
+            f"""
+            <tr>
+              <td>{esc(short_date(row['created_at']))}</td>
+              <td>{esc(row['patient_id'])}</td>
+              <td>{esc(exercise_for_level(row['level']))}</td>
+              <td>{esc(row_value(row, 'deterministic_message', row['message']))}</td>
+              <td>{esc(row_value(row, 'llm_enhanced_message', ''))}</td>
+              <td>{esc(row_value(row, 'coaching_trigger', self.sensei_trigger(row)))}</td>
+              <td>{esc(row_value(row, 'decision_source', 'Adaptive AI Engine'))}</td>
+              <td>{esc(row_value(row, 'llm_status', 'not_requested'))}</td>
+            </tr>
+            """
+            for row in rows
+        ) or '<tr><td colspan="8" class="muted">No Virtual Sensei messages recorded yet.</td></tr>'
+        body = f"""
+        <section class="card">
+          <form method="get" class="toolbar">
+            <h2>Virtual Sensei Review Panel</h2>
+            <select name="patient"><option value="">All patients</option>{patient_options}</select>
+            <button>Apply</button>
+          </form>
+          <input id="senseiSearch" oninput="filterTable('senseiSearch','senseiTable')" placeholder="Search coaching messages">
+          <table id="senseiTable" style="margin-top:12px">
+            <thead><tr><th>Date</th><th>Patient</th><th>Exercise</th><th>Generated Coaching Message</th><th>LLM Enhanced Message</th><th>Coaching Trigger</th><th>Decision Source</th><th>LLM Status</th></tr></thead>
+            <tbody>{table_rows}</tbody>
+          </table>
+        </section>
+        """
+        return Page("Virtual Sensei Review", body, "sensei")
+
+    def sensei_trigger(self, row: sqlite3.Row) -> str:
+        stored_trigger = row_value(row, "coaching_trigger", "")
+        if stored_trigger:
+            return str(stored_trigger)
+        try:
+            data = json.loads(row["context_json"] or "{}")
+            for key in ("trigger", "reason", "why", "event"):
+                if data.get(key):
+                    return str(data[key])
+            if data:
+                return ", ".join(f"{k}: {v}" for k, v in list(data.items())[:2])
+        except Exception:
+            pass
+        message = str(row["message"] or "").lower()
+        if "improved" in message:
+            return "Performance improvement detected"
+        if "pain" in message:
+            return "Pain score safety cue"
+        if "smooth" in message or "rotation" in message:
+            return "Movement quality coaching"
+        return "Session performance feedback"
+
+    def risks_page(self, params: dict[str, str]) -> Page:
+        patient = params.get("patient", "")
+        patients = [self.repo.patient(patient)] if patient and self.repo.patient(patient) else self.repo.patients()
+        patient_options = "".join(self.option(row["name"], row["name"], patient) for row in self.repo.patients())
+        cards: list[str] = []
+        rows: list[str] = []
+        for row in patients:
+            if not row:
+                continue
+            risk_items = self.patient_risks(row)
+            for label, severity, detail in risk_items:
+                level_class = "danger" if severity == "High" else "warning" if severity == "Moderate" else ""
+                cards.append(f'<div class="card alert {level_class}"><h2>{esc(label)}</h2><p><strong>{esc(row["name"])}</strong></p><p class="muted">{esc(detail)}</p><span class="badge">{esc(severity)}</span></div>')
+                rows.append(f"<tr><td>{esc(row['name'])}</td><td>{esc(label)}</td><td>{esc(severity)}</td><td>{esc(detail)}</td><td>{esc(short_date(row['last_session']))}</td></tr>")
+        body = f"""
+        <section class="card">
+          <form method="get" class="toolbar">
+            <h2>Risk Detection Panel</h2>
+            <select name="patient"><option value="">All patients</option>{patient_options}</select>
+            <button>Apply</button>
+          </form>
+        </section>
+        <section class="grid three" style="margin-top:16px">{''.join(cards) or '<div class="card muted">No active rehabilitation risks detected.</div>'}</section>
+        <section class="card" style="margin-top:16px">
+          <h2>Risk Register</h2>
+          <table>
+            <thead><tr><th>Patient</th><th>Risk</th><th>Severity</th><th>Clinical Detail</th><th>Last Session</th></tr></thead>
+            <tbody>{''.join(rows) or '<tr><td colspan="5" class="muted">No active risk items.</td></tr>'}</tbody>
+          </table>
+        </section>
+        """
+        return Page("Risk Detection", body, "risks")
+
+    def patient_risks(self, patient: sqlite3.Row) -> list[tuple[str, str, str]]:
+        name = patient["name"]
+        sessions = self.repo.sessions_chrono(name)
+        clinical = self.repo.clinical_intel.get_clinical_profile(name)
+        upper = self.repo.latest_upper_limb_assessment(name)
+        risks: list[tuple[str, str, str]] = []
+        if sessions:
+            recent = sessions[-3:]
+            avg_pain = sum(number(row["pain_level"]) for row in recent) / len(recent)
+            if avg_pain >= 6:
+                risks.append(("High Pain Risk", "High", f"Recent average pain is {avg_pain:.1f}/10."))
+            if len(recent) >= 3:
+                rom_delta = number(recent[-1]["avg_hand_angle"]) - number(recent[0]["avg_hand_angle"])
+                acc_delta = number(recent[-1]["avg_accuracy"]) - number(recent[0]["avg_accuracy"])
+                if abs(rom_delta) < 2 and acc_delta <= 2:
+                    risks.append(("Recovery Stagnation", "Moderate", "ROM and accuracy have not meaningfully improved over the last three sessions."))
+                if fatigue_score(recent[-1]) >= 7:
+                    risks.append(("Fatigue Risk", "High", f"Derived fatigue score is {fatigue_score(recent[-1]):.1f}/10."))
+            try:
+                last_dt = datetime.fromisoformat(str(sessions[-1]["timestamp"]))
+                days_since = (datetime.now() - last_dt).days
+                if days_since > 7:
+                    risks.append(("Missed Sessions", "Moderate" if days_since <= 14 else "High", f"No session recorded for {days_since} days."))
+            except ValueError:
+                pass
+        else:
+            risks.append(("Missed Sessions", "Moderate", "Patient has no stored rehabilitation sessions."))
+        if upper and number(upper["compensation_score"]) >= 0.45:
+            risks.append(("Compensation Risk", "High", f"Latest compensation score is {number(upper['compensation_score']) * 100:.0f}%."))
+        for detected in clinical["detected_risks"]:
+            if not any(label == detected for label, _, _ in risks):
+                risks.append((detected, "High" if detected in ("High Pain Risk", "Dropout Risk") else "Moderate", "Flagged by clinical intelligence layer."))
+        return risks
 
     def reports(self, params: dict[str, str]) -> Page:
         selected = params.get("patient", "")
@@ -1791,7 +2272,10 @@ function sortTable(tableId, column) {
               <p><strong>Stage:</strong> {esc(patient['rehab_stage'] or 'Not specified')}</p>
               <p><strong>Recovery prediction:</strong> {f'{pred:.1f}%' if pred >= 0 else 'Need more data'}</p>
               <p><strong>Therapist observations:</strong> {esc(patient['therapist_notes'] or 'No profile observations recorded.')}</p>
-              <a class="button" href="/report.pdf?patient={quote(selected)}">Download PDF Report</a>
+              <div class="toolbar" style="justify-content:flex-start">
+                <a class="button" href="/report.pdf?patient={quote(selected)}">Download PDF</a>
+                <button type="button" class="button secondary" onclick="window.print()">Print Report</button>
+              </div>
             </div>
             """
         body = f"""
@@ -1842,23 +2326,37 @@ function sortTable(tableId, column) {
 
     def notes(self, params: dict[str, str]) -> Page:
         selected = params.get("patient", "")
+        selected_session = params.get("session_id", "")
+        selected_date = params.get("date", "")
         patients = self.repo.patients()
         patient_options = "".join(self.option(row["name"], row["name"], selected) for row in patients)
         session_options = "".join(
-            f'<option value="{row["id"]}">{esc(short_date(row["timestamp"]))} - {esc(exercise_for_level(row["level"]))}</option>'
+            f'<option value="{row["id"]}" {"selected" if str(row["id"]) == selected_session else ""}>{esc(short_date(row["timestamp"]))} - {esc(exercise_for_level(row["level"]))}</option>'
             for row in self.repo.sessions(selected, limit=30)
         )
+        notes = self.repo.notes(selected, selected_session, selected_date)
         note_rows = "".join(
             f"""
             <div class="card">
-              <div class="toolbar"><strong>{esc(row['patient_name'])}</strong><span class="badge">{esc(row['note_type'])}</span></div>
+              <div class="toolbar"><strong>{esc(row['patient_name'])}</strong><span class="badge">{esc(row['therapist_name'])}</span></div>
+              <p><strong>Clinical observation:</strong> {esc(row['clinical_observation'] or row['note'])}</p>
               <p>{esc(row['note'])}</p>
               <p class="muted"><strong>Recommendation:</strong> {esc(row['recommendation'] or '-')}</p>
-              <p class="muted"><strong>Next plan:</strong> {esc(row['next_plan'] or '-')}</p>
-              <span class="muted">{esc(short_date(row['created_at']))}</span>
+              <p class="muted"><strong>Modified:</strong> {esc(short_date(row['modified_at']))}</p>
+              <form method="post" action="/notes/save" class="form-grid">
+                <input type="hidden" name="note_id" value="{int(number(row['id']))}">
+                <input type="hidden" name="patient_name" value="{esc(row['patient_name'])}">
+                <input type="hidden" name="session_id" value="{esc(row['session_id'] or '')}">
+                <label>Therapist<input name="therapist_name" value="{esc(row['therapist_name'])}"></label>
+                <label class="full">Edit note<textarea name="note" required>{esc(row['note'])}</textarea></label>
+                <label class="full">Clinical observation<textarea name="clinical_observation">{esc(row['clinical_observation'])}</textarea></label>
+                <label class="full">Recommendation<textarea name="recommendation">{esc(row['recommendation'])}</textarea></label>
+                <button class="full">Update Note</button>
+              </form>
+              <span class="muted">Created {esc(short_date(row['created_at']))}</span>
             </div>
             """
-            for row in self.repo.notes(selected)
+            for row in notes
         ) or '<div class="card muted">No therapist notes recorded.</div>'
         body = f"""
         <section class="grid two">
@@ -1866,15 +2364,17 @@ function sortTable(tableId, column) {
             <h2>Therapist Notes</h2>
             <form method="get" class="toolbar">
               <select name="patient"><option value="">All patients</option>{patient_options}</select>
+              <select name="session_id"><option value="">All sessions</option>{session_options}</select>
+              <input name="date" type="date" value="{esc(selected_date)}">
               <button>Filter</button>
             </form>
             <form method="post" action="/notes/save" class="form-grid">
               <label>Patient<select name="patient_name" required><option value="">Select patient</option>{patient_options}</select></label>
               <label>Session<select name="session_id"><option value="">General note</option>{session_options}</select></label>
-              <label>Type<select name="note_type"><option>Observation</option><option>Recommendation</option><option>Next Session Plan</option><option>Risk Note</option></select></label>
-              <label class="full">Observation<textarea name="note" required></textarea></label>
+              <label>Therapist<input name="therapist_name" value="Therapist"></label>
+              <label class="full">Note text<textarea name="note" required></textarea></label>
+              <label class="full">Clinical observation<textarea name="clinical_observation"></textarea></label>
               <label class="full">Recommendation<textarea name="recommendation"></textarea></label>
-              <label class="full">Next rehabilitation session plan<textarea name="next_plan"></textarea></label>
               <button class="full">Add Note</button>
             </form>
           </div>
@@ -1933,9 +2433,34 @@ function sortTable(tableId, column) {
                     alerts.append((f"{name}: slow recovery risk", f"ROM decreased by {abs(delta):.1f} degrees since the previous session.", "warning"))
         return alerts
 
+    def report_chart_image(self, sessions: list[sqlite3.Row]) -> io.BytesIO:
+        labels = [short_date(row["timestamp"]) for row in sessions[-10:]]
+        rom = [number(row["avg_hand_angle"]) for row in sessions[-10:]]
+        acc = [number(row["avg_accuracy"]) for row in sessions[-10:]]
+        pain_before = [number(row_value(row, "pain_before_session", row["pain_level"])) for row in sessions[-10:]]
+        pain_after = [number(row_value(row, "pain_after_session", row["pain_level"])) for row in sessions[-10:]]
+        recovery_scores = [calculated_functional_recovery_score(row) for row in sessions[-10:]]
+        fig, ax = plt.subplots(figsize=(7.2, 3.1), dpi=120)
+        ax.plot(labels, rom, marker="o", linewidth=2, label="ROM")
+        ax.plot(labels, acc, marker="o", linewidth=2, label="Accuracy")
+        ax.plot(labels, pain_before, marker="o", linewidth=2, label="Pain Before")
+        ax.plot(labels, pain_after, marker="o", linewidth=2, label="Pain After")
+        ax.plot(labels, recovery_scores, marker="o", linewidth=2, label="Recovery Score")
+        ax.set_title("ROM, Accuracy, Pain, and Recovery Trend", loc="left", fontsize=11, fontweight="bold")
+        ax.grid(True, color="#dbe7f0")
+        ax.tick_params(axis="x", labelrotation=20, labelsize=7)
+        ax.legend(frameon=False, fontsize=8)
+        fig.tight_layout()
+        image = io.BytesIO()
+        fig.savefig(image, format="png", bbox_inches="tight")
+        plt.close(fig)
+        image.seek(0)
+        return image
+
     def report_pdf(self, patient_name: str) -> bytes:
         try:
             from reportlab.lib.pagesizes import letter
+            from reportlab.lib.utils import ImageReader
             from reportlab.pdfgen import canvas
         except Exception as exc:
             return f"PDF export requires reportlab. Import error: {exc}".encode("utf-8")
@@ -1945,6 +2470,8 @@ function sortTable(tableId, column) {
         notes = self.repo.notes(patient_name)
         adaptive = self.repo.latest_adaptive_prescription(patient_name)
         metrics = self.repo.research_metrics(patient_name)
+        clinical = self.repo.clinical_intel.get_clinical_profile(patient_name) if patient_name else None
+        sensei = self.repo.sensei_history(patient_name, limit=8)
         pred = recovery_prediction(sessions)
         buf = io.BytesIO()
         pdf = canvas.Canvas(buf, pagesize=letter)
@@ -1971,10 +2498,36 @@ function sortTable(tableId, column) {
         y -= 8
         avg_acc = sum(number(s["avg_accuracy"]) for s in sessions) / len(sessions) if sessions else 0
         avg_rom = sum(number(s["avg_hand_angle"]) for s in sessions) / len(sessions) if sessions else 0
+        max_rom = max([number(s["avg_hand_angle"]) for s in sessions], default=0)
+        avg_pain = sum(number(s["pain_level"]) for s in sessions) / len(sessions) if sessions else 0
+        readiness = number(adaptive["readiness_score"]) if adaptive else number(clinical["health_score"] if clinical else 0)
+        latest_session = sessions[-1] if sessions else None
+        pain_before = number(row_value(latest_session, "pain_before_session", row_value(latest_session, "pain_level", 0))) if latest_session else 0
+        pain_after = number(row_value(latest_session, "pain_after_session", row_value(latest_session, "pain_level", 0))) if latest_session else 0
+        pain_difference = number(row_value(latest_session, "pain_difference", 0)) if latest_session else 0
+        pain_trend = sum(number(row_value(row, "pain_difference", 0)) for row in sessions) / len(sessions) if sessions else 0
+        recovery_score_value = calculated_functional_recovery_score(latest_session) if latest_session else 0
+        recovery_category_value = recovery_category(recovery_score_value) if latest_session else "Not started"
+        recovery_trend = (
+            calculated_functional_recovery_score(sessions[-1]) - calculated_functional_recovery_score(sessions[0])
+            if len(sessions) >= 2
+            else 0.0
+        )
         summary = [
             f"Completed Sessions: {len(sessions)}",
             f"Average Accuracy: {avg_acc:.1f}%",
             f"Average ROM: {avg_rom:.1f} degrees",
+            f"Maximum ROM Achieved: {max_rom:.1f} degrees",
+            f"Average Pain Score: {avg_pain:.1f}/10",
+            f"Pain Before Latest Session: {pain_before:.0f}/10",
+            f"Pain After Latest Session: {pain_after:.0f}/10",
+            f"Pain Difference Latest Session: {pain_difference:+.0f}",
+            f"Pain Improvement Trend: {pain_trend:+.1f} average after-before",
+            f"Functional Recovery Score: {recovery_score_value:.0f}/100",
+            f"Recovery Category: {recovery_category_value}",
+            f"Recovery Progress Trend: {recovery_trend:+.1f} points",
+            f"Readiness Score: {readiness:.0f}/100",
+            f"Current Recovery Stage: {clinical['recovery_stage'] if clinical else 'Unknown'}",
             f"Recovery Prediction: {pred:.1f}%" if pred >= 0 else "Recovery Prediction: Need more data",
         ]
         pdf.setFont("Helvetica-Bold", 13)
@@ -1993,8 +2546,11 @@ function sortTable(tableId, column) {
             adaptive_lines = [
                 f"Readiness Score: {number(adaptive['readiness_score']):.0f}/100",
                 f"Difficulty Tier: {int(number(adaptive['difficulty_tier']))}",
+                f"AI Prescription: {int(number(adaptive['repetitions']))} reps, {number(adaptive['required_rom']):.0f} deg ROM, {number(adaptive['hold_seconds']):.1f}s holds",
                 f"Risk Level: {adaptive['risk_level']}",
                 f"Recovery Trend: {adaptive['recovery_trend']}",
+                f"Progression Recommendation: {adaptive['progression']}",
+                f"Adaptive Rationale: {adaptive['rationale']}",
                 f"Override Recommendation: {adaptive['override_recommendation']}",
             ]
             for line in adaptive_lines:
@@ -2019,6 +2575,17 @@ function sortTable(tableId, column) {
         for line in research_lines:
             pdf.drawString(60, y, line)
             y -= 13
+        if sessions:
+            if y < 310:
+                pdf.showPage()
+                y = height - 50
+            y -= 10
+            pdf.setFont("Helvetica-Bold", 13)
+            pdf.drawString(50, y, "Progress Charts")
+            y -= 200
+            chart = ImageReader(self.report_chart_image(sessions))
+            pdf.drawImage(chart, 50, y, width=500, height=180, preserveAspectRatio=True, mask="auto")
+            y -= 20
         y -= 8
         pdf.setFont("Helvetica-Bold", 13)
         pdf.drawString(50, y, "Recent Sessions")
@@ -2031,16 +2598,33 @@ function sortTable(tableId, column) {
             line = (
                 f"{short_date(row['timestamp'])} | {exercise_for_level(row['level'])} | "
                 f"Acc {number(row['avg_accuracy']):.1f}% | ROM {number(row['avg_hand_angle']):.1f} | "
-                f"Pain {int(number(row['pain_level']))}/10"
+                f"Pain {int(number(row_value(row, 'pain_before_session', row['pain_level'])))}/10 to "
+                f"{int(number(row_value(row, 'pain_after_session', row['pain_level'])))} /10 | "
+                f"Recovery {calculated_functional_recovery_score(row):.0f}/100"
             )
             pdf.drawString(60, y, line[:110])
+            y -= 13
+        y -= 8
+        pdf.setFont("Helvetica-Bold", 13)
+        pdf.drawString(50, y, "Virtual Sensei Summary")
+        y -= 18
+        pdf.setFont("Helvetica", 9)
+        sensei_lines = [f"{short_date(row['created_at'])}: {row['message']}" for row in sensei] or ["No Virtual Sensei messages recorded."]
+        for line in sensei_lines:
+            if y < 80:
+                pdf.showPage()
+                y = height - 50
+            pdf.drawString(60, y, str(line)[:110])
             y -= 13
         y -= 8
         pdf.setFont("Helvetica-Bold", 13)
         pdf.drawString(50, y, "Therapist Observations")
         y -= 18
         pdf.setFont("Helvetica", 9)
-        observation_lines = [n["note"] for n in notes[:6]] or ["No therapist notes recorded."]
+        observation_lines = [
+            f"{n['therapist_name']}: {n['note']} Recommendation: {n['recommendation'] or '-'}"
+            for n in notes[:6]
+        ] or ["No therapist notes recorded."]
         for line in observation_lines:
             for chunk in [line[i:i + 95] for i in range(0, len(line), 95)]:
                 if y < 80:
@@ -2079,6 +2663,8 @@ class DashboardHandler(BaseHTTPRequestHandler):
             "/sessions": lambda: self.renderer.sessions_page(params),
             "/analytics": lambda: self.renderer.analytics(params),
             "/adaptive": lambda: self.renderer.adaptive_ai(params),
+            "/sensei": lambda: self.renderer.sensei_review(params),
+            "/risks": lambda: self.renderer.risks_page(params),
             "/digital-twin": lambda: self.renderer.digital_twin_page(params),
             "/reports": lambda: self.renderer.reports(params),
             "/performance": lambda: self.renderer.performance(params),
