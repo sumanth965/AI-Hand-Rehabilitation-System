@@ -11,6 +11,7 @@ from __future__ import annotations
 import json
 import math
 import sqlite3
+import security_utils
 from dataclasses import asdict, dataclass, field
 from datetime import datetime
 from typing import Any
@@ -184,6 +185,7 @@ class DigitalTwinRehabModel:
 
     def save_snapshot(self, profile: DigitalTwinProfile) -> None:
         risks = profile.risks
+        enc_patient = security_utils.encrypt_deterministic(profile.patient_id)
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 """
@@ -195,7 +197,7 @@ class DigitalTwinRehabModel:
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    profile.patient_id,
+                    enc_patient,
                     json.dumps(profile.to_dict(), sort_keys=True),
                     profile.current_rom,
                     profile.current_accuracy,
@@ -211,6 +213,7 @@ class DigitalTwinRehabModel:
             conn.commit()
 
     def snapshot_history(self, patient_id: str, limit: int = 20) -> list[sqlite3.Row]:
+        enc_patient = security_utils.encrypt_deterministic(patient_id)
         with self.connect() as conn:
             return conn.execute(
                 """
@@ -220,10 +223,11 @@ class DigitalTwinRehabModel:
                 ORDER BY id DESC
                 LIMIT ?
                 """,
-                (patient_id, limit),
+                (enc_patient, limit),
             ).fetchall()
 
     def _sessions(self, patient_id: str) -> list[sqlite3.Row]:
+        enc_patient = security_utils.encrypt_deterministic(patient_id)
         with self.connect() as conn:
             return conn.execute(
                 """
@@ -233,11 +237,12 @@ class DigitalTwinRehabModel:
                 ORDER BY datetime(timestamp) ASC, id ASC
                 LIMIT 80
                 """,
-                (patient_id,),
+                (enc_patient,),
             ).fetchall()
 
     def _adaptive_prescriptions(self, patient_id: str) -> list[sqlite3.Row]:
         try:
+            enc_patient = security_utils.encrypt_deterministic(patient_id)
             with self.connect() as conn:
                 return conn.execute(
                     """
@@ -247,13 +252,14 @@ class DigitalTwinRehabModel:
                     ORDER BY datetime(created_at) ASC, id ASC
                     LIMIT 80
                     """,
-                    (patient_id,),
+                    (enc_patient,),
                 ).fetchall()
         except sqlite3.OperationalError:
             return []
 
     def _overrides(self, patient_id: str) -> list[sqlite3.Row]:
         try:
+            enc_patient = security_utils.encrypt_deterministic(patient_id)
             with self.connect() as conn:
                 return conn.execute(
                     """
@@ -263,17 +269,18 @@ class DigitalTwinRehabModel:
                     ORDER BY datetime(created_at) ASC, id ASC
                     LIMIT 80
                     """,
-                    (patient_id,),
+                    (enc_patient,),
                 ).fetchall()
         except sqlite3.OperationalError:
             return []
 
     def _optional_rows(self, table: str, patient_id: str) -> list[sqlite3.Row]:
         try:
+            enc_patient = security_utils.encrypt_deterministic(patient_id)
             with self.connect() as conn:
                 return conn.execute(
                     f"SELECT * FROM {table} WHERE patient_id = ? ORDER BY datetime(created_at) ASC, id ASC LIMIT 80",
-                    (patient_id,),
+                    (enc_patient,),
                 ).fetchall()
         except sqlite3.OperationalError:
             return []

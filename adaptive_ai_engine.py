@@ -13,6 +13,7 @@ from __future__ import annotations
 import json
 import math
 import sqlite3
+import security_utils
 from dataclasses import asdict, dataclass
 from datetime import datetime
 from typing import Any, Iterable
@@ -191,6 +192,7 @@ class AdaptiveRehabEngine:
         return conn
 
     def latest_prescription(self, patient_id: str, level: int) -> AdaptivePrescription:
+        enc_patient = security_utils.encrypt_deterministic(patient_id)
         with self.connect() as conn:
             row = conn.execute(
                 """
@@ -200,12 +202,12 @@ class AdaptiveRehabEngine:
                 ORDER BY id DESC
                 LIMIT 1
                 """,
-                (patient_id, level),
+                (enc_patient, level),
             ).fetchone()
         if not row:
             return AdaptivePrescription(patient_id=patient_id, level=level)
         return AdaptivePrescription(
-            patient_id=row["patient_id"],
+            patient_id=security_utils.decrypt_deterministic(row["patient_id"]),
             level=int(row["level"]),
             difficulty_tier=int(row["difficulty_tier"]),
             readiness_score=number(row["readiness_score"], 50.0),
@@ -438,6 +440,7 @@ class AdaptiveRehabEngine:
         metrics: dict[str, Any] | None = None,
         explanation: dict[str, Any] | None = None,
     ) -> None:
+        enc_patient = security_utils.encrypt_deterministic(prescription.patient_id)
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 """
@@ -453,7 +456,7 @@ class AdaptiveRehabEngine:
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    prescription.patient_id,
+                    enc_patient,
                     session_id,
                     prescription.level,
                     prescription.difficulty_tier,
@@ -512,14 +515,15 @@ class AdaptiveRehabEngine:
         except Exception:
             clinical = None
 
+        enc_patient = security_utils.encrypt_deterministic(patient_id)
         with self.connect() as conn:
             try:
                 profile_row = conn.execute(
                     "SELECT therapist_notes FROM dashboard_patient_profiles WHERE name = ?",
-                    (patient_id,),
+                    (enc_patient,),
                 ).fetchone()
                 if profile_row and profile_row["therapist_notes"]:
-                    therapist_notes = profile_row["therapist_notes"]
+                    therapist_notes = security_utils.decrypt_non_deterministic(profile_row["therapist_notes"])
             except sqlite3.OperationalError:
                 pass
 
@@ -532,7 +536,7 @@ class AdaptiveRehabEngine:
                     ORDER BY id DESC
                     LIMIT 1
                     """,
-                    (patient_id,),
+                    (enc_patient,),
                 ).fetchone()
                 if forearm_row:
                     latest_forearm = f"{forearm_row['movement_class']} (Compensation Score: {forearm_row['compensation_score']*100:.0f}%)"
@@ -617,6 +621,7 @@ class AdaptiveRehabEngine:
         message = enhanced_message or deterministic_message
         llm_status = "enhanced" if enhanced_message else "deterministic_fallback"
 
+        enc_patient = security_utils.encrypt_deterministic(patient_id)
         with sqlite3.connect(self.db_path) as conn:
             conn.execute(
                 """
@@ -628,7 +633,7 @@ class AdaptiveRehabEngine:
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
                 """,
                 (
-                    patient_id,
+                    enc_patient,
                     session_id,
                     level,
                     message,
@@ -652,6 +657,7 @@ class AdaptiveRehabEngine:
         return message
 
     def prescription_history(self, patient_id: str, limit: int = 20) -> list[sqlite3.Row]:
+        enc_patient = security_utils.encrypt_deterministic(patient_id)
         with self.connect() as conn:
             rows = conn.execute(
                 """
@@ -661,7 +667,7 @@ class AdaptiveRehabEngine:
                 ORDER BY id DESC
                 LIMIT ?
                 """,
-                (patient_id, limit),
+                (enc_patient, limit),
             ).fetchall()
         return rows
 
@@ -709,6 +715,7 @@ class AdaptiveRehabEngine:
         }
 
     def _sessions(self, patient_id: str, limit: int = 12) -> list[sqlite3.Row]:
+        enc_patient = security_utils.encrypt_deterministic(patient_id)
         with self.connect() as conn:
             rows = conn.execute(
                 """
@@ -718,7 +725,7 @@ class AdaptiveRehabEngine:
                 ORDER BY id DESC
                 LIMIT ?
                 """,
-                (patient_id, limit),
+                (enc_patient, limit),
             ).fetchall()
         return list(reversed(rows))
 

@@ -34,16 +34,24 @@ The repository is intended for research, demonstration, and local prototype use.
 
 | Path | Responsibility |
 | --- | --- |
-| `zero_keyboard_physio.py` | Main patient-facing rehabilitation game, webcam capture, hand analysis, exercise levels, calibration, local data logging, audio/voice feedback, and in-game medical sidebar. |
-| `therapist_dashboard.py` | Browser-based therapist portal served on localhost; manages patients, dashboard metadata, session analytics, notes, charts, and reports. |
-| `clinical_modules.py` | Optional clinical-grade support modules: smoothing filter, virtual coaching, recovery prediction, chart export, and emergency pause logic. |
+| `zero_keyboard_physio.py` | Main patient-facing rehabilitation game, webcam capture, hand/pose landmarks processing, exercise levels 1-8, ROM calibration, local data logging, voice/sound coaching feedback, and patient medical sidebar. |
+| `therapist_dashboard.py` | Browser-based therapist portal served on localhost; manages patient profiles, session details, notes, clinical intelligence indicators, digital twin simulations, and PDF report downloads. |
+| `adaptive_ai_engine.py` | Explainable AI engine computing difficulty prescriptions, managing forearm assessments, auditing Virtual Sensei messages, and handling therapist overrides. |
+| `clinical_intelligence.py` | Clinical decision layer that evaluates patient health scores, recovery stages, and flags clinical risk indicators (overtraining, dropout, high pain, etc.). |
+| `digital_twin_rehab.py` | Personalized rehabilitation digital twin calculating recovery velocities, forecasting future ROM milestones, and simulating therapeutic plan variations. |
+| `upper_limb_analysis.py` | Biomechanical pose analyzer tracking shoulder elevation, abduction, elbow drift, trunk shift, and computing overall upper limb movement efficiency. |
+| `llm_wrapper.py` | Thread-safe helper routing Virtual Sensei coaching messages through local Ollama LLMs for semantic polish and phrasing adjustments. |
+| `clinical_modules.py` | Legacy clinical-grade support modules including filters, scikit-learn predictors, and emergency pause logic. |
 | `ui_components.py` | Reusable Pygame UI components such as modern buttons, level cards, and back buttons. |
 | `hand_rehab_assistant.py` | Lightweight assistant module for rehabilitation guidance functionality. |
 | `dashboard_auth_addon.py` | Optional authentication/session helper code for dashboard login protection. |
+| `FUTURE_RESEARCH_PATENT_ROADMAP.md` | Research roadmap documenting core patent claims, independent/dependent claim themes, and study endpoints. |
 | `requirements.txt` | Python package dependencies. |
 | `start.bat` | Windows helper for launching the rehabilitation runtime. |
 | `start_dashboard.bat` | Windows helper for launching the therapist dashboard. |
 | `img/image.png` | Project image asset. |
+| `img/readme2.md` | Detailed developer and workflow documentation (this file). |
+
 
 ## 3. Technology Stack
 
@@ -52,13 +60,14 @@ The repository is intended for research, demonstration, and local prototype use.
 The project uses the following packages:
 
 - `opencv-python` for webcam access and image frame handling.
-- `mediapipe<0.10.30` for 21-point hand landmark detection.
-- `numpy` for numerical operations and generated sound wave arrays.
-- `pygame` for the patient-facing graphical game, event loop, sounds, and UI rendering.
-- `matplotlib` for dashboard charts and non-interactive graph generation.
-- `pyttsx3` for offline text-to-speech coaching.
-- `scikit-learn` for optional regression-based prediction in `clinical_modules.py`.
-- `reportlab` for PDF report generation where report export is available.
+- `mediapipe<0.10.30` for 21-point hand landmark detection and pose landmark estimation.
+- `numpy` for numerical calculations (geometry operations and audio synthesis).
+- `pygame` for patient game rendering, user interaction, sound effects, and frame loop.
+- `matplotlib` for generating clinician dashboard graphs and metric charts.
+- `pyttsx3` for offline text-to-speech coaching feedback.
+- `scikit-learn` for basic patient recovery trajectory predictions.
+- `reportlab` for PDF report generation.
+- `Ollama` (optional, external) for local LLM-based coaching message polishing.
 
 ### 3.2 Storage
 
@@ -69,19 +78,38 @@ The system stores local data in `rehab_data.db`, an SQLite database created auto
 - The **patient UI** is a 1280 × 720 Pygame window with a 75% game area and 25% medical sidebar.
 - The **therapist UI** is served by Python's `ThreadingHTTPServer` on `127.0.0.1:8080` by default.
 
-## 4. Installation Workflow
+## 4. Installation & Setup Workflow
 
+### 4.1 Basic Installation
 1. Clone the repository.
 2. Move into the repository directory.
 3. Install dependencies:
-
    ```bash
    pip install -r requirements.txt
    ```
+4. Ensure a functioning webcam is connected and the execution environment supports a graphical window display (Pygame GUI).
+5. Set up adequate lighting to optimize hand and body pose detection tracking.
 
-4. Ensure a functioning webcam is available.
-5. Ensure the runtime environment can open a GUI window for Pygame.
-6. Use good lighting and keep the hand clearly visible to improve MediaPipe tracking.
+### 4.2 Local LLM Setup (Optional)
+To enable the enhanced Virtual Sensei coaching:
+1. Download and install [Ollama](https://ollama.com).
+2. Pull a compact local LLM:
+   ```bash
+   ollama pull qwen2.5:0.5b
+   ```
+3. Set environment variables to configure:
+   - On Windows cmd:
+     ```cmd
+     set OLLAMA_SENSEI_USE_LLM=1
+     set OLLAMA_SENSEI_MODEL=qwen2.5:0.5b
+     set OLLAMA_SENSEI_TIMEOUT=8
+     ```
+   - On PowerShell:
+     ```powershell
+     $env:OLLAMA_SENSEI_USE_LLM="1"
+     $env:OLLAMA_SENSEI_MODEL="qwen2.5:0.5b"
+     $env:OLLAMA_SENSEI_TIMEOUT="8"
+     ```
 
 ## 5. Launch Workflows
 
@@ -95,10 +123,10 @@ What happens during startup:
 
 1. Pygame initializes.
 2. The main window is created.
-3. The hand tracking engine initializes MediaPipe and the webcam stream.
-4. The SQLite schema is created or migrated.
-5. Sound and voice systems attempt to initialize.
-6. The app starts in the patient registration state.
+3. The hand tracking engine initializes MediaPipe Hands/Pose and webcam streams.
+4. The SQLite database schema is migrated/updated automatically.
+5. Sound and voice text-to-speech engines initialize.
+6. The app starts in the patient registration state (Dual Authentication).
 
 ### 5.2 Launch the Therapist Dashboard
 
@@ -110,9 +138,10 @@ What happens during startup:
 
 1. The dashboard ensures the `reports` directory exists.
 2. A threaded local HTTP server binds to `127.0.0.1:8080`.
-3. The dashboard repository creates or migrates required tables.
+3. The dashboard repository creates or migrates required clinical tables.
 4. The browser is opened automatically when possible.
 5. Therapists can view patient lists, analytics, session history, notes, and reports.
+
 
 ## 6. End-to-End System Flow
 
@@ -281,7 +310,8 @@ Before starting a selected exercise level, the runtime stores a pain score from 
 
 ## 14. Exercise Level Workflows
 
-The patient runtime includes six level slots. The labels are adapted by age theme, while the clinical intent remains consistent.
+The patient runtime includes eight level slots. The labels are adapted by age theme, while the clinical intent remains consistent.
+
 
 ### 14.1 Level 1 — Flexibility / Bubble Reach
 
@@ -530,6 +560,127 @@ At the end of a session:
 | `next_plan` | `TEXT DEFAULT ''` | Next treatment plan. |
 | `created_at` | `DATETIME DEFAULT CURRENT_TIMESTAMP` | Note creation time. |
 
+### 17.5 `adaptive_prescriptions`
+
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `id` | `INTEGER PRIMARY KEY AUTOINCREMENT` | Unique prescription ID. |
+| `patient_id` | `TEXT NOT NULL` | Patient linked to the prescription. |
+| `session_id` | `INTEGER` | Session ID that triggered/validated this prescription. |
+| `level` | `INTEGER NOT NULL` | Exercise level. |
+| `difficulty_tier` | `INTEGER NOT NULL` | Difficulty tier (1 to 5). |
+| `readiness_score` | `REAL DEFAULT 50` | Calculated patient physical readiness score. |
+| `target_scale` | `REAL NOT NULL` | Target object scaling multiplier. |
+| `speed_scale` | `REAL NOT NULL` | Falling object speed scaling multiplier. |
+| `required_rom` | `REAL NOT NULL` | Required flexion/extension angle range of motion. |
+| `time_limit` | `REAL NOT NULL` | Level time limit in seconds. |
+| `repetitions` | `INTEGER NOT NULL` | Target exercise repetition count. |
+| `hold_seconds` | `REAL NOT NULL` | Required hold duration for static poses. |
+| `rotation_tolerance` | `REAL NOT NULL` | Wrist rotation deviation tolerance in degrees. |
+| `assembly_position_tolerance` | `REAL NOT NULL` | Position snapping tolerance for assembly pieces. |
+| `assembly_angle_tolerance` | `REAL NOT NULL` | Rotation snapping tolerance for assembly pieces. |
+| `guidance_level` | `TEXT NOT NULL` | Level of coaching assistance (e.g., standard, high). |
+| `progression` | `TEXT NOT NULL` | Recommendation (maintain, advance, regress). |
+| `risk_level` | `TEXT NOT NULL` | Assessed safety risk level (low, moderate, high). |
+| `recovery_trend` | `TEXT DEFAULT 'stable'` | Recovery trajectory category. |
+| `override_recommendation` | `TEXT` | Prompt alerting therapist of override suggestions. |
+| `ai_confidence_score` | `REAL DEFAULT 75` | Confidence index of the generated parameters. |
+| `override_probability` | `REAL DEFAULT 0.25` | Estimated likelihood of clinical override being needed. |
+| `recommendation_reliability` | `REAL DEFAULT 75` | Calculated reliability score of the prescription. |
+| `explanation_json` | `TEXT DEFAULT '{}'` | Detailed rule activations stored in JSON structure. |
+| `rationale` | `TEXT NOT NULL` | Human-readable explanation of why these difficulty parameters were set. |
+| `metrics_json` | `TEXT DEFAULT '{}'` | Snapshot of session metrics used for calculation. |
+| `created_at` | `DATETIME` | Time stamp. |
+
+### 17.6 `forearm_assessments`
+
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `id` | `INTEGER PRIMARY KEY AUTOINCREMENT` | Unique assessment ID. |
+| `patient_id` | `TEXT NOT NULL` | Linked patient ID. |
+| `session_id` | `INTEGER` | Session ID context. |
+| `level` | `INTEGER` | Completed level ID. |
+| `movement_class` | `TEXT NOT NULL` | Movement classification (e.g., Supination, Pronation, Smooth Rotation, Compensatory). |
+| `rotation_angle` | `REAL NOT NULL` | Measured wrist/forearm rotation angle. |
+| `smoothness` | `REAL NOT NULL` | Rotation path smoothness factor (0.0 to 1.0). |
+| `compensation_score` | `REAL NOT NULL` | Biomechanical compensation score. |
+| `endurance_seconds` | `REAL NOT NULL` | Time rotation angle was maintained. |
+| `created_at` | `DATETIME` | Timestamp. |
+
+### 17.7 `sensei_messages`
+
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `id` | `INTEGER PRIMARY KEY AUTOINCREMENT` | Message log ID. |
+| `patient_id` | `TEXT NOT NULL` | Linked patient ID. |
+| `session_id` | `INTEGER` | Session ID context. |
+| `level` | `INTEGER` | Level ID context. |
+| `message` | `TEXT NOT NULL` | Spoken voice guidance text. |
+| `deterministic_message` | `TEXT` | Rule-based baseline message. |
+| `llm_enhanced_message` | `TEXT` | Message as edited by Ollama LLM. |
+| `coaching_trigger` | `TEXT` | The rule condition that triggered feedback. |
+| `decision_source` | `TEXT` | Module generating the feedback (Adaptive AI Engine). |
+| `llm_status` | `TEXT` | Integration status (e.g., enhanced, error, not_requested). |
+| `context_json` | `TEXT` | Context variables passed during generation. |
+| `created_at` | `DATETIME` | Timestamp. |
+
+### 17.8 `therapist_overrides`
+
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `id` | `INTEGER PRIMARY KEY AUTOINCREMENT` | Override ID. |
+| `prescription_id` | `INTEGER` | Target prescription ID. |
+| `patient_id` | `TEXT NOT NULL` | Linked patient ID. |
+| `therapist_id` | `TEXT` | Therapist profile identifier. |
+| `decision` | `TEXT NOT NULL` | Decision outcome (accept, modify, reject). |
+| `reason` | `TEXT NOT NULL` | Clinical justification category. |
+| `therapist_reason` | `TEXT` | Free-text clinical comments. |
+| `ai_recommendation_json` | `TEXT` | The original AI prescription parameters. |
+| `modified_recommendation_json` | `TEXT` | The customized parameters set by the therapist. |
+| `patient_context_json` | `TEXT` | Patient history context snapshot. |
+| `session_metrics_json` | `TEXT` | Raw metrics snapshot. |
+| `created_at` | `DATETIME` | Timestamp. |
+
+### 17.9 `upper_limb_assessments`
+
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `id` | `INTEGER PRIMARY KEY AUTOINCREMENT` | Assessment row ID. |
+| `patient_id` | `TEXT NOT NULL` | Linked patient ID. |
+| `session_id` | `INTEGER` | Associated session ID. |
+| `level` | `INTEGER` | Exercise level. |
+| `shoulder_angle` | `REAL` | Measured shoulder angle in degrees. |
+| `elbow_angle` | `REAL` | Measured elbow angle in degrees. |
+| `forearm_rotation_angle` | `REAL` | Forearm rotation angle. |
+| `trunk_lean_angle` | `REAL` | Torso lean deviation. |
+| `shoulder_compensation` | `REAL` | Calculated shoulder compensation score (0.0 to 1.0). |
+| `elbow_compensation` | `REAL` | Calculated elbow compensation score (0.0 to 1.0). |
+| `trunk_compensation` | `REAL` | Calculated trunk compensation score (0.0 to 1.0). |
+| `compensation_score` | `REAL` | Overall combined compensation metric. |
+| `movement_efficiency` | `REAL` | Calculated movement efficiency percentage (100 - compensation%). |
+| `feedback` | `TEXT` | Diagnostic posture advice. |
+| `side` | `TEXT` | Calibrated active side (Left/Right). |
+| `created_at` | `DATETIME` | Timestamp. |
+
+### 17.10 `digital_twin_snapshots`
+
+| Column | Type | Purpose |
+| --- | --- | --- |
+| `id` | `INTEGER PRIMARY KEY AUTOINCREMENT` | Snapshot row ID. |
+| `patient_id` | `TEXT NOT NULL` | Patient ID. |
+| `snapshot_json` | `TEXT NOT NULL` | Full serialized Digital Twin model profile. |
+| `current_rom` | `REAL` | Patient ROM at snapshot. |
+| `current_accuracy` | `REAL` | Patient accuracy at snapshot. |
+| `readiness_score` | `REAL` | Readiness index. |
+| `recovery_velocity` | `REAL` | Estimated ROM velocity in degrees/week. |
+| `stagnation_risk` | `REAL` | Projected risk of recovery plateau. |
+| `overtraining_risk` | `REAL` | Projected risk of physical fatigue/strain. |
+| `high_pain_risk` | `REAL` | Pain ceiling threshold alert level. |
+| `compensation_risk` | `REAL` | Estimated dependency on posture offsets. |
+| `dropout_risk` | `REAL` | Projected likelihood of session abandonment. |
+| `created_at` | `DATETIME` | Timestamp. |
+
+
 ## 18. Therapist Dashboard Workflow
 
 ### 18.1 Dashboard Startup
@@ -578,38 +729,83 @@ Dashboard analytics can include:
 4. PDF generation can use ReportLab where implemented and available.
 5. Generated reports are stored under `reports`.
 
-## 19. Optional Clinical Modules
+## 19. Core Adaptive AI & Clinical Intelligence Modules
 
-`clinical_modules.py` contains modular building blocks that can be used by the runtime or future integrations.
+The platform relies on a set of five core analytical modules to manage explainable adaptation, biomechanical assessment, recovery forecasting, and clinical decision support.
 
-### 19.1 `ClinicalAccuracyFilter`
+### 19.1 Adaptive AI Engine (`adaptive_ai_engine.py`)
 
-- Applies a moving-average filter to angle lists and 2D points.
-- Helps reduce MediaPipe landmark jitter.
-- Can reset buffers when tracking is lost.
+The `AdaptiveRehabEngine` implements an explainable, closed-loop personalization layer.
+- **Adaptive Prescriptions**: Based on the patient's performance history, pain level, range of motion (ROM), consistency, and posture quality, the engine calculates a new prescription for the next session. This modifies parameters including:
+  - `difficulty_tier`: Tiers 1–5 adapting the overall game parameters.
+  - `target_scale` & `speed_scale`: Target dimensions and object falling speeds.
+  - `required_rom`: Flexion/extension angles targeted for level completion.
+  - `time_limit`: Seconds allowed for the exercise.
+  - `repetitions` & `hold_seconds`: Reps and duration required for pose validation.
+  - `rotation_tolerance`, `assembly_position_tolerance`, `assembly_angle_tolerance`: Snapping and deviation margins for Level 7 and Level 8.
+- **Forearm Assessment Classifier**: Classifies forearm movements into categories:
+  - *Neutral Position*, *Pronation*, *Supination*, *Partial Pronation*, *Partial Supination*, *Rotation Hold*, *Rotation Endurance*, *Smooth Rotation*, and *Compensatory Movement*.
+- **Coaching Messages Audit**: Logs every coaching advice generated. The decision logic remains rule-based for safety, but allows optional local LLM rewrites via the `llm_wrapper.py`.
 
-### 19.2 `VirtualSensei`
+### 19.2 Clinical Intelligence Layer (`clinical_intelligence.py`)
 
-- Compares a live angle against a target angle.
-- Uses tolerance and hold-duration rules.
-- Returns events such as success, hold, bend further, or too far.
-- Provides rate-limited voice coaching.
+The `ClinicalIntelligenceLayer` provides advanced decision support for therapists.
+- **Health Score Calculation**: Computes a single 0-100 metric summarizing the patient's physical state:
+  $$\text{Base Score} = (\text{ROM Score} \times 0.5) + (\text{Accuracy Score} \times 0.5)$$
+  $$\text{ROM Score} = \min\left(100.0, \frac{\text{Average ROM}}{90.0} \times 100\right)$$
+  $$\text{Final Score} = \text{Base Score} - \text{Pain Penalty} - \text{Compensation Penalty}$$
+  - *Pain Penalty*: Up to -20 points based on the 0–10 pain index.
+  - *Compensation Penalty*: Up to -25 points based on the upper limb posture compensation score.
+- **Recovery Stage Classification**:
+  - *Early Recovery*: Average ROM $< 45.0^\circ$.
+  - *Intermediate Recovery*: Average ROM between $45.0^\circ$ and $75.0^\circ$.
+  - *Advanced Recovery*: Average ROM $\ge 75.0^\circ$.
+- **Clinical Risk Detection**: Automatically triggers flags for doctor review:
+  - *High Pain Risk*: Average pain level $\ge 6.0$.
+  - *Overtraining Risk*: Declining exercise accuracy ($\ge 10.0\%$ drop) alongside pain index $\ge 4.0$.
+  - *Dropout Risk*: No completed session logged in the last 10 days.
+  - *Compensation Dependency*: Average upper limb compensation score $\ge 0.40$.
 
-### 19.3 `RecoveryPredictor`
+### 19.3 Personalized Digital Twin (`digital_twin_rehab.py`)
 
-- Uses linear regression when scikit-learn is available.
-- Falls back to manual regression if scikit-learn is missing.
-- Predicts a future recovery/angle trend from session history.
+The `DigitalTwinRehabModel` builds a simulation twin of the patient's recovery trajectory.
+- **Longitudinal Snapshots**: Periodically saves profile snapshots to trace recovery velocities.
+- **Simulation Scenarios**:
+  - *Scenario A (Current plan continues)*: Forecasts recovery duration and final ROM/accuracy milestones based on the current session rate and performance consistency.
+  - *Scenario B (Increased intensity)*: Simulates a $1.35\times$ velocity boost. Highlights potential risks (elevated fatigue indexes, joint compensation dependency, and lower session adherence).
+  - *Scenario C (Reduced intensity)*: Simulates a $0.65\times$ slower velocity. Reduces physical stress/pain limits while extending the projected recovery timeline.
+- **Weekly ROM Velocity**: Calculated as:
+  $$\text{Velocity (deg/week)} = \frac{\text{Current ROM} - \text{Baseline ROM}}{\text{Days Elapsed}} \times 7.0$$
 
-### 19.4 `TherapistDashboard`
+### 19.4 Upper Limb Biomechanics (`upper_limb_analysis.py`)
 
-- Generates progress graphs with Matplotlib.
-- Exports visual progress summaries.
+The `UpperLimbAnalyzer` uses MediaPipe Pose landmarks to evaluate compensation mechanisms.
+- **Pose Landmark Extraction**: Captures 2D webcam coordinates for left/right shoulders, elbows, wrists, and hips.
+- **Postural Deviation Tracking**:
+  - *Shoulder Elevation*: Measures y-coordinate shift of the shoulder relative to the torso height.
+  - *Shoulder Abduction*: Measures lateral elbow offset relative to the shoulder width.
+  - *Elbow Drift*: Tracks 2D displacement of the active elbow relative to baseline position.
+  - *Trunk Shift & Lean*: Evaluates center-of-gravity offsets and torso angular tilt.
+- **Compensation Score**: Translates physical shifts into a 0.0 to 1.0 compensation factor, leading to:
+  $$\text{Movement Efficiency (\%)} = 100.0 \times (1.0 - \text{Compensation Score})$$
+  Provides contextual feedback alerts (e.g., *"Avoid lifting your shoulder"* or *"Try keeping your elbow stable"*).
 
-### 19.5 `EmergencyPause`
+### 19.5 LLM Wrapper for Voice Coaching (`llm_wrapper.py`)
 
-- Monitors confidence and tracking quality.
-- Helps prevent bad data capture when landmarks are unreliable.
+This wrapper implements a thread-safe connection to the local Ollama API.
+- **Coaching Message Polishing**: It sends the rule-based deterministic advice to Ollama (defaulting to the `qwen2.5:0.5b` model or fallbacks like `smollm2:135m`, `llama3.2:1b`).
+- **Semantic Consistency Gating**: A strict clinical system prompt forces the model to only adjust language phrasing for conversational polish. The LLM is explicitly forbidden from modifying clinical prescriptions, difficulty tiers, pain thresholds, safety ratings, or exercises.
+- **Graceful Fallbacks**: If the Ollama server is offline, times out (default 8 seconds), or returns garbage, the system silently drops back to the rule-based deterministic text, maintaining patient safety.
+
+### 19.6 Legacy Clinical Modules (`clinical_modules.py`)
+
+This file contains legacy helper classes that are retained for backwards compatibility:
+- `ClinicalAccuracyFilter`: Implements a simple moving-average (SMA) filter with a window size of 5 to remove high-frequency coordinate jitter.
+- `VirtualSensei`: Provides rule-based comparison between current joint angles and target angles, outputting instructions like "Bend further" or "Hold it there".
+- `RecoveryPredictor`: Uses basic scikit-learn linear regression to forecast future session scores.
+- `TherapistDashboard`: Handles matplotlib line charts generation for patient sessions.
+- `EmergencyPause`: Implements confidence score threshold gating for MediaPipe landmarks to suspend data logging when the webcam feed is obscured.
+
 
 ## 20. Security and Privacy Notes
 

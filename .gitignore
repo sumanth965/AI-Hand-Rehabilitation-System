@@ -22,3 +22,7 @@ push_repo.bat
 
 # Clinical Reports (privacy and local session logs)
 reports/
+
+# Encryption Keys
+secret.key
+

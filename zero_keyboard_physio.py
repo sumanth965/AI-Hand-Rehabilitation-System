@@ -8,6 +8,7 @@ import mediapipe as mp
 import pygame
 import numpy as np
 import sqlite3
+import security_utils
 import threading
 import time
 import math
@@ -994,18 +995,24 @@ class DatabaseManager:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             
+            enc_name = security_utils.encrypt_deterministic(name)
+            
             # If id_number is not provided but exists in db, preserve it
             if id_number is None:
-                cursor.execute("SELECT id_number FROM patients WHERE name = ?", (name,))
+                cursor.execute("SELECT id_number FROM patients WHERE name = ?", (enc_name,))
                 row = cursor.fetchone()
                 if row:
                     id_number = row[0]
+                else:
+                    id_number = None
+            else:
+                id_number = security_utils.encrypt_deterministic(id_number)
                     
             cursor.execute("""
                 INSERT OR REPLACE INTO patients 
                 (name, age, age_group, cal_fist_val, cal_max_ext, cal_min_ang, cal_max_ang, cal_active, id_number)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (name, age, age_group, cal_fist_val, cal_max_ext, cal_min_ang, cal_max_ang, cal_active, id_number))
+            """, (enc_name, age, age_group, cal_fist_val, cal_max_ext, cal_min_ang, cal_max_ang, cal_active, id_number))
             conn.commit()
             conn.close()
             print(f"[SUCCESS] Saved patient profile: {name} (Age {age}, Group {age_group})")
@@ -1016,10 +1023,11 @@ class DatabaseManager:
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
+            enc_name = security_utils.encrypt_deterministic(name)
             cursor.execute("""
                 SELECT age, age_group, cal_fist_val, cal_max_ext, cal_min_ang, cal_max_ang, cal_active
                 FROM patients WHERE name = ?
-            """, (name,))
+            """, (enc_name,))
             row = cursor.fetchone()
             conn.close()
             if row:
@@ -1041,15 +1049,17 @@ class DatabaseManager:
         try:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
+            enc_id = security_utils.encrypt_deterministic(id_number)
             cursor.execute("""
                 SELECT name, age, age_group, cal_fist_val, cal_max_ext, cal_min_ang, cal_max_ang, cal_active
                 FROM patients WHERE id_number = ?
-            """, (id_number,))
+            """, (enc_id,))
             row = cursor.fetchone()
             conn.close()
             if row:
+                dec_name = security_utils.decrypt_deterministic(row[0])
                 return {
-                    'name': row[0],
+                    'name': dec_name,
                     'age': row[1],
                     'age_group': row[2],
                     'cal_fist_val': row[3],
@@ -1067,22 +1077,25 @@ class DatabaseManager:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             cursor.execute("""
-                SELECT name, age, age_group, cal_fist_val, cal_max_ext, cal_min_ang, cal_max_ang, cal_active
+                SELECT name, age, age_group, cal_fist_val, cal_max_ext, cal_min_ang, cal_max_ang, cal_active, id_number
                 FROM patients ORDER BY name ASC
             """)
             rows = cursor.fetchall()
             conn.close()
             res = []
             for row in rows:
+                dec_name = security_utils.decrypt_deterministic(row[0])
+                dec_id = security_utils.decrypt_deterministic(row[8]) if row[8] else None
                 res.append({
-                    'name': row[0],
+                    'name': dec_name,
                     'age': row[1],
                     'age_group': row[2],
                     'cal_fist_val': row[3],
                     'cal_max_ext': row[4],
                     'cal_min_ang': row[5],
                     'cal_max_ang': row[6],
-                    'cal_active': row[7]
+                    'cal_active': row[7],
+                    'id_number': dec_id
                 })
             return res
         except Exception as e:
@@ -1102,6 +1115,9 @@ class DatabaseManager:
             pain_before = int(pain_level if pain_before_session is None else pain_before_session)
             pain_after = int(pain_before if pain_after_session is None else pain_after_session)
             pain_difference = pain_after - pain_before
+            
+            enc_patient_id = security_utils.encrypt_deterministic(patient_id)
+            
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             cursor.execute("""
@@ -1111,7 +1127,7 @@ class DatabaseManager:
                    pain_before_session, pain_after_session, pain_difference,
                    functional_recovery_score, recovery_category, movement_smoothness)
                 VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
-            """, (patient_id, level, score, duration, avg_accuracy,
+            """, (enc_patient_id, level, score, duration, avg_accuracy,
                    max_extension, reach_distance, avg_hand_angle, pain_before,
                    pain_before, pain_after, pain_difference,
                    functional_recovery_score, recovery_category, movement_smoothness))
@@ -1193,13 +1209,14 @@ class DatabaseManager:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             if patient_id:
+                enc_id = security_utils.encrypt_deterministic(patient_id)
                 cursor.execute("""
                     SELECT level, avg_accuracy, avg_hand_angle, score,
                            strftime('%d/%m', timestamp) as date
                     FROM sessions 
                     WHERE patient_id = ?
                     ORDER BY id DESC LIMIT ?
-                """, (patient_id, limit))
+                """, (enc_id, limit))
             else:
                 cursor.execute("""
                     SELECT level, avg_accuracy, avg_hand_angle, score,
@@ -1219,6 +1236,7 @@ class DatabaseManager:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             if patient_id:
+                enc_id = security_utils.encrypt_deterministic(patient_id)
                 cursor.execute("""
                     SELECT id,
                            strftime('%d/%m/%Y %H:%M', timestamp) as dt,
@@ -1227,7 +1245,7 @@ class DatabaseManager:
                     FROM sessions 
                     WHERE patient_id = ?
                     ORDER BY id DESC LIMIT ?
-                """, (patient_id, limit))
+                """, (enc_id, limit))
             else:
                 cursor.execute("""
                     SELECT id,
@@ -1249,12 +1267,13 @@ class DatabaseManager:
             conn = sqlite3.connect(self.db_path)
             cursor = conn.cursor()
             if patient_id:
+                enc_id = security_utils.encrypt_deterministic(patient_id)
                 cursor.execute("""
                     SELECT avg_hand_angle, strftime('%d/%m', timestamp)
                     FROM sessions 
                     WHERE patient_id = ?
                     ORDER BY id DESC LIMIT ?
-                """, (patient_id, limit))
+                """, (enc_id, limit))
             else:
                 cursor.execute("""
                     SELECT avg_hand_angle, strftime('%d/%m', timestamp)
@@ -2595,6 +2614,10 @@ class PhysioSystem:
         self.sounds = SoundSystem()
         self.particles = ParticleSystem()
         self.popups: List[ScorePopup] = []
+        
+        # Privacy & Safety Checks
+        security_utils.run_privacy_startup_checks()
+        print("Privacy Mode Enabled")
         
         # State
         self.state = GameState.PATIENT_REGISTRATION

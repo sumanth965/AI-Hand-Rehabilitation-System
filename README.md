@@ -46,31 +46,36 @@ Navigate menus, play games, and track your recovery — **using only your hands.
 | 📡 | **Real-Time Feedback** | Mirrored webcam feed with MediaPipe landmarks overlaid |
 | 📊 | **Therapist Dashboard** | Web interface for doctors to manage patients and view analytics |
 | 🔐 | **Dual Authentication** | Login using Clinical ID or Guest Mode (Name & Age) |
-| 🎮 | **Level-Based Progression** | Three exercise levels from warm-up to fine motor control |
+| 🎮 | **Level-Based Progression** | Eight exercise levels from warm-up to complex forearm rotation and smart assembly |
+| 🦾 | **Biomechanical Compensation** | Real-time posture tracking (shoulder elevation/abduction, elbow drift, trunk lean) |
+| 🧠 | **Clinical Decision & Twin** | Machine learning recovery predictions, health scoring, and digital twin simulation |
+| 🗣️ | **Interactive Virtual Sensei** | Context-aware voice guidance powered by rules and optional local LLM polish |
 
-## 🚀 Two-Part Architecture
+## 🚀 System Architecture
 
-The project is split into two integrated components:
+The project is split into two integrated components: the **Rehabilitation Game** (patient runtime) and the **Therapist Dashboard** (clinician portal), supported by modular AI, biomechanics, and clinical analysis layers.
 
 ### Adaptive AI Rehabilitation Platform Flow
-
 Patient exercise data flows through session metrics collection into the local SQLite database. Recovery prediction and forearm classification feed the `AdaptiveRehabEngine`, which generates the rehabilitation prescription: difficulty tier, target size, speed scale, ROM requirement, repetition count, hold duration, rotation tolerance, risk level, recovery state, readiness score, and therapist recommendations.
 
 The Virtual Sensei consumes the current session, previous session history, recovery prediction, forearm classification, readiness score, risk level, and adaptive prescription to generate deterministic coaching. Optional Ollama support is limited to rewriting that finished coaching message for clearer communication. The local LLM must not change prescriptions, difficulty, risk scores, safety decisions, diagnosis, medication advice, or progression recommendations.
 
 All adaptive prescriptions and Virtual Sensei audit details are stored in SQLite for therapist review, including decision source, rule-based safety logic, optional LLM enhancement status, rationale, trigger, and timestamp.
 
-### 1. The Rehabilitation Game (`zero_keyboard_physio.py`)
-A Pygame-based, interactive computer vision game for patients. It features:
-- Hand tracking using Google MediaPipe.
-- Exercise routines for Range of Motion, Coordination, and Fine Motor skills.
-- Local SQLite database logging (`rehab_data.db`).
-
-### 2. The Therapist Dashboard (`therapist_dashboard.py`)
-A web-based portal designed for medical professionals. It features:
-- Patient management and unique Clinical ID generation (e.g., `HR001`).
-- Analytics charts mapping a patient's recovery progress over time.
-- Clinical session notes and downloadable PDF reports.
+### Component Directory Map
+* **Patient Application Core**
+  * `zero_keyboard_physio.py`: Main Pygame patient game loop, camera thread, voice coaching feedback, ROM calibration, and levels 1-8.
+  * `ui_components.py`: Reusable Pygame user interface buttons, dashboard cards, and navigation rings.
+  * `hand_rehab_assistant.py`: Auxiliary guidance text helper for interactive patient UI.
+* **Clinician Portal Core**
+  * `therapist_dashboard.py`: Lightweight HTTP server dashboard rendering patient summaries, trends, notes, twin simulation projections, and PDF export.
+  * `dashboard_auth_addon.py`: Session helper library managing dashboard login and authentication states.
+* **Adaptive AI & Analytics Core**
+  * `adaptive_ai_engine.py`: Adaptive difficulty engine computing real-time prescription configurations and risk classifications.
+  * `digital_twin_rehab.py`: Patient digital twin model projecting future recovery windows across custom rehabilitation scenarios (Plans A, B, C).
+  * `clinical_intelligence.py`: Diagnostic analytics layer calculating patient health scores, recovery phases, and highlighting clinical alert triggers.
+  * `upper_limb_analysis.py`: Biomechanical pose engine parsing joint angles to measure shoulder, elbow, and trunk compensation.
+  * `llm_wrapper.py`: Thread-safe interface querying local Ollama LLMs for semantic enhancement of Virtual Sensei feedback.
 
 ## 📦 Installation
 
@@ -97,17 +102,36 @@ python zero_keyboard_physio.py
 ```
 
 > [!WARNING]
-> A functioning webcam is required for the Rehabilitation Session. Ensure adequate lighting for optimal hand detection accuracy.
+> A functioning webcam is required for the Rehabilitation Session. Ensure adequate lighting and camera visibility of both hand and upper torso for optimal landmark tracking.
+
+### 🤖 Optional Local LLM (Ollama) Integration
+The Virtual Sensei coaching feedback can optionally be enhanced using a local LLM via [Ollama](https://ollama.com).
+
+1. Install Ollama and pull a supported small model (e.g., Qwen 2.5 0.5B, Smollm2 135M, or Llama 3.2 1B):
+   ```bash
+   ollama pull qwen2.5:0.5b
+   ```
+2. Enable local LLM coaching enhancement and specify configuration details by setting environment variables before running the game:
+   ```cmd
+   :: Enable LLM coaching message polishing (0 = off, 1 = on)
+   set OLLAMA_SENSEI_USE_LLM=1
+   :: Select model name (options: qwen2.5:0.5b, smollm2:135m, llama3.2:1b, llama3)
+   set OLLAMA_SENSEI_MODEL=qwen2.5:0.5b
+   :: Set maximum query timeout in seconds
+   set OLLAMA_SENSEI_TIMEOUT=8
+   ```
 
 ## ⚙️ How It Works
 
 1. **Capture** — Webcam frames are captured and mirrored in real time.
-2. **Detect** — MediaPipe identifies 21 hand landmarks per frame.
-3. **Analyze** — Flexion angles are computed from joint positions.
-4. **Respond** — The game reacts to gestures; progress is recorded to the local database.
-5. **Review** — Therapists review the automatically generated data on the web dashboard.
+2. **Detect** — MediaPipe Hands identifies 21 hand landmarks; MediaPipe Pose tracks upper limb joints.
+3. **Analyze** — Joint angles and deviation paths are computed. Compensation scores are generated for the upper limb.
+4. **Adapt** — The game adjusts difficulty (target size, speed, hold thresholds) based on active AI prescriptions.
+5. **Log** — Metrics, prescriptions, notes, and twins are persisted to SQLite.
+6. **Review** — Therapists review recovery trends and simulate rehabilitation strategy projections on the web dashboard.
 
 ## ⚠️ Limitations & Future Improvements
+
 
 While this project provides a strong proof-of-concept for AI-powered rehabilitation, it has some limitations to be addressed in future versions:
 - **Environmental Dependency:** MediaPipe requires adequate lighting and clear contrast; poor lighting can drop the tracking frame rate.

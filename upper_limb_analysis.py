@@ -11,6 +11,7 @@ from __future__ import annotations
 
 import math
 import sqlite3
+import security_utils
 from dataclasses import asdict, dataclass
 from typing import Any
 
@@ -263,6 +264,7 @@ def save_upper_limb_assessment(
     session_id: int | None = None,
 ) -> None:
     ensure_upper_limb_schema(db_path)
+    enc_patient = security_utils.encrypt_deterministic(patient_id)
     with sqlite3.connect(db_path) as conn:
         conn.execute(
             """
@@ -275,7 +277,7 @@ def save_upper_limb_assessment(
             VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """,
             (
-                patient_id,
+                enc_patient,
                 session_id,
                 level,
                 number(metrics.get("shoulder_angle")),

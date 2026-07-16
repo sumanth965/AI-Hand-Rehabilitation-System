@@ -7,6 +7,7 @@ insights and recommendations for therapists.
 """
 
 import sqlite3
+import security_utils
 import math
 from typing import Any, Dict, List
 from datetime import datetime
@@ -34,13 +35,14 @@ class ClinicalIntelligenceLayer:
 
     def get_clinical_profile(self, patient_id: str) -> Dict[str, Any]:
         """Generates the full clinical profile for a patient."""
+        enc_patient = security_utils.encrypt_deterministic(patient_id)
         sessions = self._query(
             "SELECT * FROM sessions WHERE patient_id = ? ORDER BY id DESC LIMIT 60",
-            (patient_id,)
+            (enc_patient,)
         )
         upper_limb = self._query(
             "SELECT * FROM upper_limb_assessments WHERE patient_id = ? ORDER BY id DESC LIMIT 30",
-            (patient_id,)
+            (enc_patient,)
         )
         
         if not sessions:
