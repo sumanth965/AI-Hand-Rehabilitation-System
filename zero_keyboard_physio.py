@@ -946,6 +946,34 @@ class DatabaseManager:
                     id_number TEXT UNIQUE
                 )
             """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS compensation_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    patient_id TEXT NOT NULL,
+                    session_id INTEGER,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    exercise TEXT,
+                    compensation_type TEXT,
+                    severity REAL
+                )
+            """)
+            cursor.execute("""
+                CREATE TABLE IF NOT EXISTS clinical_summaries (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    patient_id TEXT NOT NULL,
+                    session_id INTEGER UNIQUE,
+                    movement_quality REAL,
+                    rom_improvement REAL,
+                    grip_accuracy REAL,
+                    compensation_events INTEGER,
+                    pain_before INTEGER,
+                    pain_after INTEGER,
+                    recovery_trend TEXT,
+                    ai_recommendation TEXT,
+                    summary_text TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
             # Migrations for older DBs
             for col, defn in [("level",          "INTEGER DEFAULT 1"),
                               ("score",          "INTEGER DEFAULT 0"),
@@ -961,7 +989,12 @@ class DatabaseManager:
                               ("pain_difference", "INTEGER DEFAULT 0"),
                               ("functional_recovery_score", "REAL DEFAULT 0"),
                               ("recovery_category", "TEXT DEFAULT 'Not recorded'"),
-                              ("movement_smoothness", "REAL DEFAULT 0")]:
+                              ("movement_smoothness", "REAL DEFAULT 0"),
+                              ("movement_quality_score", "REAL DEFAULT 0"),
+                              ("sub_smoothness", "REAL DEFAULT 0"),
+                              ("sub_accuracy", "REAL DEFAULT 0"),
+                              ("sub_rom", "REAL DEFAULT 0"),
+                              ("sub_stability", "REAL DEFAULT 0")]:
                 try:
                     cursor.execute(f"SELECT {col} FROM sessions LIMIT 1")
                 except sqlite3.OperationalError:
@@ -1110,7 +1143,12 @@ class DatabaseManager:
                     pain_after_session: int | None = None,
                     functional_recovery_score: float = 0.0,
                     recovery_category: str = "Not recorded",
-                    movement_smoothness: float = 0.0):
+                    movement_smoothness: float = 0.0,
+                    movement_quality_score: float = 0.0,
+                    sub_smoothness: float = 0.0,
+                    sub_accuracy: float = 0.0,
+                    sub_rom: float = 0.0,
+                    sub_stability: float = 0.0):
         try:
             pain_before = int(pain_level if pain_before_session is None else pain_before_session)
             pain_after = int(pain_before if pain_after_session is None else pain_after_session)
@@ -1125,12 +1163,14 @@ class DatabaseManager:
                   (patient_id, level, score, duration, avg_accuracy,
                    max_finger_extension, reach_distance, avg_hand_angle, pain_level,
                    pain_before_session, pain_after_session, pain_difference,
-                   functional_recovery_score, recovery_category, movement_smoothness)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   functional_recovery_score, recovery_category, movement_smoothness,
+                   movement_quality_score, sub_smoothness, sub_accuracy, sub_rom, sub_stability)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (enc_patient_id, level, score, duration, avg_accuracy,
                    max_extension, reach_distance, avg_hand_angle, pain_before,
                    pain_before, pain_after, pain_difference,
-                   functional_recovery_score, recovery_category, movement_smoothness))
+                   functional_recovery_score, recovery_category, movement_smoothness,
+                   movement_quality_score, sub_smoothness, sub_accuracy, sub_rom, sub_stability))
             
             self.last_session_id = cursor.lastrowid
             
@@ -1154,7 +1194,8 @@ class DatabaseManager:
         cursor = conn.cursor()
         
         cursor.execute("""
-            SELECT level, score, duration, avg_accuracy, max_finger_extension, reach_distance, avg_hand_angle
+            SELECT level, score, duration, avg_accuracy, max_finger_extension, reach_distance, avg_hand_angle,
+                   movement_quality_score, sub_smoothness, sub_accuracy, sub_rom, sub_stability
             FROM sessions
             WHERE id = ?
         """, (self.last_session_id,))
@@ -1170,7 +1211,12 @@ class DatabaseManager:
                 'avg_accuracy': result[3],
                 'max_extension': result[4],
                 'reach_distance': result[5],
-                'avg_hand_angle': result[6]
+                'avg_hand_angle': result[6],
+                'movement_quality_score': result[7],
+                'sub_smoothness': result[8],
+                'sub_accuracy': result[9],
+                'sub_rom': result[10],
+                'sub_stability': result[11]
             }
         return None
     
@@ -1557,15 +1603,16 @@ class LevelButton:
         current_hover = default_hov if not hov_col else hov_col
         
         bg_color = current_hover if is_hovering else current_bg
-        pygame.draw.rect(screen, bg_color, self.rect, border_radius=16)
+        pygame.draw.rect(screen, bg_color, self.rect, border_radius=12)
         border_color = (50, 255, 150) if is_hovering else (0, 180, 220)
-        pygame.draw.rect(screen, border_color, self.rect, 4 if is_hovering else 3, border_radius=16)
+        pygame.draw.rect(screen, border_color, self.rect, 3 if is_hovering else 2, border_radius=12)
 
-        # Badge: Vertically center for normal buttons, slightly offset down for tall cards
-        badge_y = self.rect.y + 12 if self.rect.height <= 80 else self.rect.y + 16
-        badge_rect = pygame.Rect(self.rect.x + 12, badge_y, 36, 36)
+        # Badge: compact and vertically centered
+        badge_size = 28 if self.rect.height > 60 else 24
+        badge_y = self.rect.centery - badge_size // 2
+        badge_rect = pygame.Rect(self.rect.x + 10, badge_y, badge_size, badge_size)
         badge_color = (50, 255, 150) if is_hovering else (0, 150, 200)
-        pygame.draw.rect(screen, badge_color, badge_rect, border_radius=8)
+        pygame.draw.rect(screen, badge_color, badge_rect, border_radius=7)
         badge_text = font_badge.render(str(self.level_num), True, (0, 0, 0))
         screen.blit(badge_text, badge_text.get_rect(center=badge_rect.center))
 
@@ -1573,35 +1620,33 @@ class LevelButton:
         
         # Split text by newlines for multiline age group cards
         lines = [line.strip() for line in self.text.split('\n') if line.strip()]
+        text_left = self.rect.x + 10 + badge_size + 10
+        text_right = self.ring.x - self.ring.radius - 10
+        center_x = (text_left + text_right) // 2
+        
         if len(lines) > 1:
-            # Multi-line card layout (e.g. age group selection card)
-            left_boundary = self.rect.x + 60
-            right_boundary = self.ring.x - self.ring.radius - 15
-            center_x = (left_boundary + right_boundary) // 2
-            
             line_heights = [font.size(line)[1] for line in lines]
-            total_h = sum(line_heights) + (len(lines) - 1) * 6
+            total_h = sum(line_heights) + (len(lines) - 1) * 4
             start_y = self.rect.centery - total_h // 2
             
             for line in lines:
                 surf = font.render(line, True, text_color)
                 rect = surf.get_rect(center=(center_x, start_y + surf.get_height() // 2))
                 screen.blit(surf, rect)
-                start_y += surf.get_height() + 6
+                start_y += surf.get_height() + 4
         else:
             # Single line buttons (e.g. level button or bottom utility button)
-            # Center vertically, left-aligned at x+60 (just next to level badge)
             text_surf = font.render(self.text, True, text_color)
-            screen.blit(text_surf, text_surf.get_rect(midleft=(self.rect.x + 60, self.rect.centery)))
+            screen.blit(text_surf, text_surf.get_rect(midleft=(text_left, self.rect.centery)))
 
-        bar_h = 6
-        bar_rect = pygame.Rect(self.rect.x + 12, self.rect.bottom - bar_h - 8,
-                               self.rect.width - 24, bar_h)
-        pygame.draw.rect(screen, (40, 45, 70), bar_rect, border_radius=3)
+        bar_h = 4
+        bar_rect = pygame.Rect(self.rect.x + 10, self.rect.bottom - bar_h - 6,
+                               self.rect.width - 20, bar_h)
+        pygame.draw.rect(screen, (40, 45, 70), bar_rect, border_radius=2)
         if progress > 0:
             fill_rect = pygame.Rect(bar_rect.x, bar_rect.y,
                                     int(bar_rect.width * progress), bar_h)
-            pygame.draw.rect(screen, (50, 255, 150), fill_rect, border_radius=3)
+            pygame.draw.rect(screen, (50, 255, 150), fill_rect, border_radius=2)
 
         self.ring.draw(screen)
 
@@ -1986,7 +2031,11 @@ class MedicalSidebarV2:
              exercise_name: str = "Session",
              exercise_count: int = 0, session_elapsed: float = 0.0,
              pain_level: int = 0, recovery_prediction: Optional[float] = None,
-             correctness_text: str = "Ready"):
+             correctness_text: str = "Ready",
+             is_menu: bool = False,
+             readiness_score: float = 50.0,
+             rec_difficulty: str = "Moderate",
+             rec_explanation: str = "Baseline therapy."):
         pygame.draw.rect(screen, COLOR_SIDEBAR_BG, (self.x, 0, self.width, WINDOW_HEIGHT))
         pygame.draw.line(screen, (198, 214, 229), (self.x, 0), (self.x, WINDOW_HEIGHT), 1)
 
@@ -2032,6 +2081,24 @@ class MedicalSidebarV2:
             screen.blit(off, off.get_rect(center=cam_rect.center))
 
         y = cam_rect.bottom + 10
+
+        if is_menu:
+            # Render menu-specific sidebar (Readiness & Recommended Difficulty)
+            self._status_pill(screen, pygame.Rect(self.x + 12, y, self.width - 24, 26),
+                              f"Readiness Score: {readiness_score:.1f}/100", COLOR_MED_PRIMARY)
+            y += 36
+            
+            diff_col = COLOR_MED_SUCCESS if rec_difficulty == "Easy" else COLOR_MED_WARNING if rec_difficulty == "Moderate" else COLOR_DANGER
+            self._status_pill(screen, pygame.Rect(self.x + 12, y, self.width - 24, 28),
+                              f"Recommended Diff: {rec_difficulty}", diff_col)
+            y += 38
+            
+            panel = pygame.Rect(self.x + 12, y, self.width - 24, 240)
+            self._panel(screen, panel)
+            self._draw_text(screen, "CLINICAL RATIONALE", self.font_small, COLOR_MED_MUTED, (panel.x + 10, panel.y + 8))
+            self._wrap(screen, rec_explanation, panel.x + 10, panel.y + 30, 32, COLOR_MED_TEXT)
+            return
+
         has_hand = hand_data.index_tip is not None
         status = "Tracking stable" if has_hand else "Hand not detected"
         self._status_pill(screen, pygame.Rect(self.x + 12, y, self.width - 24, 26),
@@ -2252,11 +2319,12 @@ class PostGameSummary:
     }
 
     def __init__(self):
-        self.font_title = pygame.font.SysFont("segoeui", 38)
-        self.font_head  = pygame.font.SysFont("segoeui", 28)
+        self.font_title = pygame.font.SysFont("segoeui", 32, bold=True)
+        self.font_head  = pygame.font.SysFont("segoeui", 26, bold=True)
         self.font_body  = pygame.font.SysFont("segoeui", 22)
-        self.font_small = pygame.font.SysFont("segoeui", 18)
-        self.font_tiny  = pygame.font.SysFont("segoeui", 16)
+        self.font_small = pygame.font.SysFont("segoeui", 17)
+        self.font_tiny  = pygame.font.SysFont("segoeui", 15)
+        self.font_label = pygame.font.SysFont("segoeui", 14, bold=True)
         self.session_chart = None
 
     # ── Helpers ───────────────────────────────────────────────────────
@@ -2278,15 +2346,15 @@ class PostGameSummary:
 
     def _section_bar(self, screen, title, x, y, w, col=(0, 130, 180)):
         pygame.draw.rect(screen, col,
-                         pygame.Rect(x, y, w, 24), border_radius=5)
-        t = self.font_tiny.render(f"  {title}", True, (0, 0, 0))
-        screen.blit(t, (x + 4, y + 4))
-        return y + 30
+                         pygame.Rect(x, y, w, 26), border_radius=5)
+        t = self.font_label.render(f"  {title}", True, (255, 255, 255))
+        screen.blit(t, (x + 6, y + 6))
+        return y + 34
 
     def _line(self, screen, txt, y, col=(200, 215, 230), indent=24):
         s = self.font_small.render(txt, True, col)
         screen.blit(s, (indent, y))
-        return y + 20
+        return y + 22
 
     def _draw_star(self, screen, x, y, r, filled, color):
         """Draw a 5-pointed star"""
@@ -2357,6 +2425,9 @@ class PostGameSummary:
         score    = session_data.get('score', 0)
         accuracy = session_data.get('avg_accuracy', 0.0)
         angle    = session_data.get('avg_hand_angle', 0.0)
+        mq       = session_data.get('movement_quality_score', 80.0)
+        summary_text = session_data.get('summary_text', 'Rehabilitation diagnostics successfully processed.')
+        ai_recommendation = session_data.get('ai_recommendation', 'Maintain current level parameters.')
 
         cx  = GAME_AREA_WIDTH // 2
         grade_str, grade_col = self._rom_grade(angle)
@@ -2365,78 +2436,129 @@ class PostGameSummary:
         exs    = self.EXERCISES.get(level, {}).get(tier, [])
 
         # ── BACKGROUND PLATE ──────────────────────────────────────────
-        pygame.draw.rect(screen, (8, 12, 25), pygame.Rect(10, 75, GAME_AREA_WIDTH - 20, WINDOW_HEIGHT - 120), border_radius=10)
-        pygame.draw.rect(screen, (0, 100, 150), pygame.Rect(10, 75, GAME_AREA_WIDTH - 20, WINDOW_HEIGHT - 120), 1, border_radius=10)
+        plate = pygame.Rect(10, 70, GAME_AREA_WIDTH - 20, WINDOW_HEIGHT - 110)
+        pygame.draw.rect(screen, (8, 12, 25), plate, border_radius=12)
+        pygame.draw.rect(screen, (0, 90, 140), plate, 1, border_radius=12)
 
         # ── HEADER ────────────────────────────────────────────────────
-        pygame.draw.rect(screen, (10, 20, 40), pygame.Rect(0, 0, GAME_AREA_WIDTH, 70))
-        pygame.draw.line(screen, (0, 200, 255), (0, 70), (GAME_AREA_WIDTH, 70), 2)
-        
-        title_surf = self.font_title.render("SESSION PERFORMANCE REPORT", True, (0, 210, 255))
-        screen.blit(title_surf, title_surf.get_rect(center=(cx, 35)))
+        header_rect = pygame.Rect(0, 0, GAME_AREA_WIDTH, 65)
+        pygame.draw.rect(screen, (10, 18, 35), header_rect)
+        pygame.draw.line(screen, (0, 170, 220), (0, 65), (GAME_AREA_WIDTH, 65), 2)
 
-        y_top = 85
-        
+        title_surf = self.font_title.render("SESSION PERFORMANCE REPORT", True, (0, 200, 255))
+        screen.blit(title_surf, title_surf.get_rect(center=(cx, 33)))
+
+        y_top = 78
+
         # ── CLINICAL SUMMARY (One-liner) ─────────────────────────────
         one_line = self._one_liner(level, accuracy, angle)
-        ol_bg = pygame.Rect(20, y_top, GAME_AREA_WIDTH - 40, 32)
-        pygame.draw.rect(screen, (20, 35, 60), ol_bg, border_radius=6)
-        ol_surf = self.font_small.render(one_line, True, (255, 210, 120))
+        ol_bg = pygame.Rect(20, y_top, GAME_AREA_WIDTH - 40, 30)
+        pygame.draw.rect(screen, (18, 30, 55), ol_bg, border_radius=6)
+        pygame.draw.rect(screen, (40, 65, 100), ol_bg, 1, border_radius=6)
+        ol_surf = self.font_small.render(one_line, True, (255, 215, 130))
         screen.blit(ol_surf, ol_surf.get_rect(center=ol_bg.center))
-        
+
         # ── COLUMNS ───────────────────────────────────────────────────
-        col1_x, col2_x = 20, 490
-        col_w = 450
-        y = y_top + 45
+        col1_x, col2_x = 22, 492
+        col_w = 448
+        y = y_top + 40
 
         # --- LEFT: PERFORMANCE ---
         ly = y
-        ly = self._section_bar(screen, "SESSION METRICS", col1_x, ly, col_w, (0, 140, 200))
-        
-        # Star visualization (Graphical)
-        sy = ly + 15
+        ly = self._section_bar(screen, "SESSION METRICS", col1_x, ly, col_w, (0, 120, 180))
+
+        # Star visualization
+        sy = ly + 8
         star_col = [(220,60,60),(255,200,0),(50,220,120)][stars-1]
         for i in range(3):
             self._draw_star(screen, col1_x + 25 + i*35, sy, 14, i < stars, star_col)
-        ly += 45
-        
-        ly = self._line(screen, f"Accuracy: {accuracy:.0f}%", ly, (200, 240, 200), indent=col1_x + 10)
-        ly = self._line(screen, f"Joint Angle: {angle:.1f}°", ly, grade_col, indent=col1_x + 10)
-        ly = self._line(screen, f"Grade: {grade_str}", ly, grade_col, indent=col1_x + 10)
-        
-        ly += 20
-        ly = self._section_bar(screen, "DAILY EXERCISES", col1_x, ly, col_w, (130, 80, 0))
+        ly += 38
+
+        ly = self._line(screen, f"Accuracy:            {accuracy:.0f}%", ly, (190, 230, 190), indent=col1_x + 12)
+        ly = self._line(screen, f"Joint Angle:         {angle:.1f}°", ly, grade_col, indent=col1_x + 12)
+        ly = self._line(screen, f"ROM Grade:           {grade_str}", ly, grade_col, indent=col1_x + 12)
+        ly = self._line(screen, f"Movement Quality:    {mq:.1f}%", ly, (0, 200, 255), indent=col1_x + 12)
+
+        ly += 12
+        ly = self._section_bar(screen, "DAILY EXERCISES", col1_x, ly, col_w, (120, 75, 0))
         for i, (ex, dose, freq) in enumerate(exs[:3]):
-            ly = self._line(screen, f"{i+1}. {ex}", ly, (200, 220, 240), indent=col1_x + 5)
-            ly = self._line(screen, f"   {dose} | {freq}", ly, (140, 160, 180), indent=col1_x + 15)
-            ly += 2
+            ly = self._line(screen, f"{i+1}. {ex}", ly, (200, 220, 240), indent=col1_x + 8)
+            ly = self._line(screen, f"   {dose} | {freq}", ly, (130, 150, 175), indent=col1_x + 18)
+            ly += 3
 
         # --- RIGHT: ANALYTICS ---
         ry = y
-        ry = self._section_bar(screen, "RECOVERY VISUALIZATION", col2_x, ry, col_w, (70, 40, 140))
-        
+        ry = self._section_bar(screen, "RECOVERY VISUALIZATION", col2_x, ry, col_w, (60, 35, 130))
+
         if self.session_chart:
-            # Scale chart to fit half screen
-            scaled_chart = pygame.transform.smoothscale(self.session_chart, (col_w - 10, 220))
+            scaled_chart = pygame.transform.smoothscale(self.session_chart, (col_w - 10, 170))
             screen.blit(scaled_chart, (col2_x + 5, ry + 5))
-            ry += 235
+            ry += 185
         else:
             ry += 40
 
-        ry = self._section_bar(screen, "FLEXIBILITY PROGRESS", col2_x, ry, col_w, (0, 120, 150))
+        ry = self._section_bar(screen, "FLEXIBILITY PROGRESS", col2_x, ry, col_w, (0, 110, 140))
         bar_x = col2_x + 10
         bar_w = col_w - 20
-        ry += 10
-        pygame.draw.rect(screen, (30, 40, 60), pygame.Rect(bar_x, ry, bar_w, 18), border_radius=4)
+        ry += 8
+        pygame.draw.rect(screen, (25, 35, 55), pygame.Rect(bar_x, ry, bar_w, 20), border_radius=5)
         fill = int(bar_w * min(angle / self.ROM_NORMAL, 1.0))
         if fill > 0:
-            pygame.draw.rect(screen, grade_col, pygame.Rect(bar_x, ry, fill, 18), border_radius=4)
-        ry += 30
+            pygame.draw.rect(screen, grade_col, pygame.Rect(bar_x, ry, fill, 20), border_radius=5)
+        # ROM percentage text on bar
+        rom_pct_txt = self.font_label.render(f"{min(angle / self.ROM_NORMAL * 100, 100):.0f}%", True, (255, 255, 255))
+        screen.blit(rom_pct_txt, (bar_x + bar_w // 2 - rom_pct_txt.get_width() // 2, ry + 3))
+        ry += 32
 
-        # Footer
-        nav_txt = "Hold FIST 2s to Return to Menu | Clinical data saved to database"
-        nav_surf = self.font_small.render(nav_txt, True, (100, 130, 160))
-        screen.blit(nav_surf, nav_surf.get_rect(center=(cx, WINDOW_HEIGHT - 30)))
+        # ── AI CLINICAL SUMMARY PANEL ─────────────────────────────────
+        by = max(ly, ry) + 6
+        bh = WINDOW_HEIGHT - by - 50
+        bw = GAME_AREA_WIDTH - 44
+        panel_rect = pygame.Rect(22, by, bw, bh)
+        pygame.draw.rect(screen, (12, 22, 48), panel_rect, border_radius=10)
+        pygame.draw.rect(screen, (0, 130, 170), panel_rect, 1, border_radius=10)
+
+        # Accent stripe
+        pygame.draw.rect(screen, (0, 160, 200), pygame.Rect(22, by, 4, bh), border_radius=2)
+
+        # Heading
+        h_surf = self.font_small.render("AI CLINICAL SUMMARY & RECOMMENDATION", True, (0, 200, 245))
+        screen.blit(h_surf, (38, by + 10))
+
+        # Wrap summary text
+        words = summary_text.split()
+        lines = []
+        line = ""
+        for w in words:
+            test = line + w + " "
+            if len(test) > 110:
+                lines.append(line.strip())
+                line = w + " "
+            else:
+                line = test
+        if line:
+            lines.append(line.strip())
+
+        sy = by + 34
+        for ln in lines[:3]:
+            s_surf = self.font_tiny.render(ln, True, (185, 200, 220))
+            screen.blit(s_surf, (38, sy))
+            sy += 18
+
+        # Recommendation
+        sy += 4
+        rec_title = self.font_small.render("RECOMMENDED THERAPY PROTOCOL:", True, (50, 210, 120))
+        screen.blit(rec_title, (38, sy))
+
+        r_surf = self.font_tiny.render(ai_recommendation, True, (240, 245, 255))
+        screen.blit(r_surf, (38, sy + 22))
+
+        # ── FOOTER ────────────────────────────────────────────────────
+        footer_rect = pygame.Rect(0, WINDOW_HEIGHT - 40, GAME_AREA_WIDTH, 40)
+        pygame.draw.rect(screen, (6, 10, 20), footer_rect)
+        nav_txt = "Hold FIST 2s → Return to Menu  |  Clinical data saved to database"
+        nav_surf = self.font_tiny.render(nav_txt, True, (80, 110, 145))
+        screen.blit(nav_surf, nav_surf.get_rect(center=(cx, WINDOW_HEIGHT - 20)))
 
     # ------------------------------------------------------------------
     def _clinical_suggestions(self, level: int, accuracy: float,
@@ -2582,6 +2704,228 @@ class Button:
             bar_w = int((self.rect.width - 20) * prog)
             pygame.draw.rect(screen, (50, 255, 150), (self.rect.x + 10, self.rect.bottom - 10, bar_w, 6), border_radius=3)
 
+
+# ============================================================================
+# CLINICAL INTELLIGENCE: MOVEMENT QUALITY EVALUATION & ADVANCED COMPENSATION
+# ============================================================================
+
+class KinematicQualityTracker:
+    """Calculates live smoothness, accuracy, ROM score, hold stability, and overall Quality Score."""
+    
+    def __init__(self):
+        self.reset()
+        
+    def reset(self):
+        self.positions = []
+        self.velocities = []
+        self.jerk_values = []
+        self.hold_deviations = []
+        self.accuracy_hits = 0
+        self.accuracy_attempts = 0
+        self.rom_angles = []
+        self.hold_window = []
+        
+    def update(self, hand_data, is_active_session=True, active_hold=False):
+        if not is_active_session or not hand_data or hand_data.index_tip is None:
+            return
+            
+        pos = hand_data.index_tip
+        self.positions.append(pos)
+        
+        # Calculate velocity & jerk (for Smoothness)
+        if len(self.positions) >= 2:
+            p1 = self.positions[-2]
+            p2 = self.positions[-1]
+            vel = math.hypot(p2[0] - p1[0], p2[1] - p1[1])
+            self.velocities.append(vel)
+            
+            if len(self.velocities) >= 2:
+                accel = self.velocities[-1] - self.velocities[-2]
+                if len(self.jerk_values) > 0:
+                    jerk = abs(accel - self.jerk_values[-1])
+                    self.jerk_values.append(jerk)
+                else:
+                    self.jerk_values.append(abs(accel))
+                    
+        # Hold Stability tracking
+        if active_hold:
+            self.hold_window.append(pos)
+            if len(self.hold_window) >= 15:
+                xs = [p[0] for p in self.hold_window]
+                ys = [p[1] for p in self.hold_window]
+                sd_x = np.std(xs) if len(xs) > 1 else 0.0
+                sd_y = np.std(ys) if len(ys) > 1 else 0.0
+                dev = math.hypot(sd_x, sd_y)
+                self.hold_deviations.append(dev)
+                self.hold_window.clear()
+        else:
+            self.hold_window.clear()
+            
+        # ROM angles
+        if hand_data.knuckle_angles and len(hand_data.knuckle_angles) > 0:
+            self.rom_angles.append(hand_data.knuckle_angles[0])
+            
+    def record_accuracy(self, hits, attempts):
+        self.accuracy_hits = hits
+        self.accuracy_attempts = attempts
+        
+    def calculate_metrics(self, calibrated_max_rom=90.0) -> dict:
+        # 1. Smoothness Score (0-100)
+        if self.jerk_values:
+            avg_jerk = sum(self.jerk_values) / len(self.jerk_values)
+            smoothness = max(0.0, min(100.0, 100.0 * math.exp(-0.08 * avg_jerk)))
+        else:
+            smoothness = 80.0
+            
+        # 2. Movement Accuracy (0-100)
+        if self.accuracy_attempts > 0:
+            accuracy = (self.accuracy_hits / self.accuracy_attempts) * 100.0
+            accuracy = max(0.0, min(100.0, accuracy))
+        else:
+            accuracy = 85.0
+            
+        # 3. ROM Score (0-100)
+        if self.rom_angles:
+            avg_rom = sum(self.rom_angles) / len(self.rom_angles)
+            rom_target = max(45.0, calibrated_max_rom)
+            rom_score = (avg_rom / rom_target) * 100.0
+            rom_score = max(0.0, min(100.0, rom_score))
+        else:
+            rom_score = 75.0
+            
+        # 4. Hold Stability Score (0-100)
+        if self.hold_deviations:
+            avg_dev = sum(self.hold_deviations) / len(self.hold_deviations)
+            stability = max(0.0, min(100.0, 100.0 * math.exp(-0.04 * avg_dev)))
+        else:
+            stability = 90.0
+            
+        overall_score = (smoothness + accuracy + rom_score + stability) / 4.0
+        
+        if overall_score >= 90:
+            rating = "Excellent"
+        elif overall_score >= 75:
+            rating = "Good"
+        elif overall_score >= 50:
+            rating = "Moderate"
+        else:
+            rating = "Needs Improvement"
+            
+        return {
+            "smoothness": round(smoothness, 1),
+            "accuracy": round(accuracy, 1),
+            "rom": round(rom_score, 1),
+            "stability": round(stability, 1),
+            "overall": round(overall_score, 1),
+            "rating": rating
+        }
+
+
+class AdvancedCompensationDetector:
+    """Analyses hand landmark translations to detect shoulder/arm compensation and logs events."""
+    
+    def __init__(self):
+        self.reset()
+        
+    def reset(self):
+        self.prev_wrist = None
+        self.prev_rot = None
+        self.wrist_velocities = deque(maxlen=45)
+        self.rot_velocities = deque(maxlen=45)
+        self.lateral_movements = deque(maxlen=45)
+        self.jerk_buffer = deque(maxlen=45)
+        self.events = []
+        self.last_triggered_time = 0.0
+        self.warning_text = ""
+        
+    def analyze(self, hand_data, current_level=1) -> tuple[bool, str, str, float]:
+        if not hand_data or hand_data.wrist is None:
+            return False, "", "", 0.0
+            
+        wrist = hand_data.wrist
+        rot = hand_data.wrist_rotation_angle
+        now = time.time()
+        
+        if now - self.last_triggered_time < 3.0:
+            return False, "", "", 0.0
+            
+        detected = False
+        comp_type = ""
+        desc = ""
+        severity = 0.0
+        
+        if self.prev_wrist is not None:
+            disp = math.hypot(wrist[0] - self.prev_wrist[0], wrist[1] - self.prev_wrist[1])
+            self.wrist_velocities.append(disp)
+            
+            # 1. Sudden Landmark Translation
+            if disp > 55.0 and len(self.wrist_velocities) > 5:
+                detected = True
+                comp_type = "Sudden Landmark Translation"
+                desc = "Rotate your forearm instead of shifting your entire arm suddenly."
+                severity = min(1.0, disp / 120.0)
+                
+            # 2. Inconsistent Wrist Movement
+            if not detected and len(self.wrist_velocities) >= 15:
+                vel_std = np.std(list(self.wrist_velocities))
+                if vel_std > 18.0:
+                    detected = True
+                    comp_type = "Inconsistent Wrist Movement"
+                    desc = "Maintain a steady, controlled motion. Avoid jerking."
+                    severity = min(1.0, vel_std / 35.0)
+                    
+            # 3. Unstable Trajectory
+            if not detected and len(self.wrist_velocities) >= 3:
+                jerk = abs(self.wrist_velocities[-1] - self.wrist_velocities[-2])
+                self.jerk_buffer.append(jerk)
+                if len(self.jerk_buffer) >= 15:
+                    avg_jerk = np.mean(list(self.jerk_buffer))
+                    if avg_jerk > 12.0:
+                        detected = True
+                        comp_type = "Unstable Trajectory"
+                        desc = "Keep your wrist steady and trace along a smooth path."
+                        severity = min(1.0, avg_jerk / 30.0)
+                        
+            # 5. Excessive Lateral Movement
+            if not detected and current_level in [1, 5, 7]:
+                lat_disp = abs(wrist[0] - self.prev_wrist[0])
+                self.lateral_movements.append(lat_disp)
+                if len(self.lateral_movements) >= 20:
+                    avg_lat = np.mean(list(self.lateral_movements))
+                    if avg_lat > 15.0:
+                        detected = True
+                        comp_type = "Excessive Lateral Movement"
+                        desc = "Rotate your wrist or bend fingers directly. Avoid shifting sideways."
+                        severity = min(1.0, avg_lat / 35.0)
+                        
+        # 4. Abnormal Rotation Speed
+        if not detected and self.prev_rot is not None:
+            d_rot = abs(rot - self.prev_rot)
+            if d_rot > 180:
+                d_rot = 360 - d_rot
+            self.rot_velocities.append(d_rot)
+            
+            if d_rot > 35.0 and len(self.rot_velocities) > 5:
+                detected = True
+                comp_type = "Abnormal Rotation Speed"
+                desc = "Control your forearm rotation speed. Move slowly and deliberately."
+                severity = min(1.0, d_rot / 70.0)
+                
+        self.prev_wrist = wrist
+        self.prev_rot = rot
+        
+        if detected:
+            self.last_triggered_time = now
+            self.events.append({
+                "timestamp": datetime.now().isoformat(),
+                "type": comp_type,
+                "severity": round(severity, 2)
+            })
+            self.warning_text = f"Compensation Detected: {desc}"
+            
+        return detected, comp_type, desc, severity
+
+
 class PhysioSystem:
     """Main application"""
     
@@ -2610,6 +2954,13 @@ class PhysioSystem:
         self.db = DatabaseManager()
         self.adaptive_engine = AdaptiveRehabEngine(self.db.db_path)
         self.forearm_classifier = ForearmExerciseClassifier()
+        self.quality_tracker = KinematicQualityTracker()
+        self.compensation_detector = AdvancedCompensationDetector()
+        self.recommended_difficulty = "Moderate"
+        self.recommended_difficulty_explanation = "Ready for baseline therapy."
+        self.readiness_score = 50.0
+        self.current_clinical_summary = ""
+        self.current_clinical_recommendation = ""
         self.sidebar = MedicalSidebarV2()
         self.sounds = SoundSystem()
         self.particles = ParticleSystem()
@@ -2681,24 +3032,28 @@ class PhysioSystem:
         ]
         
         cx = GAME_AREA_WIDTH // 2
-        bw = 270
-        gap = 50
+        bw = 310
+        gap = 30
         col1_x = cx - bw - (gap // 2)
         col2_x = cx + (gap // 2)
         self.level_buttons = [
-            LevelButton(col1_x, 170, bw, 80, "LEVEL 1", 1, ring_radius=48),
-            LevelButton(col2_x, 170, bw, 80, "LEVEL 2", 2, ring_radius=48),
-            LevelButton(col1_x, 275, bw, 80, "LEVEL 3", 3, ring_radius=48),
-            LevelButton(col2_x, 275, bw, 80, "LEVEL 4", 4, ring_radius=48),
-            LevelButton(col1_x, 380, bw, 80, "LEVEL 5", 5, ring_radius=48),
-            LevelButton(col2_x, 380, bw, 80, "LEVEL 6", 6, ring_radius=48),
-            LevelButton(col1_x, 485, bw, 80, "LEVEL 7", 7, ring_radius=48),
-            LevelButton(col2_x, 485, bw, 80, "LEVEL 8", 8, ring_radius=48)
+            LevelButton(col1_x, 165, bw, 90, "LEVEL 1", 1, ring_radius=30),
+            LevelButton(col2_x, 165, bw, 90, "LEVEL 2", 2, ring_radius=30),
+            LevelButton(col1_x, 270, bw, 90, "LEVEL 3", 3, ring_radius=30),
+            LevelButton(col2_x, 270, bw, 90, "LEVEL 4", 4, ring_radius=30),
+            LevelButton(col1_x, 375, bw, 90, "LEVEL 5", 5, ring_radius=30),
+            LevelButton(col2_x, 375, bw, 90, "LEVEL 6", 6, ring_radius=30),
+            LevelButton(col1_x, 480, bw, 90, "LEVEL 7", 7, ring_radius=30),
+            LevelButton(col2_x, 480, bw, 90, "LEVEL 8", 8, ring_radius=30)
         ]
-        # Adjusting positions to fit History, Calibration, Exit nicely side-by-side
-        self.history_button = LevelButton(cx - 410, 580, 260, 60, "RECOVERY HISTORY", 9, ring_radius=40)
-        self.calibrate_button = LevelButton(cx - 130, 580, 260, 60, "ROM DIAGNOSTICS", 8, ring_radius=40)
-        self.exit_button = LevelButton(cx + 150, 580, 260, 60, "EXIT SYSTEM", 99, ring_radius=40)
+        # Bottom utility buttons — evenly spaced with smaller rings
+        btn_w = 210
+        btn_gap = 12
+        total_w = btn_w * 3 + btn_gap * 2
+        start_x = cx - total_w // 2
+        self.history_button = LevelButton(start_x, 585, btn_w, 50, "RECOVERY HISTORY", 9, ring_radius=20)
+        self.calibrate_button = LevelButton(start_x + btn_w + btn_gap, 585, btn_w, 50, "ROM DIAGNOSTICS", 8, ring_radius=20)
+        self.exit_button = LevelButton(start_x + (btn_w + btn_gap) * 2, 585, btn_w, 50, "EXIT SYSTEM", 99, ring_radius=20)
         self.logout_button = Button(20, 15, 140, 40, "← LOGOUT", (50, 50, 70))
         self.logout_button.duration = 1.2
         self.home_icon = HomeIcon(GAME_AREA_WIDTH - 250, 15, 240, 60)
@@ -3193,6 +3548,7 @@ class PhysioSystem:
                                 random.randint(-shake_amount, shake_amount))
         else:
             self.shake_offset = (0, 0)
+        self._run_clinical_analysis(hand_data)
     
     def _update_age_select(self, hand_data: HandData):
         """Handle age group selection"""
@@ -3246,6 +3602,7 @@ class PhysioSystem:
                         VOICE.speak(f"Welcome back {self.patient_name}. Patient profile loaded successfully.")
                         btn.hover_start = None
                         self.state = GameState.MAIN_MENU
+                        self._update_readiness_and_difficulty()
                         self.sounds.play('select')
                         break
 
@@ -3268,6 +3625,7 @@ class PhysioSystem:
                     self.hand_engine.calibration_active = True
                     self.calibration_active = True
                 self.state = GameState.MAIN_MENU
+                self._update_readiness_and_difficulty()
                 self.sounds.play('select')
                 print(f"Logged in via ID: {self.patient_id_str}")
                 return
@@ -3316,6 +3674,7 @@ class PhysioSystem:
 
             print(f"Patient: {self.patient_name}, Age: {age}, Group: {self.age_group.value}")
             self.state = GameState.MAIN_MENU
+            self._update_readiness_and_difficulty()
             self.sounds.play('select')
         except ValueError:
             print("Invalid age entered")
@@ -3975,7 +4334,11 @@ class PhysioSystem:
                               session_elapsed=self._get_session_elapsed(),
                               pain_level=self.pain_level,
                               recovery_prediction=self._get_recovery_prediction(),
-                              correctness_text=self._get_correctness_label(hand_data))
+                              correctness_text=self._get_correctness_label(hand_data),
+                              is_menu=(self.state == GameState.MAIN_MENU),
+                              readiness_score=getattr(self, 'readiness_score', 50.0),
+                              rec_difficulty=getattr(self, 'recommended_difficulty', 'Moderate'),
+                              rec_explanation=getattr(self, 'recommended_difficulty_explanation', 'Ready for baseline therapy.'))
 
             # Draw progress chart over the bottom half of the sidebar on Results screen
             if self.state == GameState.RESULTS:
@@ -4141,6 +4504,26 @@ class PhysioSystem:
                 self.screen.blit(h_t, h_t.get_rect(center=(cx, box_y + 40)))
                 sub_t = self.font_small.render("Keep hand closed to return to Main Menu", True, (180, 200, 220))
                 self.screen.blit(sub_t, sub_t.get_rect(center=(cx, box_y + 85)))
+
+        # Draw Compensation Warning overlay
+        if hasattr(self, 'compensation_detector') and self.compensation_detector.warning_text:
+            elapsed_warn = time.time() - self.compensation_detector.last_triggered_time
+            if elapsed_warn < 3.0:
+                alpha = int(255 * (1.0 - elapsed_warn / 3.0))
+                bar_h = 50
+                bar_y = WINDOW_HEIGHT - bar_h - 20
+                bar_w = GAME_AREA_WIDTH - 40
+                bar_x = 20
+                
+                # Draw red notice bar
+                warn_surf = pygame.Surface((bar_w, bar_h), pygame.SRCALPHA)
+                warn_surf.fill((220, 45, 45, int(alpha * 0.85)))
+                pygame.draw.rect(warn_surf, (255, 90, 90, alpha), (0, 0, bar_w, bar_h), 2, border_radius=8)
+                
+                text_surf = self.font_hud.render(self.compensation_detector.warning_text, True, (255, 255, 255))
+                text_rect = text_surf.get_rect(center=(bar_w // 2, bar_h // 2))
+                warn_surf.blit(text_surf, text_rect)
+                self.screen.blit(warn_surf, (bar_x, bar_y))
 
         pygame.display.flip()
     
@@ -4397,56 +4780,63 @@ class PhysioSystem:
             self.logout_button.draw(self.screen, self.font_small, base_col=(40, 50, 70))
 
         # Title
-        title = self.font_large.render("AI PHYSIOTHERAPY", True, primary)
-        title_rect = title.get_rect(center=(GAME_AREA_WIDTH // 2, 60))
+        title = self.font_medium.render("AI PHYSIOTHERAPY", True, primary)
+        title_rect = title.get_rect(center=(GAME_AREA_WIDTH // 2, 50))
         
         # Soft Glow Behind Title
-        glow = pygame.Surface((title_rect.width + 100, title_rect.height + 40), pygame.SRCALPHA)
-        pygame.draw.ellipse(glow, (primary[0], primary[1], primary[2], 25), glow.get_rect())
-        self.screen.blit(glow, glow.get_rect(center=(GAME_AREA_WIDTH // 2, 60)))
+        glow = pygame.Surface((title_rect.width + 80, title_rect.height + 30), pygame.SRCALPHA)
+        pygame.draw.ellipse(glow, (primary[0], primary[1], primary[2], 20), glow.get_rect())
+        self.screen.blit(glow, glow.get_rect(center=(GAME_AREA_WIDTH // 2, 50)))
         
         # Drop Shadow
-        shadow = self.font_large.render("AI PHYSIOTHERAPY", True, (0, 0, 0))
-        self.screen.blit(shadow, shadow.get_rect(center=(GAME_AREA_WIDTH // 2 + 3, 63)))
+        shadow = self.font_medium.render("AI PHYSIOTHERAPY", True, (0, 0, 0))
+        self.screen.blit(shadow, shadow.get_rect(center=(GAME_AREA_WIDTH // 2 + 2, 52)))
         
         self.screen.blit(title, title_rect)
 
-        # Theme name
-        theme_surf = self.font_small.render(f"Theme: {theme['name']}", True, theme["accent_color"])
-        theme_rect = theme_surf.get_rect(center=(GAME_AREA_WIDTH // 2, 108))
-        self.screen.blit(theme_surf, theme_rect)
-
-        # Welcome patient
+        # Theme name + Welcome — compact single line
+        info_parts = [f"Theme: {theme['name']}"]
         if self.patient_name:
-            welcome = self.font_small.render(f"Welcome, {self.patient_name}!", True, COLOR_SUCCESS)
-            welcome_rect = welcome.get_rect(center=(GAME_AREA_WIDTH // 2, 140))
+            info_parts.append(f"Welcome, {self.patient_name}!")
+        
+        theme_surf = self.font_tiny.render(info_parts[0], True, theme["accent_color"])
+        theme_rect = theme_surf.get_rect(center=(GAME_AREA_WIDTH // 2 - 80, 90))
+        self.screen.blit(theme_surf, theme_rect)
+        
+        if self.patient_name:
+            welcome = self.font_tiny.render(f"Welcome, {self.patient_name}!", True, COLOR_SUCCESS)
+            welcome_rect = welcome.get_rect(center=(GAME_AREA_WIDTH // 2 + 80, 90))
             self.screen.blit(welcome, welcome_rect)
 
-        # Update level button labels to theme names (emojis stripped for system font compatibility)
-        level_names = [
-            theme['level1_name'],
-            theme['level2_name'],
-            theme['level3_name'],
-            theme.get('level4_name', 'Magic Trace'),
-            theme.get('level5_name', 'Balloon Pump'),
-            theme.get('level6_name', 'Piano Play'),
+        # Update level button labels to clinical terminology
+        clinical_labels = [
+            "Wrist Flexion & Extension\n(Active ROM)",
+            "Grip Strength & Coordination\n(Fruit Catch)",
+            "Pinch Training\n(Seed Planting)",
+            "Coordination & Tracing\n(Path Trace)",
+            "Grip & Release Cycle\n(Balloon Pump)",
+            "Fine Motor Tap Precision\n(Simon Tap)",
+            "Forearm Pronate & Supinate\n(Rotation Orbit)",
+            "Functional Spatial Coord\n(Toy Builder)"
         ]
+        btn_font = pygame.font.SysFont("segoeui", 16)
         for i, button in enumerate(self.level_buttons):
-            if i < len(level_names):
-                button.text = level_names[i]
-            button.draw(self.screen, self.font_small)
+            if i < len(clinical_labels):
+                button.text = clinical_labels[i]
+            button.draw(self.screen, btn_font)
 
         # Instructions
-        inst = self.font_small.render("Hover your finger over a level to select", True, COLOR_TEXT)
-        inst_rect = inst.get_rect(center=(GAME_AREA_WIDTH // 2, 605))
+        inst = self.font_tiny.render("Hover your finger over a level to select", True, COLOR_TEXT)
+        inst_rect = inst.get_rect(center=(GAME_AREA_WIDTH // 2, 575))
         self.screen.blit(inst, inst_rect)
 
         # History, Calibration, and Exit utility buttons
-        self.history_button.draw(self.screen, self.font_small, base_col=(30, 80, 150), hov_col=(50, 120, 200))
+        util_font = pygame.font.SysFont("segoeui", 14, bold=True)
+        self.history_button.draw(self.screen, util_font, base_col=(30, 80, 150), hov_col=(50, 120, 200))
         if hasattr(self, 'calibrate_button'):
-            self.calibrate_button.draw(self.screen, self.font_small, base_col=(120, 60, 140), hov_col=(160, 80, 180))
+            self.calibrate_button.draw(self.screen, util_font, base_col=(120, 60, 140), hov_col=(160, 80, 180))
         if hasattr(self, 'exit_button'):
-            self.exit_button.draw(self.screen, self.font_small, base_col=(180, 40, 40), hov_col=(255, 60, 60))
+            self.exit_button.draw(self.screen, util_font, base_col=(180, 40, 40), hov_col=(255, 60, 60))
     
     def _draw_level1(self):
         theme = self._get_theme()
@@ -5062,6 +5452,13 @@ class PhysioSystem:
             self.functional_recovery_score = recovery_score_value
             self.recovery_category = recovery_category_value
 
+            qm_metrics = self.quality_tracker.calculate_metrics(self.calibrated_max_angle)
+            movement_quality_score = qm_metrics["overall"]
+            sub_smoothness = qm_metrics["smoothness"]
+            sub_accuracy = qm_metrics["accuracy"]
+            sub_rom = qm_metrics["rom"]
+            sub_stability = qm_metrics["stability"]
+
             self.db.save_session(
                 self.current_level, self.score, duration,
                 avg_accuracy, self.max_extension,
@@ -5072,8 +5469,20 @@ class PhysioSystem:
                 functional_recovery_score=recovery_score_value,
                 recovery_category=recovery_category_value,
                 movement_smoothness=movement_smoothness,
+                movement_quality_score=movement_quality_score,
+                sub_smoothness=sub_smoothness,
+                sub_accuracy=sub_accuracy,
+                sub_rom=sub_rom,
+                sub_stability=sub_stability,
             )
             session_id = getattr(self.db, 'last_session_id', None)
+            
+            # Generate and securely store clinical summary
+            self._generate_and_save_clinical_summary(
+                session_id, duration, avg_accuracy, avg_hand_angle,
+                pain_before_session, pain_after_session, recovery_score_value,
+                qm_metrics
+            )
 
             rotation_smoothness = 0.7
             if isinstance(getattr(self, 'forearm_assessment', None), dict):
@@ -5089,7 +5498,7 @@ class PhysioSystem:
                 except Exception as exc:
                     print(f"Forearm assessment save failed: {exc}")
 
-            movement_quality = min(1.0, max(0.0, (avg_accuracy / 100.0) * 0.65 + min(avg_hand_angle / 90.0, 1.0) * 0.35))
+            movement_quality = movement_quality_score / 100.0
             fatigue_index = 0.0
             if duration > 0 and self.accuracy_attempts > 0:
                 fatigue_index = min(1.0, max(0.0, (duration / max(getattr(self, 'session_time_limit', LEVEL_DURATION), 1.0) - 1.0) * 0.5))
@@ -5141,6 +5550,9 @@ class PhysioSystem:
                     'reach_distance': self.reach_distance,
                     'avg_hand_angle': avg_hand_angle
                 }
+            if self.session_data:
+                self.session_data['summary_text'] = self.current_clinical_summary
+                self.session_data['ai_recommendation'] = self.current_clinical_recommendation
             self.best_data    = self.db.get_all_time_best()
             
             # Generate Session Charts (Pie/Histogram)
@@ -5167,6 +5579,14 @@ class PhysioSystem:
                     f.write(f"Pain After : {pain_after_session}/10\n")
                     f.write(f"Pain Change: {pain_difference:+d}\n")
                     f.write(f"Recovery Score: {recovery_score_value:.1f}/100 ({recovery_category_value})\n")
+                    f.write(f"Movement Quality: {movement_quality_score:.1f}% ({qm_metrics['rating']})\n")
+                    f.write(f"  - Smoothness: {sub_smoothness:.1f}%\n")
+                    f.write(f"  - Accuracy: {sub_accuracy:.1f}%\n")
+                    f.write(f"  - Range of Motion: {sub_rom:.1f}%\n")
+                    f.write(f"  - Stability: {sub_stability:.1f}%\n")
+                    f.write(f"\n-- Clinical Summary & Recommendation --\n")
+                    f.write(f"Summary: {self.current_clinical_summary}\n")
+                    f.write(f"Recommendation: {self.current_clinical_recommendation}\n")
                     f.write(f"\n-- Performance --\n")
                     f.write(f"Score    : {sd.get('score', self.score)}\n")
                     f.write(f"Accuracy : {sd.get('avg_accuracy', 0):.1f}%\n")
@@ -5482,6 +5902,17 @@ class PhysioSystem:
                 </div>
                 <div style="font-size: 24px;">⚡</div>
             </div>
+            <div class="metric-card">
+                <div class="metric-details">
+                    <h3>Movement Quality</h3>
+                    <div class="value">{movement_quality_score:.1f}%</div>
+                    <div style="font-size: 11px; color: var(--text-secondary); line-height: 1.4; margin-top: 4px;">
+                        Smoothness: {sub_smoothness:.1f}% | ROM: {sub_rom:.1f}%<br>
+                        Accuracy: {sub_accuracy:.1f}% | Stability: {sub_stability:.1f}%
+                    </div>
+                </div>
+                <div style="font-size: 24px; color: var(--accent-glow);">⭐</div>
+            </div>
         </div>
 
         <div class="clinical-suggestions">
@@ -5489,6 +5920,13 @@ class PhysioSystem:
             <ul>
                 {suggestions_html}
             </ul>
+        </div>
+
+        <div class="clinical-suggestions" style="background: rgba(0, 136, 255, 0.04); border-color: rgba(0, 136, 255, 0.2);">
+            <h2>AI CLINICAL SUMMARY</h2>
+            <p style="color: var(--text-secondary); line-height: 1.6; margin-bottom: 15px;">{self.current_clinical_summary}</p>
+            <h2 style="color: var(--accent-blue);">THERAPEUTIC RECOMMENDATION</h2>
+            <p style="color: var(--text-primary); font-weight: 600; margin: 0;">{self.current_clinical_recommendation}</p>
         </div>
 
         <div class="footer">
@@ -5523,15 +5961,67 @@ class PhysioSystem:
                     
                     c.setFont("Helvetica-Bold", 16)
                     c.setFillColorRGB(0, 0.3, 0.5)
-                    c.drawString(50, 610, "Session Telemetry")
+                    c.drawString(50, 585, "Session Telemetry")
                     
                     c.setFont("Helvetica", 12)
                     c.setFillColorRGB(0, 0, 0)
-                    c.drawString(50, 580, f"Final Score: {sd.get('score', self.score)}")
-                    c.drawString(50, 560, f"Target Accuracy: {acc_val:.1f}%")
-                    c.drawString(50, 540, f"Average Range of Motion: {rom_val:.1f} degrees")
-                    c.drawString(50, 520, f"Therapy Duration: {dur_val:.0f} seconds")
-                    c.drawString(50, 500, f"Functional Recovery Score: {recovery_score_value:.1f}/100 ({recovery_category_value})")
+                    c.drawString(50, 565, f"Final Score: {sd.get('score', self.score)}")
+                    c.drawString(50, 545, f"Target Accuracy: {acc_val:.1f}%")
+                    c.drawString(50, 525, f"Average Range of Motion: {rom_val:.1f} degrees")
+                    c.drawString(50, 505, f"Therapy Duration: {dur_val:.0f} seconds")
+                    c.drawString(50, 485, f"Functional Recovery Score: {recovery_score_value:.1f}/100 ({recovery_category_value})")
+                    c.drawString(50, 465, f"Movement Quality Score: {movement_quality_score:.1f}% ({qm_metrics['rating']})")
+                    c.setFont("Helvetica-Oblique", 10)
+                    c.drawString(70, 448, f"Smoothness: {sub_smoothness:.1f}% | Hold Stability: {sub_stability:.1f}% | Accuracy: {sub_accuracy:.1f}% | ROM: {sub_rom:.1f}%")
+                    
+                    c.setFont("Helvetica-Bold", 14)
+                    c.setFillColorRGB(0, 0.3, 0.5)
+                    c.drawString(50, 420, "AI Clinical Summary & Recommendation")
+                    
+                    c.setFont("Helvetica-Oblique", 11)
+                    c.setFillColorRGB(0.15, 0.15, 0.15)
+                    summary_lines = []
+                    words = self.current_clinical_summary.split()
+                    line = ""
+                    for w in words:
+                        test_line = line + w + " "
+                        if len(test_line) > 85:
+                            summary_lines.append(line)
+                            line = w + " "
+                        else:
+                            line = test_line
+                    if line:
+                        summary_lines.append(line)
+                        
+                    curr_y = 402
+                    for sl in summary_lines:
+                        c.drawString(50, curr_y, sl)
+                        curr_y -= 15
+                        
+                    curr_y -= 5
+                    c.setFont("Helvetica-Bold", 11)
+                    c.setFillColorRGB(0.1, 0.5, 0.3)
+                    c.drawString(50, curr_y, "Therapeutic Recommendation:")
+                    curr_y -= 15
+                    c.setFont("Helvetica", 11)
+                    c.setFillColorRGB(0, 0, 0)
+                    
+                    rec_lines = []
+                    words = self.current_clinical_recommendation.split()
+                    line = ""
+                    for w in words:
+                        test_line = line + w + " "
+                        if len(test_line) > 85:
+                            rec_lines.append(line)
+                            line = w + " "
+                        else:
+                            line = test_line
+                    if line:
+                        rec_lines.append(line)
+                        
+                    for rl in rec_lines:
+                        c.drawString(50, curr_y, rl)
+                        curr_y -= 15
                     
                     c.save()
                     print(f"PDF Report saved: {pdf_fname}")
@@ -5561,6 +6051,167 @@ class PhysioSystem:
             print(f"Error in _end_level: {e}")
             self.state = GameState.MAIN_MENU
             self._reset_game()
+
+    def _generate_and_save_clinical_summary(self, session_id, duration, avg_accuracy, avg_hand_angle, pain_before, pain_after, recovery_score, qm_metrics):
+        try:
+            # Gather compensation events
+            conn = sqlite3.connect(self.db.db_path)
+            cursor = conn.cursor()
+            cursor.execute("SELECT compensation_type, severity FROM compensation_events WHERE session_id = ?", (session_id,))
+            comp_rows = cursor.fetchall()
+            conn.close()
+            
+            comp_summary = ""
+            if comp_rows:
+                comp_counts = {}
+                for r in comp_rows:
+                    comp_counts[r[0]] = comp_counts.get(r[0], 0) + 1
+                comp_summary = " Compensations: " + ", ".join([f"{k} (x{v})" for k, v in comp_counts.items()]) + "."
+            else:
+                comp_summary = " No significant compensation detected."
+                
+            pain_delta = pain_after - pain_before
+            pain_text = f"Pain was stable at {pain_after}/10." if pain_delta == 0 else (
+                f"Pain increased by {pain_delta} to {pain_after}/10." if pain_delta > 0 else
+                f"Pain decreased by {abs(pain_delta)} to {pain_after}/10."
+            )
+            
+            summary_text = (
+                f"Completed Level {self.current_level} in {duration:.1f}s. "
+                f"Movement Quality was {qm_metrics['overall']:.1f}% ({qm_metrics['rating']}), "
+                f"featuring {qm_metrics['smoothness']:.1f}% smoothness, {qm_metrics['stability']:.1f}% hold stability. "
+                f"Average joint flexion reached {avg_hand_angle:.1f}° with {avg_accuracy:.1f}% target hit accuracy."
+                f"{comp_summary} {pain_text} Functional Recovery Score: {recovery_score:.1f}%."
+            )
+            
+            # Formulate AI Recommendation
+            if qm_metrics['overall'] >= 85 and pain_after <= 3:
+                ai_rec = f"Increase difficulty. Patient displays high compliance and stable joint control. Recommend advancing to Level {min(8, self.current_level + 1)}."
+            elif pain_after >= 6:
+                ai_rec = "Reduce intensity. Elevated pain scores detected. Incorporate warm-up stretches and longer pause intervals."
+            else:
+                ai_rec = "Maintain current training pace. Continue tracking range of motion and focus on smoothness to reduce compensatory patterns."
+                
+            # Encrypt securely using non-deterministic encryption
+            enc_summary = security_utils.encrypt_non_deterministic(summary_text)
+            enc_rec = security_utils.encrypt_non_deterministic(ai_rec)
+            
+            conn = sqlite3.connect(self.db.db_path)
+            cursor = conn.cursor()
+            cursor.execute("""
+                INSERT OR REPLACE INTO clinical_summaries (session_id, summary_text, ai_recommendation)
+                VALUES (?, ?, ?)
+            """, (session_id, enc_summary, enc_rec))
+            conn.commit()
+            conn.close()
+            
+            self.current_clinical_summary = summary_text
+            self.current_clinical_recommendation = ai_rec
+            print("[SUCCESS] Clinical summary generated and stored securely.")
+        except Exception as e:
+            print(f"Error generating clinical summary: {e}")
+            self.current_clinical_summary = "Report summary telemetry compilation in progress."
+            self.current_clinical_recommendation = "Maintain standard recovery protocol."
+
+    def _run_clinical_analysis(self, hand_data):
+        gameplay_states = [
+            GameState.LEVEL1_FLEXIBILITY,
+            GameState.LEVEL2_STRENGTH,
+            GameState.LEVEL3_FINEMOTOR,
+            GameState.LEVEL4_COORDINATION,
+            GameState.LEVEL5_GRIP_RELEASE,
+            GameState.LEVEL6_FINGER_TAPS,
+            GameState.LEVEL7_WRIST_MECHANICS,
+            GameState.LEVEL8_SMART_ASSEMBLY
+        ]
+        if self.state in gameplay_states and hand_data and hand_data.index_tip is not None:
+            active_hold = False
+            if self.state == GameState.LEVEL3_FINEMOTOR and hand_data.is_pinching:
+                active_hold = True
+            elif self.state == GameState.LEVEL5_GRIP_RELEASE and hand_data.is_fist:
+                active_hold = True
+            elif self.state == GameState.LEVEL7_WRIST_MECHANICS and hasattr(self, 'hold_timer') and getattr(self, 'hold_timer', 0) > 0:
+                active_hold = True
+                
+            self.quality_tracker.update(hand_data, is_active_session=True, active_hold=active_hold)
+            self.quality_tracker.record_accuracy(self.accuracy_hits, self.accuracy_attempts)
+            
+            # Analyze compensation
+            detected, comp_type, desc, severity = self.compensation_detector.analyze(hand_data, self.current_level)
+            if detected:
+                self.sounds.play('select')
+                self.popups.append(ScorePopup(GAME_AREA_WIDTH // 2 - 100, WINDOW_HEIGHT // 2, "COMPENSATION DETECTED!", (255, 50, 50)))
+                session_id = getattr(self.db, 'last_session_id', None)
+                try:
+                    conn = sqlite3.connect(self.db.db_path)
+                    cursor = conn.cursor()
+                    enc_patient = security_utils.encrypt_deterministic(self.patient_name or "Unknown")
+                    cursor.execute("""
+                        INSERT INTO compensation_events (patient_id, session_id, exercise, compensation_type, severity)
+                        VALUES (?, ?, ?, ?, ?)
+                    """, (enc_patient, session_id, LEVEL_DISPLAY_NAMES.get(self.current_level, "Unknown"), comp_type, severity))
+                    conn.commit()
+                    conn.close()
+                except Exception as exc:
+                    print(f"Failed to log compensation event: {exc}")
+
+    def _update_readiness_and_difficulty(self):
+        if not self.patient_name:
+            self.readiness_score = 50.0
+            self.recommended_difficulty = "Moderate"
+            self.recommended_difficulty_explanation = "Ready for baseline therapy."
+            return
+            
+        try:
+            enc_name = security_utils.encrypt_deterministic(self.patient_name)
+            conn = sqlite3.connect(self.db.db_path)
+            cursor = conn.cursor()
+            cursor.execute("""
+                SELECT avg_accuracy, avg_hand_angle, pain_after_session, movement_quality_score, duration
+                FROM sessions WHERE patient_id = ? ORDER BY id DESC LIMIT 5
+            """, (enc_name,))
+            rows = cursor.fetchall()
+            conn.close()
+            
+            if not rows:
+                self.readiness_score = 65.0
+                self.recommended_difficulty = "Moderate"
+                self.recommended_difficulty_explanation = "Initial baseline. Calibrated ROM will adjust game scale."
+                return
+                
+            avg_acc = sum(r[0] for r in rows) / len(rows)
+            avg_rom = sum(r[1] for r in rows) / len(rows)
+            avg_pain = sum(r[2] for r in rows) / len(rows)
+            avg_mq = sum(r[3] for r in rows) / len(rows) * 100.0 if rows[0][3] is not None else 75.0
+            avg_dur = sum(r[4] for r in rows) / len(rows)
+            
+            fatigue = min(100.0, max(0.0, (avg_dur / 45.0) * 20.0 + avg_pain * 5.0))
+            
+            rom_factor = min(100.0, (avg_rom / 90.0) * 100.0)
+            acc_factor = avg_acc
+            mq_factor = avg_mq
+            pain_penalty = avg_pain * 8.0
+            fatigue_penalty = fatigue * 0.4
+            
+            readiness = (rom_factor * 0.4 + acc_factor * 0.3 + mq_factor * 0.3) - pain_penalty - fatigue_penalty
+            readiness = max(10.0, min(100.0, readiness))
+            self.readiness_score = round(readiness, 1)
+            
+            if readiness >= 80.0:
+                self.recommended_difficulty = "Hard"
+                self.recommended_difficulty_explanation = f"Patient shows excellent coordination ({avg_acc:.0f}% accuracy) and high ROM ({avg_rom:.0f}°) with low pain ({avg_pain:.1f}/10). Recommended to increase challenge."
+            elif readiness >= 50.0:
+                self.recommended_difficulty = "Moderate"
+                self.recommended_difficulty_explanation = f"Patient is stable with moderate ROM ({avg_rom:.0f}°) and tolerable pain ({avg_pain:.1f}/10). Recommended to maintain current difficulty pace."
+            else:
+                self.recommended_difficulty = "Easy"
+                self.recommended_difficulty_explanation = f"Low readiness ({readiness:.1f}) detected due to high pain ({avg_pain:.1f}/10) or limited movement quality. Recommended easy setting for clinical safety."
+                
+        except Exception as e:
+            print(f"Error calculating readiness: {e}")
+            self.readiness_score = 55.0
+            self.recommended_difficulty = "Moderate"
+            self.recommended_difficulty_explanation = "Maintained moderate baseline due to telemetry calculation fallback."
 
 
     
@@ -5612,6 +6263,10 @@ class PhysioSystem:
         self.combo = 0
         self.feedback_text = None
         self.feedback_timer = 0
+        if hasattr(self, 'quality_tracker'):
+            self.quality_tracker.reset()
+        if hasattr(self, 'compensation_detector'):
+            self.compensation_detector.reset()
     
     def _trigger_feedback(self):
         """Trigger visual feedback based on combo"""

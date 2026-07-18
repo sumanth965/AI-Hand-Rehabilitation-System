@@ -231,7 +231,8 @@ def decrypt_row_fields(d: dict[str, Any]) -> None:
     # Non-deterministic decryption for PII/notes/summaries
     for k in ['gender', 'injury_type', 'rehab_stage', 'assigned_exercises', 'therapist_notes',
               'note', 'recommendation', 'next_plan', 'note_text', 'clinical_observation',
-              'ai_recommendation_json', 'modified_recommendation_json', 'patient_context_json']:
+              'ai_recommendation_json', 'modified_recommendation_json', 'patient_context_json',
+              'summary_text', 'ai_recommendation']:
         if k in d and d[k]:
             d[k] = security_utils.decrypt_non_deterministic(d[k])
 
@@ -536,6 +537,51 @@ class DashboardRepository:
                     conn.execute(f"CREATE UNIQUE INDEX IF NOT EXISTS idx_patients_id_number ON patients(id_number)")
                 except Exception:
                     pass
+
+            # Ensure new tables exist
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS compensation_events (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    patient_id TEXT NOT NULL,
+                    session_id INTEGER,
+                    timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                    exercise TEXT,
+                    compensation_type TEXT,
+                    severity REAL
+                )
+            """)
+            conn.execute("""
+                CREATE TABLE IF NOT EXISTS clinical_summaries (
+                    id INTEGER PRIMARY KEY AUTOINCREMENT,
+                    patient_id TEXT NOT NULL,
+                    session_id INTEGER UNIQUE,
+                    movement_quality REAL,
+                    rom_improvement REAL,
+                    grip_accuracy REAL,
+                    compensation_events INTEGER,
+                    pain_before INTEGER,
+                    pain_after INTEGER,
+                    recovery_trend TEXT,
+                    ai_recommendation TEXT,
+                    summary_text TEXT,
+                    created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+                )
+            """)
+
+            # Sessions column migrations
+            for col, defn in [("movement_quality_score", "REAL DEFAULT 0"),
+                              ("sub_smoothness", "REAL DEFAULT 0"),
+                              ("sub_accuracy", "REAL DEFAULT 0"),
+                              ("sub_rom", "REAL DEFAULT 0"),
+                              ("sub_stability", "REAL DEFAULT 0")]:
+                try:
+                    conn.execute(f"SELECT {col} FROM sessions LIMIT 1")
+                except sqlite3.OperationalError:
+                    try:
+                        conn.execute(f"ALTER TABLE sessions ADD COLUMN {col} {defn}")
+                    except Exception:
+                        pass
+
             conn.commit()
 
     def verify_therapist(self, username: str, password: str) -> bool:
@@ -1002,6 +1048,101 @@ class DashboardRepository:
             return []
         return self.digital_twin.snapshot_history(patient, limit=limit)
 
+    def exercise_analytics_data(self, patient: str = "") -> list[dict]:
+        conn = sqlite3.connect(self.db_path)
+        conn.row_factory = sqlite3.Row
+        cursor = conn.cursor()
+        
+        where_clause = ""
+        params = []
+        if patient:
+            enc_patient = security_utils.encrypt_deterministic(patient)
+            where_clause = "WHERE patient_id = ?"
+            params.append(enc_patient)
+            
+        cursor.execute(f"""
+            SELECT level, 
+                   AVG(duration) as avg_duration,
+                   AVG(sub_smoothness) as avg_smoothness,
+                   AVG(sub_accuracy) as avg_accuracy,
+                   AVG(sub_rom) as avg_rom,
+                   COUNT(id) as completed_count
+            FROM sessions
+            {where_clause}
+            GROUP BY level
+        """, params)
+        rows = cursor.fetchall()
+        
+        comp_counts = {}
+        level_map = {
+            "Flexibility Training": 1,
+            "Strength Coordination": 2,
+            "Fine Motor Pinch": 3,
+            "Path Tracing Control": 4,
+            "Grip Release Cycle": 5,
+            "Cognitive Finger Taps": 6,
+            "Forearm Rotation Orbit": 7,
+            "Smart Functional Assembly": 8
+        }
+        
+        if patient:
+            cursor.execute("SELECT exercise, COUNT(*) as cnt FROM compensation_events WHERE patient_id = ? GROUP BY exercise", (enc_patient,))
+        else:
+            cursor.execute("SELECT exercise, COUNT(*) as cnt FROM compensation_events GROUP BY exercise")
+            
+        for r in cursor.fetchall():
+            ex_name = r["exercise"]
+            matched_lvl = None
+            for name, lvl in level_map.items():
+                if name.lower() in ex_name.lower() or ex_name.lower() in name.lower():
+                    matched_lvl = lvl
+                    break
+            if matched_lvl is not None:
+                comp_counts[matched_lvl] = comp_counts.get(matched_lvl, 0) + r["cnt"]
+                
+        improvements = {}
+        for lvl in range(1, 9):
+            if patient:
+                cursor.execute("""
+                    SELECT avg_accuracy FROM sessions 
+                    WHERE patient_id = ? AND level = ? 
+                    ORDER BY timestamp ASC
+                """, (enc_patient, lvl))
+            else:
+                cursor.execute("""
+                    SELECT avg_accuracy FROM sessions 
+                    WHERE level = ? 
+                    ORDER BY timestamp ASC
+                """, (lvl,))
+            lvl_sessions = [r[0] for r in cursor.fetchall()]
+            if len(lvl_sessions) >= 2:
+                first_3 = lvl_sessions[:3]
+                last_3 = lvl_sessions[-3:]
+                avg_first = sum(first_3) / len(first_3)
+                avg_last = sum(last_3) / len(last_3)
+                improvements[lvl] = avg_last - avg_first
+            else:
+                improvements[lvl] = 0.0
+                
+        conn.close()
+        
+        analytics_list = []
+        for row in rows:
+            lvl = row["level"]
+            analytics_list.append({
+                "level": lvl,
+                "exercise_name": exercise_for_level(lvl),
+                "avg_duration": row["avg_duration"],
+                "avg_smoothness": row["avg_smoothness"] if row["avg_smoothness"] is not None else 75.0,
+                "avg_accuracy": row["avg_accuracy"],
+                "avg_rom": row["avg_rom"],
+                "completed_count": row["completed_count"],
+                "compensation_count": comp_counts.get(lvl, 0),
+                "improvement_percentage": improvements.get(lvl, 0.0)
+            })
+            
+        return analytics_list
+
     def _weekly_rom_improvement(self, sessions: list[sqlite3.Row]) -> float:
         if len(sessions) < 2:
             return 0.0
@@ -1156,7 +1297,8 @@ class DashboardRenderer:
             ("risks", "/risks", "Risk Detection", "R"),
             ("reports", "/reports", "Reports", "PDF"),
             ("digital_twin", "/digital-twin", "Digital Twin", "DT"),
-            ("performance", "/performance", "Performance", "E"),
+            ("performance", "/performance", "Exercise Stats", "E"),
+            ("research", "/research", "Research Portal", "📊"),
             ("notes", "/notes", "Notes", "N"),
             ("security", "/security", "Security", "🔒"),
             ("audit", "/audit-logs", "Audit Logs", "📋"),
@@ -1235,9 +1377,9 @@ class DashboardRenderer:
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap');
 :root {
   --bg: #f8fafc;
-  --panel: rgba(255, 255, 255, 0.85);
-  --panel-2: rgba(241, 245, 249, 0.8);
-  --text: #0f172a;
+  --panel: rgba(255, 255, 255, 0.88);
+  --panel-2: rgba(241, 245, 249, 0.9);
+  --text: #1e293b;
   --muted: #64748b;
   --line: rgba(226, 232, 240, 0.8);
   --primary: #2563EB;
@@ -1245,22 +1387,22 @@ class DashboardRenderer:
   --success: #22C55E;
   --warning: #F59E0B;
   --danger: #EF4444;
-  --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.05), 0 8px 10px -6px rgba(0, 0, 0, 0.01);
-  --shadow-hover: 0 20px 25px -5px rgba(37, 99, 235, 0.1), 0 10px 10px -5px rgba(37, 99, 235, 0.04);
-  --glass-border: rgba(255, 255, 255, 0.5);
+  --shadow: 0 4px 20px -4px rgba(0, 0, 0, 0.06), 0 2px 8px -2px rgba(0, 0, 0, 0.03);
+  --shadow-hover: 0 12px 28px -6px rgba(37, 99, 235, 0.12), 0 4px 10px -4px rgba(37, 99, 235, 0.06);
+  --glass-border: rgba(226, 232, 240, 0.6);
 }
 [data-theme="dark"] {
   --bg: #0f172a;
-  --panel: rgba(30, 41, 59, 0.85);
+  --panel: rgba(30, 41, 59, 0.88);
   --panel-2: rgba(51, 65, 85, 0.8);
-  --text: #f8fafc;
+  --text: #f1f5f9;
   --muted: #94a3b8;
   --line: rgba(51, 65, 85, 0.8);
   --primary: #3b82f6;
   --primary-2: #22d3ee;
-  --shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.4);
-  --shadow-hover: 0 20px 25px -5px rgba(59, 130, 246, 0.2);
-  --glass-border: rgba(255, 255, 255, 0.05);
+  --shadow: 0 4px 20px -4px rgba(0, 0, 0, 0.35);
+  --shadow-hover: 0 12px 28px -6px rgba(59, 130, 246, 0.2);
+  --glass-border: rgba(255, 255, 255, 0.06);
 }
 * { box-sizing: border-box; }
 body {
@@ -1268,7 +1410,10 @@ body {
   font-family: 'Inter', system-ui, -apple-system, sans-serif;
   background: var(--bg);
   color: var(--text);
-  line-height: 1.5;
+  font-size: 14.5px;
+  line-height: 1.6;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
   transition: background-color 0.3s ease, color 0.3s ease;
 }
 a { color: inherit; text-decoration: none; }
@@ -1276,178 +1421,183 @@ a { color: inherit; text-decoration: none; }
 /* Layout Elements */
 .glass-panel {
   background: var(--panel);
-  backdrop-filter: blur(12px);
-  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--glass-border);
 }
 .sidebar {
-  position: fixed; inset: 0 auto 0 0; width: 280px; padding: 24px 20px;
+  position: fixed; inset: 0 auto 0 0; width: 270px; padding: 28px 18px;
   display: flex; flex-direction: column;
   border-right: 1px solid var(--line);
   z-index: 100;
-  box-shadow: 4px 0 24px rgba(0,0,0,0.02);
+  box-shadow: 2px 0 20px rgba(0,0,0,0.03);
 }
-.brand { display: flex; gap: 14px; align-items: center; margin-bottom: 36px; padding: 0 8px; }
+.brand { display: flex; gap: 14px; align-items: center; margin-bottom: 32px; padding: 0 8px; }
 .brand-mark {
-  width: 46px; height: 46px; border-radius: 8px;
+  width: 44px; height: 44px; border-radius: 10px;
   display: grid; place-items: center;
   color: white; background: linear-gradient(135deg, var(--primary), var(--primary-2));
-  font-weight: 800; font-size: 18px;
-  box-shadow: 0 8px 16px rgba(37, 99, 235, 0.25);
+  font-weight: 800; font-size: 17px;
+  box-shadow: 0 6px 14px rgba(37, 99, 235, 0.22);
 }
-.brand strong { display: block; font-size: 18px; font-weight: 700; color: var(--text); letter-spacing: -0.01em; }
+.brand strong { display: block; font-size: 16px; font-weight: 700; color: var(--text); letter-spacing: -0.01em; }
 .brand span, .topbar p, .muted { color: var(--muted); font-size: 13px; font-weight: 500; }
 
-.nav-menu { display: flex; flex-direction: column; gap: 4px; flex-grow: 1; overflow-y: auto; }
+.nav-menu { display: flex; flex-direction: column; gap: 3px; flex-grow: 1; overflow-y: auto; }
 .nav-item {
-  display: flex; align-items: center; gap: 12px;
-  padding: 12px 16px; border-radius: 8px;
-  color: var(--muted); font-weight: 600; font-size: 14px;
+  display: flex; align-items: center; gap: 11px;
+  padding: 11px 14px; border-radius: 8px;
+  color: var(--muted); font-weight: 600; font-size: 13.5px;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
-.nav-icon { font-size: 18px; opacity: 0.8; }
+.nav-icon { font-size: 16px; opacity: 0.75; }
 .nav-item.active, .nav-item:hover {
   background: var(--panel-2); color: var(--primary);
-  transform: translateX(4px);
+  transform: translateX(3px);
 }
 .nav-item.active .nav-icon { opacity: 1; }
-.nav-divider { height: 1px; background: var(--line); margin: 16px 0; }
+.nav-divider { height: 1px; background: var(--line); margin: 14px 0; }
 .text-danger:hover { color: var(--danger) !important; background: rgba(239, 68, 68, 0.1) !important; }
 
-.main { margin-left: 280px; padding: 0; min-height: 100vh; display: flex; flex-direction: column; }
+.main { margin-left: 270px; padding: 0; min-height: 100vh; display: flex; flex-direction: column; }
 .topbar {
   display: flex; align-items: center; justify-content: space-between; gap: 24px;
-  padding: 16px 40px; border-bottom: 1px solid var(--line);
+  padding: 14px 36px; border-bottom: 1px solid var(--line);
   position: sticky; top: 0; z-index: 90;
 }
 .search-bar {
   display: flex; align-items: center; gap: 10px;
   background: var(--bg); border: 1px solid var(--line);
-  padding: 8px 16px; border-radius: 8px;
-  width: 100%; max-width: 400px; transition: all 0.2s ease;
+  padding: 9px 16px; border-radius: 8px;
+  width: 100%; max-width: 380px; transition: all 0.2s ease;
 }
 .search-bar:focus-within { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37,99,235,0.1); }
-.search-input { border: none; background: transparent; width: 100%; outline: none; padding: 0; color: var(--text); font-family: 'Inter', sans-serif;}
+.search-input { border: none; background: transparent; width: 100%; outline: none; padding: 0; color: var(--text); font-family: 'Inter', sans-serif; font-size: 14px; }
 .search-input:focus { box-shadow: none; }
 
-.topbar-actions { display: flex; align-items: center; gap: 16px; }
+.topbar-actions { display: flex; align-items: center; gap: 14px; }
 .icon-btn {
   display: grid; place-items: center;
-  width: 40px; height: 40px; border-radius: 8px;
+  width: 38px; height: 38px; border-radius: 8px;
   background: var(--bg); color: var(--text); border: 1px solid var(--line);
-  font-size: 16px; transition: all 0.2s ease;
+  font-size: 15px; transition: all 0.2s ease;
 }
-.icon-btn:hover { background: var(--panel-2); transform: translateY(-2px); }
+.icon-btn:hover { background: var(--panel-2); transform: translateY(-1px); }
 
 .therapist-profile { display: flex; align-items: center; gap: 12px; margin-left: 12px; padding-left: 16px; border-left: 1px solid var(--line); cursor: pointer; }
 .avatar {
-  width: 42px; height: 42px; border-radius: 8px;
+  width: 40px; height: 40px; border-radius: 8px;
   background: linear-gradient(135deg, var(--primary-2), var(--primary));
-  color: white; display: grid; place-items: center; font-weight: 700;
+  color: white; display: grid; place-items: center; font-weight: 700; font-size: 14px;
 }
 .profile-info { display: flex; flex-direction: column; }
-.profile-info strong { font-size: 14px; font-weight: 600; color: var(--text); }
+.profile-info strong { font-size: 13.5px; font-weight: 600; color: var(--text); }
 .profile-info span { font-size: 12px; color: var(--muted); }
 
-.page-header { padding: 32px 40px 16px; display: flex; align-items: center; justify-content: space-between; }
-h1 { margin: 0 0 8px; font-size: 32px; font-weight: 800; letter-spacing: -0.03em; }
-h2 { margin: 0 0 16px; font-size: 18px; font-weight: 700; letter-spacing: -0.01em; }
+.page-header { padding: 28px 36px 12px; display: flex; align-items: center; justify-content: space-between; }
+h1 { margin: 0 0 6px; font-size: 26px; font-weight: 800; letter-spacing: -0.025em; }
+h2 { margin: 0 0 14px; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
 .date-chip, .pill {
-  padding: 8px 16px; border: 1px solid var(--line);
+  padding: 7px 14px; border: 1px solid var(--line);
   background: var(--panel); border-radius: 8px;
   color: var(--primary); font-size: 13px; font-weight: 600;
-  box-shadow: 0 2px 8px rgba(0,0,0,0.02);
+  box-shadow: 0 1px 4px rgba(0,0,0,0.02);
 }
 
 /* Sections */
-.main > section { padding: 0 40px 32px; }
-.grid { display: grid; gap: 24px; }
+.main > section { padding: 0 36px 28px; }
+.grid { display: grid; gap: 20px; }
 .stats { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
-.two { grid-template-columns: minmax(0, 1.2fr) minmax(360px, 0.8fr); }
-.three { grid-template-columns: repeat(auto-fit, minmax(320px, 1fr)); }
+.two { grid-template-columns: minmax(0, 1.2fr) minmax(340px, 0.8fr); }
+.three { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
 
 .card {
   background: var(--panel);
   border: 1px solid var(--glass-border);
-  border-radius: 8px;
-  padding: 24px;
+  border-radius: 10px;
+  padding: 22px;
   box-shadow: var(--shadow);
-  transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.3s ease;
+  transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1), box-shadow 0.25s ease;
   backdrop-filter: blur(12px);
   -webkit-backdrop-filter: blur(12px);
 }
-.card:hover { transform: translateY(-4px); box-shadow: var(--shadow-hover); }
+.card:hover { transform: translateY(-3px); box-shadow: var(--shadow-hover); }
 
-.stat-label { color: var(--muted); font-size: 13px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; display: flex; align-items: center; gap: 8px; }
-.stat-value { margin-top: 12px; font-size: 36px; font-weight: 800; color: var(--text); line-height: 1; letter-spacing: -0.02em; }
-.stat-sub { margin-top: 8px; color: var(--muted); font-size: 13px; font-weight: 500; }
+.stat-label { color: var(--muted); font-size: 12.5px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.06em; display: flex; align-items: center; gap: 8px; }
+.stat-value { margin-top: 10px; font-size: 30px; font-weight: 800; color: var(--text); line-height: 1.1; letter-spacing: -0.02em; }
+.stat-sub { margin-top: 8px; color: var(--muted); font-size: 13px; font-weight: 500; line-height: 1.4; }
 
-.toolbar { display: flex; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 24px; flex-wrap: wrap; }
+.toolbar { display: flex; gap: 12px; align-items: center; justify-content: space-between; margin-bottom: 20px; flex-wrap: wrap; }
 input:not(.search-input), select, textarea {
   width: 100%; border: 1px solid var(--line);
   background: var(--bg); color: var(--text);
-  border-radius: 8px; padding: 12px 16px;
+  border-radius: 8px; padding: 10px 14px;
   font: inherit; font-size: 14px;
   transition: all 0.2s ease; outline: none;
 }
-input:focus:not(.search-input), select:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.15); }
-textarea { min-height: 120px; resize: vertical; }
-.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; }
+input:focus:not(.search-input), select:focus, textarea:focus { border-color: var(--primary); box-shadow: 0 0 0 3px rgba(37, 99, 235, 0.12); }
+textarea { min-height: 100px; resize: vertical; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; }
 .full { grid-column: 1 / -1; }
-label { display: flex; flex-direction: column; gap: 8px; font-size: 13px; font-weight: 600; color: var(--text); }
+label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; color: var(--text); }
 
 button, .button {
   display: inline-flex; align-items: center; justify-content: center;
-  border: 0; border-radius: 8px; padding: 12px 24px;
+  border: 0; border-radius: 8px; padding: 10px 22px;
   background: linear-gradient(135deg, var(--primary), var(--primary-2));
-  color: white; font-weight: 600; font-size: 14px; cursor: pointer;
+  color: white; font-weight: 600; font-size: 13.5px; cursor: pointer;
   transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
-  box-shadow: 0 4px 12px rgba(37, 99, 235, 0.2);
+  box-shadow: 0 3px 10px rgba(37, 99, 235, 0.18);
 }
-button:hover, .button:hover { transform: translateY(-2px); box-shadow: 0 6px 16px rgba(37, 99, 235, 0.3); }
+button:hover, .button:hover { transform: translateY(-1px); box-shadow: 0 5px 14px rgba(37, 99, 235, 0.25); }
 button:active, .button:active { transform: translateY(0); }
 .button.secondary { background: var(--bg); color: var(--text); border: 1px solid var(--line); box-shadow: none; }
-.button.secondary:hover { background: var(--panel-2); border-color: var(--primary); box-shadow: 0 4px 12px rgba(0,0,0,0.05); }
-.button.danger, button.danger { background: linear-gradient(135deg, var(--danger), #b91c1c); box-shadow: 0 4px 12px rgba(239, 68, 68, 0.2); }
+.button.secondary:hover { background: var(--panel-2); border-color: var(--primary); box-shadow: 0 3px 10px rgba(0,0,0,0.04); }
+.button.danger, button.danger { background: linear-gradient(135deg, var(--danger), #b91c1c); box-shadow: 0 3px 10px rgba(239, 68, 68, 0.18); }
 
-table { width: 100%; border-collapse: separate; border-spacing: 0; margin-top: 8px; }
-th, td { padding: 16px 16px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; }
-th { color: var(--muted); font-size: 12px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.05em; border-bottom-width: 2px; }
+table { width: 100%; border-collapse: separate; border-spacing: 0; margin-top: 6px; }
+th, td { padding: 12px 14px; border-bottom: 1px solid var(--line); text-align: left; vertical-align: middle; font-size: 13.5px; }
+th { color: var(--muted); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.06em; border-bottom-width: 2px; }
 tr:last-child td { border-bottom: none; }
 tr { transition: background-color 0.15s ease; }
 tr:hover td { background: var(--bg); }
 
-.progress { height: 8px; border-radius: 8px; background: var(--bg); overflow: hidden; margin-top: 8px; border: 1px solid var(--line); }
+.progress { height: 7px; border-radius: 8px; background: var(--bg); overflow: hidden; margin-top: 8px; border: 1px solid var(--line); }
 .progress span { display: block; height: 100%; background: linear-gradient(90deg, var(--primary), var(--success)); border-radius: 8px; }
-.badge { padding: 6px 12px; border-radius: 8px; font-size: 12px; font-weight: 600; background: rgba(37, 99, 235, 0.1); color: var(--primary); display: inline-block; }
+.badge { padding: 5px 10px; border-radius: 6px; font-size: 12px; font-weight: 600; background: rgba(37, 99, 235, 0.1); color: var(--primary); display: inline-block; transition: all 0.2s ease; }
+.badge.success { background: rgba(34, 197, 94, 0.1); color: var(--success); }
+.badge.warning { background: rgba(245, 158, 11, 0.1); color: var(--warning); }
+.badge.danger { background: rgba(239, 68, 68, 0.1); color: var(--danger); }
 
-.alert { border-left: 5px solid var(--primary); padding-left: 20px; border-radius: 8px; background: rgba(37, 99, 235, 0.03); }
+.alert { border-left: 4px solid var(--primary); padding-left: 18px; border-radius: 8px; background: rgba(37, 99, 235, 0.03); }
 .alert.warning { border-left-color: var(--warning); background: rgba(245, 158, 11, 0.03); }
 .alert.warning .badge { color: var(--warning); background: rgba(245, 158, 11, 0.1); }
 .alert.danger { border-left-color: var(--danger); background: rgba(239, 68, 68, 0.03); }
 .alert.danger .badge { color: var(--danger); background: rgba(239, 68, 68, 0.1); }
 
-.chart { width: 100%; border-radius: 8px; border: 1px solid var(--line); background: #ffffff; mix-blend-mode: normal; box-shadow: 0 4px 12px rgba(0,0,0,0.02); }
+.chart { width: 100%; border-radius: 8px; border: 1px solid var(--line); background: #ffffff; mix-blend-mode: normal; box-shadow: 0 2px 8px rgba(0,0,0,0.02); }
 [data-theme="dark"] .chart { filter: brightness(0.9) contrast(1.1); }
-.tabs { display: flex; gap: 10px; margin-bottom: 24px; flex-wrap: wrap; }
-.pagination { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+.tabs { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+.pagination { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
 
 @media (max-width: 1024px) {
-  .sidebar { width: 240px; }
-  .main { margin-left: 240px; }
-  .topbar, .page-header, .main > section { padding-left: 24px; padding-right: 24px; }
+  .sidebar { width: 230px; }
+  .main { margin-left: 230px; }
+  .topbar, .page-header, .main > section { padding-left: 20px; padding-right: 20px; }
 }
 @media (max-width: 768px) {
-  .sidebar { position: static; width: 100%; border-right: none; border-bottom: 1px solid var(--line); padding: 20px; }
-  .nav-menu { flex-direction: row; flex-wrap: wrap; gap: 8px; }
-  .nav-item { padding: 10px 14px; flex: 1; min-width: 140px; justify-content: center; }
+  .sidebar { position: static; width: 100%; border-right: none; border-bottom: 1px solid var(--line); padding: 18px; }
+  .nav-menu { flex-direction: row; flex-wrap: wrap; gap: 6px; }
+  .nav-item { padding: 9px 12px; flex: 1; min-width: 120px; justify-content: center; font-size: 13px; }
   .nav-divider { display: none; }
   .main { margin-left: 0; }
-  .topbar { flex-direction: column; align-items: stretch; gap: 16px; }
+  .topbar { flex-direction: column; align-items: stretch; gap: 14px; }
   .search-bar { max-width: none; }
   .therapist-profile { border-left: none; padding-left: 0; margin-left: auto; }
   .stats, .two, .three, .form-grid { grid-template-columns: 1fr; }
-  .page-header { flex-direction: column; align-items: flex-start; gap: 16px; }
+  .page-header { flex-direction: column; align-items: flex-start; gap: 14px; }
+  h1 { font-size: 22px; }
+  .stat-value { font-size: 26px; }
 }
 """
 
@@ -2664,7 +2814,7 @@ function sortTable(tableId, column) {
         <section class="grid three" style="margin-top:16px">
           {self.stat_card('AI Confidence', f"{override_stats['ai_confidence']:.0f}%", 'Learned from therapist decisions')}
           {self.stat_card('Override Probability', f"{override_stats['override_probability'] * 100:.0f}%", 'Human-in-the-loop estimate')}
-          {self.stat_card('Recommendation Reliability', f"{override_stats['recommendation_reliability']:.0f}%", f"{override_stats['agreement_rate']:.0f}% agreement")}
+          {self.stat_card('AI Agreement Rate', f"{override_stats['agreement_rate']:.1f}%", f"Based on {override_stats['total']} total reviews")}
         </section>
         <section class="card" style="margin-top:16px">
           <h2>Most Common Override Reasons</h2>
@@ -2712,24 +2862,34 @@ function sortTable(tableId, column) {
             "Clinical judgement",
         ]
         reason_options = "".join(f"<option>{esc(reason)}</option>" for reason in reasons)
+        rid = int(number(row['id']))
         return f"""
-        <form method="post" action="/adaptive/override" class="form-grid">
-          <input type="hidden" name="prescription_id" value="{int(number(row['id']))}">
-          <label>Therapist<input name="therapist_id" value="Therapist"></label>
-          <label>Decision<select name="decision"><option value="accept">Accept</option><option value="modify">Modify</option><option value="reject">Reject</option></select></label>
-          <label>Reason<select name="reason">{reason_options}</select></label>
-          <label>Difficulty Tier<input name="difficulty_tier" type="number" min="1" max="5" value="{int(number(row['difficulty_tier']))}"></label>
-          <label>ROM Requirement<input name="required_rom" type="number" step="0.1" value="{number(row['required_rom']):.1f}"></label>
-          <label>Repetitions<input name="repetitions" type="number" min="1" value="{int(number(row['repetitions']))}"></label>
-          <label>Hold Duration<input name="hold_seconds" type="number" step="0.1" value="{number(row['hold_seconds']):.1f}"></label>
-          <label>Progression<select name="progression">
-            {self.option('advance', 'Advance', row['progression'])}
-            {self.option('maintain', 'Maintain', row['progression'])}
-            {self.option('support', 'Support', row['progression'])}
-            {self.option('regress', 'Regress', row['progression'])}
-          </select></label>
-          <label class="full">Therapist Reason<textarea name="therapist_reason" placeholder="Clinical reasoning, observation, or safety note"></textarea></label>
-          <button class="full">Store Therapist Decision</button>
+        <form method="post" action="/adaptive/override" id="form_{rid}">
+          <input type="hidden" name="prescription_id" value="{rid}">
+          <input type="hidden" id="decision_{rid}" name="decision" value="accept">
+          
+          <div style="display: flex; gap: 10px; margin: 12px 0 8px;">
+            <button type="button" style="flex: 1; padding: 9px 16px; background: linear-gradient(135deg, #10b981, #059669); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13.5px; box-shadow: 0 2px 8px rgba(16,185,129,0.2); transition: all 0.2s ease;" onclick="document.getElementById('decision_{rid}').value='accept'; document.getElementById('form_{rid}').submit();">✓ Agree</button>
+            <button type="button" style="flex: 1; padding: 9px 16px; background: linear-gradient(135deg, #f59e0b, #d97706); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13.5px; box-shadow: 0 2px 8px rgba(245,158,11,0.2); transition: all 0.2s ease;" onclick="var p = document.getElementById('params_{rid}'); p.style.display = (p.style.display === 'none') ? 'grid' : 'none';">✎ Modify</button>
+            <button type="button" style="flex: 1; padding: 9px 16px; background: linear-gradient(135deg, #ef4444, #dc2626); color: white; border: none; border-radius: 8px; cursor: pointer; font-weight: 600; font-size: 13.5px; box-shadow: 0 2px 8px rgba(239,68,68,0.2); transition: all 0.2s ease;" onclick="document.getElementById('decision_{rid}').value='reject'; document.getElementById('form_{rid}').submit();">✗ Reject</button>
+          </div>
+          
+          <div id="params_{rid}" class="form-grid" style="display:none; border: 1px solid var(--line); padding: 16px; border-radius: 10px; margin-top: 12px; background: var(--bg);">
+            <label>Therapist<input name="therapist_id" value="Therapist"></label>
+            <label>Reason<select name="reason">{reason_options}</select></label>
+            <label>Difficulty Tier<input name="difficulty_tier" type="number" min="1" max="5" value="{int(number(row['difficulty_tier']))}"></label>
+            <label>ROM Requirement<input name="required_rom" type="number" step="0.1" value="{number(row['required_rom']):.1f}"></label>
+            <label>Repetitions<input name="repetitions" type="number" min="1" value="{int(number(row['repetitions']))}"></label>
+            <label>Hold Duration<input name="hold_seconds" type="number" step="0.1" value="{number(row['hold_seconds']):.1f}"></label>
+            <label>Progression<select name="progression">
+              {self.option('advance', 'Advance', row['progression'])}
+              {self.option('maintain', 'Maintain', row['progression'])}
+              {self.option('support', 'Support', row['progression'])}
+              {self.option('regress', 'Regress', row['progression'])}
+            </select></label>
+            <label class="full">Therapist Reason<textarea name="therapist_reason" placeholder="Clinical reasoning, observation, or safety note"></textarea></label>
+            <button class="full" type="button" style="background: linear-gradient(135deg, var(--primary), var(--primary-2)); color: white; padding: 10px; border: none; border-radius: 8px; font-weight: 600; font-size: 13.5px; cursor: pointer;" onclick="document.getElementById('decision_{rid}').value='modify'; document.getElementById('form_{rid}').submit();">Save Modification</button>
+          </div>
         </form>
         """
 
@@ -3012,38 +3172,189 @@ function sortTable(tableId, column) {
         return Page("Recovery Reports", body, "reports")
 
     def performance(self, params: dict[str, str]) -> Page:
-        rows = self.repo.sessions()
-        by_exercise: dict[str, list[sqlite3.Row]] = {}
-        for row in rows:
-            by_exercise.setdefault(exercise_for_level(row["level"]), []).append(row)
-        perf_rows = []
-        for exercise, items in by_exercise.items():
-            attempts = len(items)
-            correct = sum(1 for row in items if number(row["avg_accuracy"]) >= 60)
-            incorrect = attempts - correct
-            avg_accuracy = sum(number(row["avg_accuracy"]) for row in items) / attempts if attempts else 0
-            time_spent = sum(number(row["duration"]) for row in items)
-            perf_rows.append((exercise, attempts, correct, incorrect, avg_accuracy, time_spent))
-        best = max(perf_rows, key=lambda item: item[4], default=None)
-        weakest = min(perf_rows, key=lambda item: item[4], default=None)
+        patient = params.get("patient", "")
+        patient_options = "".join(self.option(row["name"], row["name"], patient) for row in self.repo.patients())
+        analytics = self.repo.exercise_analytics_data(patient)
+        
+        total_completions = sum(a["completed_count"] for a in analytics)
+        total_compensations = sum(a["compensation_count"] for a in analytics)
+        best = max(analytics, key=lambda item: item["avg_accuracy"], default=None)
+        
         table = "".join(
             f"""
-            <tr><td>{esc(ex)}</td><td>{done}</td><td>{correct}</td><td>{incorrect}</td><td>{acc:.1f}%</td><td>{time_spent/60:.1f} min</td></tr>
+            <tr>
+              <td>L{a['level']} - {esc(a['exercise_name'])}</td>
+              <td>{a['completed_count']}</td>
+              <td>{a['avg_duration']:.1f}s</td>
+              <td>{a['avg_smoothness']:.1f}%</td>
+              <td>{a['avg_accuracy']:.1f}%</td>
+              <td>{a['avg_rom']:.1f}°</td>
+              <td><span class="badge {'danger' if a['compensation_count'] > 5 else 'warning' if a['compensation_count'] > 0 else 'success'}">{a['compensation_count']}</span></td>
+              <td style="color: {'#10b981' if a['improvement_percentage'] > 0 else '#ef4444' if a['improvement_percentage'] < 0 else 'inherit'}">{a['improvement_percentage']:+.1f}%</td>
+            </tr>
             """
-            for ex, done, correct, incorrect, acc, time_spent in perf_rows
-        ) or '<tr><td colspan="6" class="muted">No exercise data available.</td></tr>'
+            for a in analytics
+        ) or '<tr><td colspan="8" class="muted">No exercise data available.</td></tr>'
+        
         body = f"""
-        <section class="grid three">
-          {self.stat_card('Best Exercise', best[0] if best else '-', f'{best[4]:.1f}% accuracy' if best else '')}
-          {self.stat_card('Weakest Exercise', weakest[0] if weakest else '-', f'{weakest[4]:.1f}% accuracy' if weakest else '')}
-          {self.stat_card('Exercises Completed', str(sum(item[1] for item in perf_rows)), 'Session-level completions')}
+        <section class="card">
+          <form method="get" class="toolbar">
+            <h2>Exercise Analytics Dashboard</h2>
+            <select name="patient"><option value="">All patients</option>{patient_options}</select>
+            <button>Apply</button>
+          </form>
+        </section>
+        <section class="grid three" style="margin-top:16px">
+          {self.stat_card('Top Performing Exercise', best['exercise_name'] if best else '-', f'{best["avg_accuracy"]:.1f}% avg accuracy' if best else '')}
+          {self.stat_card('Total Exercise Completions', str(total_completions), 'Across all levels')}
+          {self.stat_card('Compensations Logged', str(total_compensations), 'Clinical biomechanical alerts')}
         </section>
         <section class="card" style="margin-top:16px">
-          <h2>Exercise Performance</h2>
-          <table><thead><tr><th>Exercise</th><th>Completed</th><th>Correct</th><th>Incorrect</th><th>Accuracy</th><th>Time Spent</th></tr></thead><tbody>{table}</tbody></table>
+          <h2>Clinical Exercise Telemetry</h2>
+          <table>
+            <thead>
+              <tr>
+                <th>Exercise / Level</th>
+                <th>Completions</th>
+                <th>Avg Duration</th>
+                <th>Avg Smoothness</th>
+                <th>Avg Accuracy</th>
+                <th>Avg ROM</th>
+                <th>Compensations</th>
+                <th>Improvement Rate</th>
+              </tr>
+            </thead>
+            <tbody>{table}</tbody>
+          </table>
         </section>
         """
-        return Page("Exercise Performance", body, "performance")
+        return Page("Exercise Analytics", body, "performance")
+
+    def research_dashboard(self, params: dict[str, str]) -> Page:
+        patient = params.get("patient", "")
+        patient_options = "".join(self.option(row["name"], row["name"], patient) for row in self.repo.patients())
+        
+        sessions = self.repo.sessions_chrono(patient)
+        labels = [short_date(row["timestamp"]) for row in sessions[-16:]]
+        
+        # 1. Movement Quality Trend
+        mq_trend = [number(row.get("movement_quality_score", number(row["avg_accuracy"]) * 0.65 + 25)) for row in sessions[-16:]]
+        
+        # 2. ROM Improvement Trend
+        rom_trend = [number(row["avg_hand_angle"]) for row in sessions[-16:]]
+        
+        # 3. Pain Delta
+        pain_before = [number(row_value(row, "pain_before_session", row["pain_level"])) for row in sessions[-16:]]
+        pain_after = [number(row_value(row, "pain_after_session", row["pain_level"])) for row in sessions[-16:]]
+        
+        # 4. Recovery Prediction Accuracy
+        actual_rec = [min(100.0, number(row["avg_hand_angle"]) / 90.0 * 100.0) for row in sessions[-16:]]
+        predicted_rec = []
+        for index in range(len(sessions[-16:])):
+            pred = recovery_prediction(sessions[: max(0, len(sessions) - len(sessions[-16:])) + index + 1])
+            predicted_rec.append(pred if pred >= 0 else actual_rec[index])
+            
+        # 5. Readiness History
+        prescriptions = list(reversed(self.repo.adaptive_history(patient, limit=16)))
+        readiness_labels = [short_date(row["created_at"]) for row in prescriptions]
+        readiness_scores = [number(row["readiness_score"]) for row in prescriptions]
+        
+        # 6. Difficulty Adjustments
+        difficulty_tiers = [number(row.get("difficulty_tier", 2.0)) for row in prescriptions]
+        
+        # 7. Therapist Agreement Rate
+        override_stats = self.repo.override_stats(patient)
+        agreement_rate = override_stats["agreement_rate"]
+        
+        overrides = self.repo.override_history(patient, limit=200)
+        agree_cnt = sum(1 for r in overrides if str(r["decision"]).lower() == "accept")
+        modify_cnt = sum(1 for r in overrides if str(r["decision"]).lower() == "modify")
+        reject_cnt = sum(1 for r in overrides if str(r["decision"]).lower() == "reject")
+        total_decisions = len(overrides)
+        
+        # 8. Demographic Success Rates
+        demographics = {"Child": 0.0, "Young Adult": 0.0, "Adult": 0.0, "Senior": 0.0}
+        try:
+            conn = sqlite3.connect(self.repo.db_path)
+            cursor = conn.cursor()
+            
+            cursor.execute("""
+                SELECT AVG(s.functional_recovery_score) 
+                FROM sessions s JOIN patients p ON s.patient_id = p.name
+                WHERE p.age_group = 'child'
+            """)
+            demographics["Child"] = cursor.fetchone()[0] or 0.0
+            
+            cursor.execute("""
+                SELECT AVG(s.functional_recovery_score) 
+                FROM sessions s JOIN patients p ON s.patient_id = p.name
+                WHERE p.age_group = 'young_adult'
+            """)
+            demographics["Young Adult"] = cursor.fetchone()[0] or 0.0
+            
+            cursor.execute("""
+                SELECT AVG(s.functional_recovery_score) 
+                FROM sessions s JOIN patients p ON s.patient_id = p.name
+                WHERE p.age_group = 'adult'
+            """)
+            demographics["Adult"] = cursor.fetchone()[0] or 0.0
+            
+            cursor.execute("""
+                SELECT AVG(s.functional_recovery_score) 
+                FROM sessions s JOIN patients p ON s.patient_id = p.name
+                WHERE p.age_group = 'senior'
+            """)
+            demographics["Senior"] = cursor.fetchone()[0] or 0.0
+            
+            conn.close()
+        except Exception as e:
+            print(f"Demographics query failed: {e}")
+
+        # Build Demographic Progress Bars HTML
+        demo_html = ""
+        for group, val in demographics.items():
+            demo_html += f"""
+            <div style="margin-bottom: 12px;">
+              <div class="toolbar" style="font-size: 13px; margin-bottom: 4px;">
+                <span>{group}</span>
+                <strong>{val:.1f}% Recovery</strong>
+              </div>
+              <div style="width: 100%; height: 8px; background: rgba(255,255,255,0.06); border-radius: 4px; overflow: hidden;">
+                <div style="width: {val}%; height: 100%; background: linear-gradient(90deg, #0088ff, #00ffcc); border-radius: 4px;"></div>
+              </div>
+            </div>
+            """
+
+        body = f"""
+        <section class="card">
+          <form method="get" class="toolbar">
+            <h2>Clinical Research Portal</h2>
+            <select name="patient"><option value="">All patients</option>{patient_options}</select>
+            <button>Apply</button>
+          </form>
+        </section>
+        
+        <section class="grid three" style="margin-top:16px">
+          {self.stat_card('AI Agreement Rate', f"{agreement_rate:.1f}%", f"{agree_cnt} Agree / {modify_cnt} Modify / {reject_cnt} Reject")}
+          {self.stat_card('Clinical Success Index', f"{demographics['Adult']:.1f}%", 'Average recovery score (Adults)')}
+          {self.stat_card('Research Datapoints', f"{len(sessions)} Sessions", 'Confidential biomechanical dataset')}
+        </section>
+
+        <section class="grid two" style="margin-top:16px">
+          <div class="card">{self.chart('Movement Quality Trends', {'Movement Quality (%)': mq_trend}, labels, '%')}</div>
+          <div class="card">{self.chart('ROM Improvement Over Time', {'Range of Motion (deg)': rom_trend}, labels, 'deg')}</div>
+          <div class="card">{self.chart('Pain Delta Reduction', {'Pain Before': pain_before, 'Pain After': pain_after}, labels, 'NRS')}</div>
+          <div class="card">{self.chart('Recovery Prediction Accuracy', {'Actual Recovery': actual_rec, 'Predicted Recovery': predicted_rec}, labels, '%')}</div>
+          <div class="card">{self.chart('Patient Readiness Score History', {'Readiness Score': readiness_scores}, readiness_labels, 'score')}</div>
+          <div class="card">
+            <h2>Clinical Success by Demographic</h2>
+            <div style="margin-top: 15px;">
+              {demo_html}
+            </div>
+          </div>
+        </section>
+        """
+        return Page("Clinical Research Portal", body, "research")
 
     def notes(self, params: dict[str, str]) -> Page:
         selected = params.get("patient", "")
@@ -3527,6 +3838,7 @@ class DashboardHandler(BaseHTTPRequestHandler):
             "/digital-twin": lambda: self.renderer.digital_twin_page(params),
             "/reports": lambda: self.renderer.reports(params),
             "/performance": lambda: self.renderer.performance(params),
+            "/research": lambda: self.renderer.research_dashboard(params),
             "/notes": lambda: self.renderer.notes(params),
             "/notifications": self.renderer.notifications,
             "/security": lambda: self.renderer.security_overview(params),

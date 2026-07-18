@@ -140,6 +140,40 @@ While this project provides a strong proof-of-concept for AI-powered rehabilitat
 - **AI-Driven Smart Object Assembly:** As a future enhancement, the system can include an AI-driven rehabilitation game called Smart Object Assembly. In this game, patients perform therapeutic hand, wrist, and forearm movements to assemble virtual objects such as houses, machines, or robotic structures. Different rehabilitation exercises, including wrist flexion, extension, pronation, supination, and pinch movements, are mapped to specific assembly actions. The game difficulty can be automatically adjusted based on the patient's recovery progress and previous performance. This approach can improve patient engagement, support advanced hand and forearm rehabilitation, and provide a novel adaptive rehabilitation framework suitable for future research and potential patent development.
 
 
+## 🔬 Clinical Research & Advanced Kinematic Analytics
+
+In this version, we introduced advanced clinical telemetry, research validation metrics, and publication-ready graphs:
+
+### 1. Kinematic Quality Evaluation Model
+We evaluate movement quality using four kinematic sub-metrics over the duration of the session:
+* **Smoothness Score ($S_m$)**: Calculated using the time-derivative of acceleration (jerk) over the index tip coordinate stream, normalized via exponential decay:
+  $$S_m = 100 \times e^{-\lambda_j \cdot \overline{\text{Jerk}}}$$
+* **Accuracy Score ($A_c$)**: Ratio of hit attempts to total targets during active gameplay.
+* **Range of Motion Achievement ($R_o$)**: Flexion/extension joint angle performance normalized against the patient's calibrated baseline maximum ROM.
+* **Hold Stability ($H_s$)**: Calculated by computing the spatial standard deviation of index finger coordinates during static holding periods:
+  $$H_s = 100 \times e^{-\lambda_d \cdot \sigma_{\text{hold}}}$$
+* **Overall Movement Quality ($Q_m$)**:
+  $$Q_m = \frac{S_m + A_c + R_o + H_s}{4}$$
+
+### 2. Advanced Hand-Only Compensation Detection
+Real-time compensatory pattern matching operates on hand landmarks (without full-body pose requirements) to identify:
+* **Sudden Landmark Translation**: Frame-to-frame displacement spikes.
+* **Inconsistent Wrist Movement**: Excessive wrist velocity variance.
+* **Unstable Trajectory**: Unstable coordinates path jerk.
+* **Abnormal Rotation Speed**: Fast forearm rotation acceleration.
+* **Excessive Lateral Movement**: Sideways wrist drift.
+
+### 3. Patient Clinical Readiness & Difficulty Intelligence
+Today's recommended game difficulty is decided adaptively by computing a Patient Readiness Score ($R_p$):
+$$R_p = \left( 0.4 \times R_{\text{rom}} + 0.3 \times A_c + 0.3 \times Q_m \right) - P_{\text{pain}} - P_{\text{fatigue}}$$
+* Recommended difficulty thresholds:
+  * **Easy**: $R_p < 50$
+  * **Moderate**: $50 \le R_p < 80$
+  * **Hard**: $R_p \ge 80$
+
+### 4. Interactive Clinician Override Dashboard
+A direct Agree/Modify/Reject panel tracks human-in-the-loop validation, providing transparent **AI Agreement Rate** tracking.
+
 ## 🔒 Security Posture
 
 This system is designed as a **local prototype** and is currently rated for non-clinical research and development. 
