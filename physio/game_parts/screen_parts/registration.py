@@ -286,8 +286,8 @@ class RegistrationScreenMixin:
                     + 30                             # chips row
                     + FIELD_H + 4)                   # button
         _avail   = (BOTTOM - TOP) - PAD * 2          # usable interior height
-        # Spread remaining space across 9 gap slots; clamp between 4 and 26 px
-        _gap     = max(4, min(26, (_avail - _fixed) // 9))
+        # Spread remaining space across 8 gap slots; clamp between 4 and 30 px
+        _gap     = max(4, min(30, (_avail - _fixed) // 8))
         V_SM     = max(3, _gap // 2)
         V_MD     = _gap
         V_LG     = max(_gap, _gap + _gap // 3)
