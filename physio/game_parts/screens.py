@@ -378,6 +378,134 @@ class ScreenMixin:
         hand_data = self.hand_engine.get_hand_data()
         self._draw_cursor(hand_data)
     
+    # The helpers below are presentation-only; they deliberately do not touch
+    # registration state, event handling, hover timing, or camera integration.
+    def _draw_glass_card(self, rect, fill=(13, 22, 34, 235), radius=18):
+        surface = pygame.Surface(rect.size, pygame.SRCALPHA)
+        pygame.draw.rect(surface, fill, surface.get_rect(), border_radius=radius)
+        pygame.draw.rect(surface, (0, 229, 255, 65), surface.get_rect(), 1, border_radius=radius)
+        self.screen.blit(surface, rect.topleft)
+
+    def _draw_portal_input(self, rect, label, icon, value, placeholder, active, now):
+        label_color = (0, 229, 255) if active else (143, 167, 194)
+        self.screen.blit(self.font_tiny.render(label, True, label_color), (rect.x, rect.y - 20))
+        if active:
+            halo = pygame.Surface((rect.width + 8, rect.height + 8), pygame.SRCALPHA)
+            pygame.draw.rect(halo, (0, 229, 255, 32), halo.get_rect(), 3, border_radius=12)
+            self.screen.blit(halo, (rect.x - 4, rect.y - 4))
+        pygame.draw.rect(self.screen, (8, 17, 28), rect, border_radius=9)
+        pygame.draw.rect(self.screen, (0, 229, 255) if active else (48, 83, 112), rect, 2 if active else 1, border_radius=9)
+        self.screen.blit(self.font_hint.render(icon, True, (0, 229, 255)), (rect.x + 14, rect.y + 15))
+        cursor = "|" if active and int(now * 2) % 2 == 0 else ""
+        text = f"{value}{cursor}" if value else placeholder
+        color = (244, 248, 252) if value else (143, 167, 194)
+        self.screen.blit(self.font_hint.render(text, True, color), (rect.x + 45, rect.y + 15))
+
+    def _draw_patient_registration(self):
+        """Responsive 2026 clinical portal; functionality is unchanged."""
+        now = time.time()
+        scr = self.screen
+        w, h = scr.get_size()
+        cx = w // 2
+        margin = max(24, int(w * 0.028))
+        header_h = max(76, int(h * 0.11))
+        feature_h = max(52, int(h * 0.075))
+        feature_y = h - feature_h - margin // 2
+        top, bottom = header_h + 18, feature_y - 18
+
+        # Subtle dark healthcare gradient and grid.
+        for y in range(0, h, 4):
+            blend = y / max(h, 1)
+            pygame.draw.rect(scr, (6 + int(5 * blend), 11 + int(9 * blend), 20 + int(16 * blend)), (0, y, w, 4))
+        for x in range(0, w, 48):
+            pygame.draw.line(scr, (14, 35, 51), (x, header_h), (x, feature_y), 1)
+        for y in range(header_h, feature_y, 48):
+            pygame.draw.line(scr, (14, 35, 51), (0, y), (w, y), 1)
+
+        title = self.font_large.render("CLINICAL REGISTRATION PORTAL", True, (244, 248, 252))
+        scr.blit(title, title.get_rect(center=(cx, header_h // 2 - 4)))
+        pygame.draw.line(scr, (0, 229, 255), (cx - 145, header_h - 13), (cx + 145, header_h - 13), 2)
+
+        gap = max(18, int(w * .018))
+        left_w = int((w - 2 * margin - gap) * .56)
+        left = pygame.Rect(margin, top, left_w, bottom - top)
+        right = pygame.Rect(left.right + gap, top, w - margin - left.right - gap, bottom - top)
+        self._draw_glass_card(left)
+        self._draw_glass_card(right)
+
+        # Registration card.
+        scr.blit(self.font_head.render("Registration Portal", True, (244, 248, 252)), (left.x + 28, left.y + 22))
+        scr.blit(self.font_tiny.render("PATIENT ACCESS & THERAPY INTAKE", True, (143, 167, 194)), (left.x + 29, left.y + 51))
+        field_x, field_w = left.x + 30, left.width - 60
+        field_h = max(46, min(54, int(h * .07)))
+        id_y = left.y + 84
+        self._draw_portal_input(pygame.Rect(field_x, id_y, field_w, field_h), "CLINICAL ID LOGIN", "◉", self.patient_id_str, "Enter Clinical ID...", self.input_active == "id", now)
+        divider_y = id_y + field_h + 27
+        pygame.draw.line(scr, (48, 83, 112), (field_x, divider_y), (cx - 22, divider_y), 1)
+        pygame.draw.line(scr, (48, 83, 112), (cx + 22, divider_y), (left.right - 30, divider_y), 1)
+        scr.blit(self.font_tiny.render("OR", True, (143, 167, 194)), self.font_tiny.render("OR", True, (143, 167, 194)).get_rect(center=(cx, divider_y)))
+
+        name_y = divider_y + 38
+        self._draw_portal_input(pygame.Rect(field_x, name_y, field_w, field_h), "GUEST REGISTRATION", "◉", self.patient_name, "Enter Patient Name", self.input_active == "name", now)
+        age_y, age_w = name_y + field_h + 30, int(field_w * .40)
+        self._draw_portal_input(pygame.Rect(field_x, age_y, age_w, field_h), "PATIENT AGE", "□", self.patient_age, "00", self.input_active == "age", now)
+        if self.patient_age.isdigit():
+            age = int(self.patient_age)
+            badge, color = ("Adult Rehabilitation", (24, 224, 143))
+            if age <= 12: badge, color = ("Pediatric Mode", (255, 146, 187))
+            elif age > 60: badge, color = ("Geriatric Care", (255, 176, 0))
+            badge_surf = self.font_tiny.render(f"✦  {badge}", True, color)
+            badge_rect = badge_surf.get_rect(midleft=(field_x + age_w + 18, age_y + field_h // 2))
+            pygame.draw.rect(scr, (13, 31, 44), badge_rect.inflate(20, 12), border_radius=13)
+            scr.blit(badge_surf, badge_rect)
+
+        protocol = pygame.Rect(field_x, age_y + field_h + 25, field_w, 76)
+        self._draw_glass_card(protocol, (10, 26, 39, 225), 12)
+        scr.blit(self.font_tiny.render("▣  DIAGNOSTIC PROTOCOL", True, (0, 229, 255)), (protocol.x + 14, protocol.y + 10))
+        for i, text in enumerate(("Stand 1–2 meters from camera", "Ensure proper room lighting", "Complete registration to unlock therapy")):
+            scr.blit(self.font_tiny.render(f"✓  {text}", True, (183, 205, 224)), (protocol.x + 15, protocol.y + 29 + i * 16))
+
+        shortcuts_y = protocol.bottom + 11
+        scr.blit(self.font_tiny.render("⌨  TAB", True, (143, 167, 194)), (field_x, shortcuts_y))
+        scr.blit(self.font_tiny.render("Switch Field", True, (143, 167, 194)), (field_x + 58, shortcuts_y))
+        scr.blit(self.font_tiny.render("⌨  ENTER", True, (143, 167, 194)), (field_x + field_w // 2, shortcuts_y))
+        scr.blit(self.font_tiny.render("Launch Therapy", True, (143, 167, 194)), (field_x + field_w // 2 + 74, shortcuts_y))
+        button_rect = pygame.Rect(field_x, shortcuts_y + 26, field_w, field_h)
+        self.quick_start_button.rect = button_rect
+        ready = bool(self.patient_name and self.patient_age)
+        base, hover, border = ((16, 128, 84), (24, 192, 120), (24, 224, 143)) if ready else ((12, 86, 125), (0, 145, 190), (0, 229, 255))
+        self.quick_start_button.draw(scr, self.font_small, "▶  Start Rehabilitation" if ready else "▶  Quick Start", base_col=base, hov_col=hover, border_col=border)
+
+        # Live sensor feed.
+        scr.blit(self.font_head.render("Live Sensor Feed", True, (244, 248, 252)), (right.x + 24, right.y + 22))
+        scr.blit(self.font_tiny.render("HIGH-RESOLUTION NEURAL SENSOR", True, (143, 167, 194)), (right.x + 25, right.y + 51))
+        camera = pygame.Rect(right.x + 24, right.y + 78, right.width - 48, min(int((right.width - 48) * .56), int(right.height * .52)))
+        self._draw_camera_preview(camera.x, camera.y, camera.width, camera.height, "LIVE CAMERA PREVIEW")
+        hand_data = self.hand_engine.get_hand_data()
+        detected = hand_data.hand_label != "Unknown"
+        status, status_col = ("Hand detected — calibration ready", (24, 224, 143)) if detected else ("Awaiting hand calibration...", (255, 176, 0))
+        telemetry = pygame.Rect(right.x + 24, camera.bottom + 18, right.width - 48, right.bottom - camera.bottom - 42)
+        self._draw_glass_card(telemetry, (10, 26, 39, 225), 12)
+        scr.blit(self.font_tiny.render("✦  HIGH RESOLUTION NEURAL SENSOR", True, (244, 248, 252)), (telemetry.x + 14, telemetry.y + 11))
+        scr.blit(self.font_tiny.render(status, True, status_col), (telemetry.x + 14, telemetry.y + 33))
+        bar = pygame.Rect(telemetry.x + 14, telemetry.y + 56, telemetry.width - 28, 7)
+        pygame.draw.rect(scr, (30, 55, 75), bar, border_radius=4)
+        progress = .78 if detected else .28 + .12 * (0.5 + .5 * math.sin(now * 1.5))
+        pygame.draw.rect(scr, status_col, (bar.x, bar.y, int(bar.width * progress), bar.height), border_radius=4)
+        scr.blit(self.font_tiny.render("● Secure Connection     ◌ Real-time Tracking     ▣ Privacy Mode Enabled", True, (24, 224, 143)), (telemetry.x + 14, telemetry.y + 75))
+
+        features = (("▣", "Clinical Grade", "Secure & Reliable"), ("AI", "AI Powered", "Computer Vision Tracking"), ("☝", "Zero Keyboard", "Touchless Interaction"), ("▣", "Privacy First", "Encrypted Patient Data"))
+        feature_gap = 12
+        feature_w = (w - margin * 2 - feature_gap * 3) // 4
+        for i, (icon, title_text, subtitle) in enumerate(features):
+            rect = pygame.Rect(margin + i * (feature_w + feature_gap), feature_y, feature_w, feature_h)
+            self._draw_glass_card(rect, (12, 26, 40, 225), 12)
+            scr.blit(self.font_hint.render(icon, True, (0, 229, 255)), (rect.x + 13, rect.y + 11))
+            scr.blit(self.font_tiny.render(title_text, True, (244, 248, 252)), (rect.x + 45, rect.y + 9))
+            scr.blit(self.font_tiny.render(subtitle, True, (143, 167, 194)), (rect.x + 45, rect.y + 29))
+
+        self._draw_cursor(hand_data)
+
     def _draw_age_select(self):
         """Draw age selection screen"""
         # Title
