@@ -4,6 +4,22 @@ from ..shared import *
 
 
 class NavigationScreenMixin:
+    def _update_age_select(self, hand_data: HandData):
+        """Handle age-group selection from the welcome screen."""
+        age_groups = [
+            AgeGroup.CHILD,
+            AgeGroup.YOUNG_ADULT,
+            AgeGroup.ADULT,
+            AgeGroup.SENIOR,
+        ]
+        for age_group, button in zip(age_groups, self.age_buttons):
+            if button.update(hand_data.index_tip):
+                self.age_group = age_group
+                self.state = GameState.MAIN_MENU
+                self.sounds.play("select")
+                print(f"Selected age group: {self.age_group.value}")
+                break
+
     def _draw_age_select(self):
         """Draw age selection screen"""
         # Title
