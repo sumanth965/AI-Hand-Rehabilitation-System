@@ -1,0 +1,277 @@
+/* =================================================================
+   1. DESIGN TOKENS
+   ================================================================= */
+:root {
+  --bg-canvas: #F5F7FA;
+  --bg-primary: #FFFFFF;
+  --bg-secondary: #EFF2F7;
+  --bg-elevated: rgba(255, 255, 255, 0.92);
+  --border-subtle: #E5E7EB;
+  --border-strong: #D1D5DB;
+
+  --text-primary: #1F2937;
+  --text-secondary: #4B5563;
+  --text-muted: #6B7280;
+
+  --accent: #2563EB;
+  --accent-strong: #4F46E5;
+  --accent-soft: rgba(37, 99, 235, 0.07);
+  --accent-contrast: #ffffff;
+
+  --success: #16A34A;
+  --success-soft: rgba(22, 163, 74, 0.07);
+  --danger: #DC2626;
+  --danger-soft: rgba(220, 38, 38, 0.07);
+  --warning: #F59E0B;
+  --warning-soft: rgba(245, 158, 11, 0.07);
+
+  --shadow-sm: 0 4px 12px rgba(15, 23, 42, 0.05);
+  --shadow-md: 0 12px 30px rgba(15, 23, 42, 0.08);
+  --shadow-lg: 0 20px 50px rgba(15, 23, 42, 0.12);
+
+  --radius-sm: 12px;
+  --radius-md: 16px;
+  --radius-lg: 20px;
+
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 32px;
+  --space-6: 40px;
+
+  --sidebar-width: 260px;
+  --sidebar-width-collapsed: 76px;
+  --topbar-height: 68px;
+
+  --font-sans: "Segoe UI", Arial, Helvetica, -apple-system, BlinkMacSystemFont, sans-serif;
+  --font-mono: "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
+
+  color-scheme: light;
+}
+
+html[data-theme="dark"] {
+  --bg-canvas: #0C0E14;
+  --bg-primary: #14161E;
+  --bg-secondary: #1C1E28;
+  --bg-elevated: rgba(20, 22, 30, 0.92);
+  --border-subtle: #282A36;
+  --border-strong: #3A3D4C;
+
+  --text-primary: #F3F4F6;
+  --text-secondary: #A0A5B5;
+  --text-muted: #6B7280;
+
+  --accent: #5B8DEF;
+  --accent-strong: #818CF8;
+  --accent-soft: rgba(91, 141, 239, 0.12);
+  --accent-contrast: #0a1628;
+
+  --success: #4ade80;
+  --success-soft: rgba(74, 222, 128, 0.10);
+  --danger: #f87171;
+  --danger-soft: rgba(248, 113, 113, 0.10);
+  --warning-soft: rgba(245, 158, 11, 0.10);
+
+  --shadow-sm: 0 4px 12px rgba(0, 0, 0, 0.35);
+  --shadow-md: 0 12px 30px rgba(0, 0, 0, 0.40);
+  --shadow-lg: 0 20px 50px rgba(0, 0, 0, 0.50);
+
+  color-scheme: dark;
+}
+
+/* =================================================================
+   2. RESET & BASE
+   ================================================================= */
+*, *::before, *::after { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; scroll-behavior: smooth; }
+
+body {
+  margin: 0;
+  font-family: var(--font-sans);
+  font-size: 14.5px;
+  line-height: 1.6;
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+  transition: background-color 0.3s ease, color 0.3s ease;
+  animation: fadeIn 0.35s ease;
+}
+
+@keyframes fadeIn {
+  from { opacity: 0; }
+  to { opacity: 1; }
+}
+
+h1, h2, h3, h4 { margin: 0; font-weight: 700; letter-spacing: -0.025em; color: var(--text-primary); }
+h1 { font-size: 28px; font-weight: 800; }
+h2 { font-size: 18px; margin: 0 0 16px; }
+h3 { font-size: 15px; }
+p { margin: 0; color: var(--text-secondary); line-height: 1.65; }
+
+a { color: inherit; text-decoration: none; transition: color 0.2s ease; }
+
+button {
+  font-family: inherit;
+  border: none;
+  background: none;
+  cursor: pointer;
+  color: inherit;
+}
+
+input {
+  font-family: inherit;
+  color: var(--text-primary);
+}
+
+:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+  border-radius: var(--radius-sm);
+}
+
+.glass-panel {
+  background: var(--bg-elevated);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  border: 1px solid var(--border-subtle);
+}
+
+.muted { color: var(--text-muted); }
+
+/* =================================================================
+   12. FORM ELEMENTS
+   ================================================================= */
+input:not(.search-input), select, textarea {
+  width: 100%;
+  border: 1px solid var(--border-subtle);
+  background: var(--bg-canvas);
+  color: var(--text-primary);
+  border-radius: var(--radius-sm);
+  padding: 11px 16px;
+  font-family: var(--font-sans);
+  font-size: 14px;
+  transition: border-color 0.3s ease, box-shadow 0.3s ease;
+  outline: none;
+}
+input:focus:not(.search-input), select:focus, textarea:focus {
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent-soft);
+}
+textarea { min-height: 100px; resize: vertical; }
+.form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 20px; }
+.full { grid-column: 1 / -1; }
+label { display: flex; flex-direction: column; gap: 7px; font-size: 13px; font-weight: 600; color: var(--text-primary); }
+
+/* =================================================================
+   13. BUTTONS
+   ================================================================= */
+button, .button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: var(--radius-sm);
+  padding: 11px 24px;
+  min-height: 42px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-strong));
+  color: #ffffff;
+  font-family: var(--font-sans);
+  font-weight: 600;
+  font-size: 13.5px;
+  cursor: pointer;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: 0 3px 10px rgba(37, 99, 235, 0.20);
+  text-decoration: none;
+}
+button:hover, .button:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 18px rgba(37, 99, 235, 0.28);
+  filter: brightness(1.05);
+}
+button:active, .button:active {
+  transform: translateY(0);
+  box-shadow: 0 1px 4px rgba(37, 99, 235, 0.12);
+}
+.button.secondary {
+  background: var(--bg-primary);
+  color: var(--text-primary);
+  border: 1px solid var(--border-subtle);
+  box-shadow: var(--shadow-sm);
+}
+.button.secondary:hover {
+  background: var(--accent-soft);
+  border-color: var(--accent);
+  color: var(--accent);
+  box-shadow: var(--shadow-md);
+}
+.button.danger, button.danger {
+  background: linear-gradient(135deg, #DC2626, #991b1b);
+  box-shadow: 0 3px 10px rgba(220, 38, 38, 0.20);
+}
+.button.danger:hover, button.danger:hover {
+  box-shadow: 0 6px 18px rgba(220, 38, 38, 0.28);
+}
+
+/* =================================================================
+   16. BADGES
+   ================================================================= */
+.badge {
+  padding: 5px 14px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 600;
+  background: var(--accent-soft);
+  color: var(--accent);
+  display: inline-block;
+  transition: all 0.3s ease;
+}
+.badge.success { background: var(--success-soft); color: var(--success); }
+.badge.warning { background: var(--warning-soft); color: #D97706; }
+.badge.danger  { background: var(--danger-soft);  color: var(--danger); }
+
+/* =================================================================
+   17. ALERTS
+   ================================================================= */
+.alert {
+  border-left: 4px solid var(--accent);
+  padding: 18px 24px;
+  border-radius: var(--radius-md);
+  background: var(--accent-soft);
+  margin-bottom: 14px;
+}
+.alert.warning { border-left-color: var(--warning); background: var(--warning-soft); }
+.alert.warning .badge { color: #D97706; background: rgba(245, 158, 11, 0.14); }
+.alert.danger  { border-left-color: var(--danger);  background: var(--danger-soft); }
+.alert.danger .badge  { color: var(--danger); background: rgba(220, 38, 38, 0.14); }
+
+/* =================================================================
+   20. SKELETONS
+   ================================================================= */
+.skeleton {
+  position: relative;
+  overflow: hidden;
+  background: var(--bg-secondary);
+  border-radius: var(--radius-sm);
+}
+.skeleton::after {
+  content: "";
+  position: absolute;
+  inset: 0;
+  transform: translateX(-100%);
+  background: linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.12), transparent);
+  animation: skeletonSweep 1.4s infinite;
+}
+@keyframes skeletonSweep { 100% { transform: translateX(100%); } }
+
+/* =================================================================
+   23. ACCESSIBILITY — Reduced motion
+   ================================================================= */
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+  }
+}

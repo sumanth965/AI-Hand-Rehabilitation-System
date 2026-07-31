@@ -188,6 +188,23 @@ class DashboardHandler(BaseHTTPRequestHandler):
             self.wfile.write(csv_data.encode("utf-8"))
             return
 
+        # Static files serving
+        if path.startswith("/static/"):
+            filepath = os.path.join(os.path.dirname(__file__), path.lstrip("/"))
+            if os.path.exists(filepath):
+                with open(filepath, "rb") as f:
+                    content = f.read()
+                self.send_response(HTTPStatus.OK)
+                if path.endswith(".css"):
+                    self.send_header("Content-Type", "text/css")
+                self.send_header("Content-Length", str(len(content)))
+                self.end_headers()
+                self.wfile.write(content)
+                return
+            else:
+                self.send_error(HTTPStatus.NOT_FOUND, "File not found")
+                return
+
         # Audit logs patient views
         if path == "/patients" and params.get("patient"):
             security_utils.log_audit_event(
