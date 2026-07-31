@@ -4,6 +4,7 @@
 .main > section { padding: 0 36px 32px; }
 
 .grid { display: grid; gap: 28px; }
+.grid > * { min-width: 0; }
 .stats { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
 .two   { grid-template-columns: minmax(0, 1.25fr) minmax(340px, 0.75fr); }
 .three { grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); }
@@ -95,6 +96,11 @@ button.card:hover {
 /* =================================================================
    14. TABLES
    ================================================================= */
+.table-container {
+  overflow-x: auto;
+  width: 100%;
+  -webkit-overflow-scrolling: touch;
+}
 table {
   width: 100%;
   border-collapse: separate;
