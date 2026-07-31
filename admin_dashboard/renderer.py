@@ -112,11 +112,18 @@ class DashboardRenderer(HomePageMixin, AuthPagesMixin, PatientPagesMixin, Sessio
             </div>
             <label for="sidebar-toggle" class="sidebar-close-btn" role="button" tabindex="0" aria-label="Close navigation">✕</label>
           </div>
+          <div class="therapist-profile sidebar-profile">
+            <div class="avatar" aria-hidden="true">{esc(avatar_initials)}</div>
+            <div class="profile-info">
+              <strong>{esc(username_val)}</strong>
+              <span>Therapist</span>
+            </div>
+          </div>
           <nav class="nav-menu" aria-label="Main">
             {nav_html}
-            <div class="nav-divider" role="separator"></div>
-            <a class="nav-item" href="#" aria-label="Settings"><span class="nav-icon" aria-hidden="true">⚙️</span><span class="nav-label">Settings</span></a>
-            <a class="nav-item text-danger" href="/logout" aria-label="Logout"><span class="nav-icon" aria-hidden="true">🚪</span><span class="nav-label">Logout</span></a>
+            <div class="nav-spacer" style="flex-grow: 1;"></div>
+            <a class="nav-item utility-link" href="#" aria-label="Settings"><span class="nav-icon" aria-hidden="true">⚙️</span><span class="nav-label">Settings</span></a>
+            <a class="nav-item utility-link text-danger" href="/logout" aria-label="Logout"><span class="nav-icon" aria-hidden="true">🚪</span><span class="nav-label">Logout</span></a>
           </nav>
         </aside>
 
@@ -135,13 +142,6 @@ class DashboardRenderer(HomePageMixin, AuthPagesMixin, PatientPagesMixin, Sessio
               <a class="icon-btn theme-toggle-btn" href="?theme={toggled_theme}" title="Toggle Theme" aria-label="Toggle color theme">
                 {'🌙' if theme == 'light' else '☀️'}
               </a>
-              <button class="therapist-profile" type="button" aria-haspopup="true" aria-label="Therapist profile menu">
-                <div class="avatar" aria-hidden="true">{esc(avatar_initials)}</div>
-                <div class="profile-info">
-                  <strong>{esc(username_val)}</strong>
-                  <span>Admin</span>
-                </div>
-              </button>
             </div>
           </header>
 
@@ -320,12 +320,11 @@ class DashboardRenderer(HomePageMixin, AuthPagesMixin, PatientPagesMixin, Sessio
       display: flex;
       flex-direction: column;
       padding: var(--space-4) var(--space-3);
-      gap: var(--space-4);
+      gap: var(--space-3);
       border-radius: 0;
-      border-right: 1px solid var(--border-subtle);
-      border-top: none;
-      border-bottom: none;
-      border-left: none;
+      background: #17181c;
+      color: #ffffff;
+      border: none;
       contain: layout style;
       z-index: 30;
       transition: width 0.25s ease, padding 0.25s ease;
@@ -354,8 +353,8 @@ class DashboardRenderer(HomePageMixin, AuthPagesMixin, PatientPagesMixin, Sessio
     }
 
     .brand-text { display: flex; flex-direction: column; line-height: 1.25; overflow: hidden; }
-    .brand-text strong { font-size: 15px; white-space: nowrap; }
-    .brand-text span { font-size: 12px; color: var(--text-muted); white-space: nowrap; }
+    .brand-text strong { font-size: 15px; white-space: nowrap; color: #ffffff; }
+    .brand-text span { font-size: 12px; color: rgba(255, 255, 255, 0.5); white-space: nowrap; }
 
     .sidebar-close-btn {
       display: none;
@@ -387,30 +386,44 @@ class DashboardRenderer(HomePageMixin, AuthPagesMixin, PatientPagesMixin, Sessio
       display: flex;
       align-items: center;
       gap: var(--space-2);
-      padding: 10px var(--space-2);
-      border-radius: var(--radius-sm);
-      color: var(--text-secondary);
+      padding: 12px 16px;
+      border-radius: 20px;
+      color: rgba(255, 255, 255, 0.7);
+      background: rgba(255, 255, 255, 0.05);
       font-size: 14px;
       font-weight: 500;
       min-height: 44px;
-      border-left: 3px solid transparent;
-      transition: background-color 0.18s ease, color 0.18s ease, transform 0.12s ease, border-color 0.18s ease;
+      border: none;
+      margin-bottom: 8px;
+      transition: background-color 0.18s ease, color 0.18s ease, transform 0.12s ease;
       white-space: nowrap;
     }
 
     .nav-item:hover {
-      background: var(--accent-soft);
-      color: var(--accent-strong);
-      transform: translateX(2px);
+      background: rgba(255, 255, 255, 0.1);
+      color: #ffffff;
+      transform: translateY(-1px);
     }
 
-    .nav-item:active { transform: scale(0.98) translateX(2px); }
+    .nav-item:active { transform: scale(0.98); }
 
     .nav-item.active {
-      background: var(--accent-soft);
-      color: var(--accent-strong);
-      border-left-color: var(--accent);
+      background: #1cd0a0;
+      color: #0b1220;
       font-weight: 650;
+    }
+
+    .nav-item.utility-link {
+      background: transparent;
+      border-radius: 0;
+      margin-bottom: 0;
+      padding: 10px 16px;
+      color: rgba(255, 255, 255, 0.6);
+    }
+    
+    .nav-item.utility-link:hover {
+      color: #ffffff;
+      transform: none;
     }
 
     .nav-icon {
@@ -420,14 +433,14 @@ class DashboardRenderer(HomePageMixin, AuthPagesMixin, PatientPagesMixin, Sessio
       display: inline-flex;
       align-items: center;
       justify-content: center;
-      font-size: 13px;
+      font-size: 14px;
       border-radius: 6px;
       background: transparent;
     }
 
     .nav-item.active .nav-icon,
     .nav-item:hover .nav-icon {
-      background: var(--bg-primary);
+      background: transparent;
     }
 
     .nav-divider {
@@ -550,12 +563,24 @@ class DashboardRenderer(HomePageMixin, AuthPagesMixin, PatientPagesMixin, Sessio
       gap: var(--space-2);
       padding: 6px 10px 6px 6px;
       border-radius: 999px;
-      background: var(--bg-secondary);
-      border: 1px solid var(--border-subtle);
+      background: transparent;
+      border: none;
       min-height: 44px;
-      transition: background-color 0.18s ease, box-shadow 0.18s ease;
     }
-    .therapist-profile:hover { background: var(--accent-soft); box-shadow: var(--shadow-sm); }
+    .therapist-profile:hover { background: transparent; }
+
+    .sidebar-profile {
+      padding: 0 var(--space-2);
+      margin-bottom: var(--space-4);
+      min-height: auto;
+    }
+    
+    .sidebar-profile .profile-info strong {
+      color: #ffffff;
+    }
+    .sidebar-profile .profile-info span {
+      color: rgba(255, 255, 255, 0.5);
+    }
 
     .avatar {
       width: 32px;
