@@ -172,31 +172,31 @@ class DashboardRenderer(HomePageMixin, AuthPagesMixin, PatientPagesMixin, Sessio
        Design tokens
        ===================================================================== */
     :root {
-      --bg-canvas: #f4f7fa;
-      --bg-primary: #ffffff;
-      --bg-secondary: #f8fafc;
-      --bg-elevated: rgba(255, 255, 255, 0.72);
-      --border-subtle: #e2e8f0;
-      --border-strong: #cbd5e1;
+      --bg-canvas: #F4F7FB;
+      --bg-primary: #FFFFFF;
+      --bg-secondary: #f0f3f8;
+      --bg-elevated: rgba(255, 255, 255, 0.88);
+      --border-subtle: #E5E7EB;
+      --border-strong: #D1D5DB;
 
-      --text-primary: #0f172a;
-      --text-secondary: #475569;
-      --text-muted: #94a3b8;
+      --text-primary: #1F2937;
+      --text-secondary: #4B5563;
+      --text-muted: #6B7280;
 
-      --accent: #0e7c86;
-      --accent-strong: #0a5f68;
-      --accent-soft: #e6f4f5;
+      --accent: #1F6FEB;
+      --accent-strong: #1558c7;
+      --accent-soft: rgba(31, 111, 235, 0.08);
       --accent-contrast: #ffffff;
 
-      --success: #22c55e;
-      --success-soft: rgba(34, 197, 94, 0.1);
-      --danger: #ef4444;
-      --danger-soft: rgba(239, 68, 68, 0.1);
-      --warning: #f59e0b;
+      --success: #16A34A;
+      --success-soft: rgba(22, 163, 74, 0.08);
+      --danger: #DC2626;
+      --danger-soft: rgba(220, 38, 38, 0.08);
+      --warning: #F59E0B;
 
-      --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.06);
-      --shadow-md: 0 4px 12px rgba(15, 23, 42, 0.08);
-      --shadow-lg: 0 12px 28px rgba(15, 23, 42, 0.12);
+      --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+      --shadow-md: 0 4px 12px rgba(0, 0, 0, 0.06);
+      --shadow-lg: 0 12px 28px rgba(0, 0, 0, 0.1);
 
       --radius-sm: 8px;
       --radius-md: 10px;
@@ -211,39 +211,39 @@ class DashboardRenderer(HomePageMixin, AuthPagesMixin, PatientPagesMixin, Sessio
 
       --sidebar-width: 260px;
       --sidebar-width-collapsed: 76px;
-      --topbar-height: 68px;
+      --topbar-height: 64px;
 
-      --font-sans: "Inter", "Roboto", -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
-      --font-mono: "SFMono-Regular", ui-monospace, "Roboto Mono", Menlo, Consolas, monospace;
+      --font-sans: "Segoe UI", Arial, Helvetica, -apple-system, BlinkMacSystemFont, sans-serif;
+      --font-mono: "SFMono-Regular", ui-monospace, Menlo, Consolas, monospace;
 
       color-scheme: light;
     }
 
     html[data-theme="dark"] {
-      --bg-canvas: #0b1220;
-      --bg-primary: #111a2b;
-      --bg-secondary: #16223a;
-      --bg-elevated: rgba(17, 26, 43, 0.72);
-      --border-subtle: #22314d;
-      --border-strong: #2e3f61;
+      --bg-canvas: #111318;
+      --bg-primary: #1a1c23;
+      --bg-secondary: #22242c;
+      --bg-elevated: rgba(26, 28, 35, 0.88);
+      --border-subtle: #2d303a;
+      --border-strong: #3d4050;
 
-      --text-primary: #f1f5f9;
-      --text-secondary: #b6c2d9;
-      --text-muted: #7688a8;
+      --text-primary: #f3f4f6;
+      --text-secondary: #b0b5c3;
+      --text-muted: #6b7280;
 
-      --accent: #35c6d1;
-      --accent-strong: #6fdbe4;
-      --accent-soft: rgba(53, 198, 209, 0.14);
-      --accent-contrast: #06222a;
+      --accent: #4d94ff;
+      --accent-strong: #7bb3ff;
+      --accent-soft: rgba(77, 148, 255, 0.12);
+      --accent-contrast: #0a1628;
 
       --success: #4ade80;
-      --success-soft: rgba(74, 222, 128, 0.14);
+      --success-soft: rgba(74, 222, 128, 0.12);
       --danger: #f87171;
-      --danger-soft: rgba(248, 113, 113, 0.14);
+      --danger-soft: rgba(248, 113, 113, 0.12);
 
-      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.35);
-      --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.4);
-      --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.5);
+      --shadow-sm: 0 1px 2px rgba(0, 0, 0, 0.4);
+      --shadow-md: 0 4px 16px rgba(0, 0, 0, 0.45);
+      --shadow-lg: 0 16px 32px rgba(0, 0, 0, 0.55);
 
       color-scheme: dark;
     }
@@ -270,8 +270,9 @@ class DashboardRenderer(HomePageMixin, AuthPagesMixin, PatientPagesMixin, Sessio
       to { opacity: 1; }
     }
 
-    h1, h2, h3, h4 { margin: 0; font-weight: 650; letter-spacing: -0.01em; }
-    p { margin: 0; color: var(--text-secondary); }
+    h1, h2, h3, h4 { margin: 0; font-weight: 700; letter-spacing: -0.02em; }
+    h2 { margin: 0 0 14px; font-size: 17px; font-weight: 700; letter-spacing: -0.01em; }
+    p { margin: 0; color: var(--text-secondary); line-height: 1.6; }
 
     a { color: inherit; text-decoration: none; }
 
@@ -464,7 +465,11 @@ class DashboardRenderer(HomePageMixin, AuthPagesMixin, PatientPagesMixin, Sessio
     .main {
       min-width: 0;
       contain: layout style;
-      padding: 0 var(--space-5) var(--space-6);
+      padding: 0;
+      min-height: 100vh;
+      display: flex;
+      flex-direction: column;
+      background: var(--bg-canvas);
     }
 
     .topbar {
@@ -474,13 +479,13 @@ class DashboardRenderer(HomePageMixin, AuthPagesMixin, PatientPagesMixin, Sessio
       display: flex;
       align-items: center;
       gap: var(--space-3);
-      min-height: var(--topbar-height);
-      padding: var(--space-2) var(--space-4);
-      margin: 0 calc(var(--space-5) * -1);
-      border-radius: 0;
-      border-top: none;
-      border-left: none;
-      border-right: none;
+      min-height: 64px;
+      padding: 12px 32px;
+      background: var(--bg-primary);
+      border-bottom: 1px solid var(--border-subtle);
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04);
+      backdrop-filter: none;
+      -webkit-backdrop-filter: none;
     }
 
     .hamburger-btn {
@@ -493,27 +498,29 @@ class DashboardRenderer(HomePageMixin, AuthPagesMixin, PatientPagesMixin, Sessio
       display: flex;
       align-items: center;
       gap: var(--space-2);
-      background: var(--bg-secondary);
+      background: var(--bg-canvas);
       border: 1px solid var(--border-subtle);
-      border-radius: 999px;
-      padding: 0 var(--space-3);
-      height: 40px;
-      transition: box-shadow 0.18s ease, border-color 0.18s ease;
+      border-radius: 10px;
+      padding: 0 14px;
+      height: 42px;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
     }
 
     .search-bar:focus-within {
-      border-color: var(--accent);
-      box-shadow: 0 0 0 3px var(--accent-soft);
+      border-color: #1F6FEB;
+      box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.1);
     }
 
-    .search-icon { color: var(--text-muted); font-size: 13px; }
+    .search-icon { color: var(--text-muted); font-size: 14px; }
 
     .search-input {
       flex: 1;
       border: none;
       background: transparent;
       font-size: 14px;
+      font-family: "Segoe UI", Arial, Helvetica, sans-serif;
       height: 100%;
+      color: var(--text-primary);
     }
     .search-input:focus { outline: none; }
     .search-input::placeholder { color: var(--text-muted); }
@@ -522,40 +529,47 @@ class DashboardRenderer(HomePageMixin, AuthPagesMixin, PatientPagesMixin, Sessio
       margin-left: auto;
       display: flex;
       align-items: center;
-      gap: var(--space-2);
+      gap: 10px;
     }
 
     .privacy-badge {
       font-size: 13px;
-      color: var(--success);
+      color: #16A34A;
       font-weight: 600;
       display: flex;
       align-items: center;
-      gap: 4px;
-      background: var(--success-soft);
-      padding: 6px 12px;
-      border-radius: var(--radius-sm);
-      border: 1px solid rgba(34, 197, 94, 0.2);
+      gap: 6px;
+      background: rgba(22, 163, 74, 0.08);
+      padding: 7px 14px;
+      border-radius: 8px;
+      border: 1px solid rgba(22, 163, 74, 0.18);
       white-space: nowrap;
     }
 
     .icon-btn {
       width: 40px;
       height: 40px;
-      min-width: 44px;
-      min-height: 44px;
+      min-width: 40px;
+      min-height: 40px;
       display: flex;
       align-items: center;
       justify-content: center;
-      border-radius: var(--radius-sm);
+      border-radius: 10px;
       font-size: 16px;
       color: var(--text-secondary);
-      background: var(--bg-secondary);
+      background: var(--bg-canvas);
       border: 1px solid var(--border-subtle);
-      transition: background-color 0.18s ease, transform 0.12s ease, box-shadow 0.18s ease;
+      transition: all 0.2s ease;
+      cursor: pointer;
     }
-    .icon-btn:hover { background: var(--accent-soft); color: var(--accent-strong); box-shadow: var(--shadow-sm); }
-    .icon-btn:active { transform: scale(0.94); }
+    .icon-btn:hover {
+      background: rgba(31, 111, 235, 0.06);
+      color: #1F6FEB;
+      border-color: rgba(31, 111, 235, 0.25);
+      transform: translateY(-1px);
+      box-shadow: 0 2px 8px rgba(31, 111, 235, 0.1);
+    }
+    .icon-btn:active { transform: scale(0.95) translateY(0); }
 
     .therapist-profile {
       display: flex;
@@ -574,7 +588,7 @@ class DashboardRenderer(HomePageMixin, AuthPagesMixin, PatientPagesMixin, Sessio
       margin-bottom: var(--space-4);
       min-height: auto;
     }
-    
+
     .sidebar-profile .profile-info strong {
       color: #ffffff;
     }
@@ -583,81 +597,343 @@ class DashboardRenderer(HomePageMixin, AuthPagesMixin, PatientPagesMixin, Sessio
     }
 
     .avatar {
-      width: 32px;
-      height: 32px;
+      width: 34px;
+      height: 34px;
       border-radius: 50%;
-      background: linear-gradient(135deg, var(--accent), var(--accent-strong));
-      color: var(--accent-contrast);
+      background: linear-gradient(135deg, #1F6FEB, #06B6D4);
+      color: #ffffff;
       display: flex;
       align-items: center;
       justify-content: center;
-      font-size: 12px;
+      font-size: 13px;
       font-weight: 700;
+      box-shadow: 0 2px 8px rgba(31, 111, 235, 0.2);
     }
 
     .profile-info { display: flex; flex-direction: column; line-height: 1.2; text-align: left; }
-    .profile-info strong { font-size: 13px; }
+    .profile-info strong { font-size: 13px; font-weight: 600; }
     .profile-info span { font-size: 11px; color: var(--text-muted); }
 
     /* Page header ------------------------------------------------------------ */
     .page-header {
       display: flex;
-      align-items: flex-end;
+      align-items: center;
       justify-content: space-between;
       gap: var(--space-3);
-      padding: var(--space-5) 0 var(--space-4);
+      padding: 28px 32px 16px;
       flex-wrap: wrap;
     }
 
-    .page-header h1 { font-size: 24px; color: var(--text-primary); }
-    .page-header p { font-size: 14px; margin-top: 4px; max-width: 520px; }
+    .page-header h1 {
+      font-size: 26px;
+      font-weight: 800;
+      color: var(--text-primary);
+      letter-spacing: -0.025em;
+      margin: 0 0 4px;
+    }
+    .page-header p {
+      font-size: 14px;
+      margin-top: 4px;
+      max-width: 540px;
+      color: var(--text-muted);
+      line-height: 1.5;
+    }
 
     .date-chip {
-      font-family: var(--font-mono);
-      font-size: 12px;
-      color: var(--text-muted);
-      background: var(--bg-secondary);
-      border: 1px solid var(--border-subtle);
-      padding: 8px 14px;
-      border-radius: var(--radius-sm);
+      font-family: "SFMono-Regular", ui-monospace, "Roboto Mono", Menlo, Consolas, monospace;
+      font-size: 12.5px;
+      color: #1F6FEB;
+      font-weight: 600;
+      background: rgba(31, 111, 235, 0.06);
+      border: 1px solid rgba(31, 111, 235, 0.15);
+      padding: 8px 16px;
+      border-radius: 8px;
       white-space: nowrap;
     }
 
     .page-content {
-      animation: content-enter 0.3s ease;
+      padding: 0 32px 36px;
+      animation: content-enter 0.35s ease;
     }
 
     @keyframes content-enter {
-      from { opacity: 0; transform: translateY(6px); }
+      from { opacity: 0; transform: translateY(8px); }
       to { opacity: 1; transform: translateY(0); }
     }
 
     /* =====================================================================
-       Shared card / grid primitives available to page mixins
+       Sections and layout primitives
        ===================================================================== */
+    .main > section { padding: 0 32px 28px; }
+
     .grid {
       display: grid;
-      gap: var(--space-4);
-      grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+      gap: 20px;
     }
+    .stats { grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); }
+    .two { grid-template-columns: minmax(0, 1.2fr) minmax(340px, 0.8fr); }
+    .three { grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); }
 
+    /* =====================================================================
+       Cards
+       ===================================================================== */
     .card {
       background: var(--bg-primary);
       border: 1px solid var(--border-subtle);
-      border-radius: var(--radius-lg);
-      padding: var(--space-4);
-      box-shadow: var(--shadow-sm);
-      transition: transform 0.18s ease, box-shadow 0.18s ease, border-color 0.18s ease;
+      border-radius: 12px;
+      padding: 24px;
+      box-shadow: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+      transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1),
+                  box-shadow 0.25s ease,
+                  border-color 0.25s ease;
+    }
+
+    .card:hover {
+      transform: translateY(-3px);
+      box-shadow: 0 8px 24px -4px rgba(31, 111, 235, 0.1), 0 4px 10px -4px rgba(0, 0, 0, 0.04);
+      border-color: rgba(31, 111, 235, 0.2);
     }
 
     .card.interactive:hover,
     a.card:hover,
     button.card:hover {
-      transform: translateY(-2px);
-      box-shadow: var(--shadow-md);
-      border-color: var(--border-strong);
+      transform: translateY(-3px);
+      box-shadow: 0 8px 24px -4px rgba(31, 111, 235, 0.12), 0 4px 10px -4px rgba(0, 0, 0, 0.05);
+      border-color: rgba(31, 111, 235, 0.25);
     }
 
+    /* =====================================================================
+       Stat cards (KPI)
+       ===================================================================== */
+    .stat-label {
+      color: var(--text-muted);
+      font-size: 12.5px;
+      font-weight: 600;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .stat-value {
+      margin-top: 12px;
+      font-size: 32px;
+      font-weight: 800;
+      color: var(--text-primary);
+      line-height: 1.1;
+      letter-spacing: -0.02em;
+    }
+
+    .stat-sub {
+      margin-top: 8px;
+      color: var(--text-muted);
+      font-size: 13px;
+      font-weight: 500;
+      line-height: 1.5;
+    }
+
+    /* =====================================================================
+       Toolbar
+       ===================================================================== */
+    .toolbar {
+      display: flex;
+      gap: 12px;
+      align-items: center;
+      justify-content: space-between;
+      margin-bottom: 20px;
+      flex-wrap: wrap;
+    }
+
+    /* =====================================================================
+       Form elements
+       ===================================================================== */
+    input:not(.search-input), select, textarea {
+      width: 100%;
+      border: 1px solid var(--border-subtle);
+      background: var(--bg-canvas);
+      color: var(--text-primary);
+      border-radius: 10px;
+      padding: 10px 14px;
+      font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+      font-size: 14px;
+      transition: border-color 0.2s ease, box-shadow 0.2s ease;
+      outline: none;
+    }
+    input:focus:not(.search-input), select:focus, textarea:focus {
+      border-color: #1F6FEB;
+      box-shadow: 0 0 0 3px rgba(31, 111, 235, 0.1);
+    }
+    textarea { min-height: 100px; resize: vertical; }
+    .form-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 18px; }
+    .full { grid-column: 1 / -1; }
+    label { display: flex; flex-direction: column; gap: 6px; font-size: 13px; font-weight: 600; color: var(--text-primary); }
+
+    /* =====================================================================
+       Buttons
+       ===================================================================== */
+    button, .button {
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      border: 0;
+      border-radius: 10px;
+      padding: 10px 22px;
+      background: linear-gradient(135deg, #1F6FEB, #06B6D4);
+      color: #ffffff;
+      font-family: "Segoe UI", Arial, Helvetica, sans-serif;
+      font-weight: 600;
+      font-size: 13.5px;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+      box-shadow: 0 2px 8px rgba(31, 111, 235, 0.18);
+      text-decoration: none;
+    }
+    button:hover, .button:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 4px 14px rgba(31, 111, 235, 0.25);
+    }
+    button:active, .button:active { transform: translateY(0); box-shadow: 0 1px 4px rgba(31, 111, 235, 0.12); }
+
+    .button.secondary {
+      background: var(--bg-canvas);
+      color: var(--text-primary);
+      border: 1px solid var(--border-subtle);
+      box-shadow: none;
+    }
+    .button.secondary:hover {
+      background: rgba(31, 111, 235, 0.04);
+      border-color: #1F6FEB;
+      color: #1F6FEB;
+      box-shadow: 0 2px 8px rgba(31, 111, 235, 0.06);
+    }
+    .button.danger, button.danger {
+      background: linear-gradient(135deg, #DC2626, #b91c1c);
+      box-shadow: 0 2px 8px rgba(220, 38, 38, 0.18);
+    }
+    .button.danger:hover, button.danger:hover {
+      box-shadow: 0 4px 14px rgba(220, 38, 38, 0.25);
+    }
+
+    /* =====================================================================
+       Tables
+       ===================================================================== */
+    table {
+      width: 100%;
+      border-collapse: separate;
+      border-spacing: 0;
+      margin-top: 6px;
+    }
+    th, td {
+      padding: 13px 16px;
+      border-bottom: 1px solid var(--border-subtle);
+      text-align: left;
+      vertical-align: middle;
+      font-size: 13.5px;
+    }
+    th {
+      color: var(--text-muted);
+      font-size: 11.5px;
+      font-weight: 700;
+      text-transform: uppercase;
+      letter-spacing: 0.06em;
+      border-bottom-width: 2px;
+      background: var(--bg-canvas);
+      position: sticky;
+      top: 64px;
+      z-index: 5;
+    }
+    tr:last-child td { border-bottom: none; }
+    tr { transition: background-color 0.15s ease; }
+    tr:hover td { background: rgba(31, 111, 235, 0.02); }
+    td { color: var(--text-secondary); }
+
+    /* =====================================================================
+       Progress bars
+       ===================================================================== */
+    .progress {
+      height: 7px;
+      border-radius: 8px;
+      background: var(--bg-canvas);
+      overflow: hidden;
+      margin-top: 8px;
+      border: 1px solid var(--border-subtle);
+    }
+    .progress span {
+      display: block;
+      height: 100%;
+      background: linear-gradient(90deg, #1F6FEB, #16A34A);
+      border-radius: 8px;
+      transition: width 0.6s ease;
+    }
+
+    /* =====================================================================
+       Badges
+       ===================================================================== */
+    .badge {
+      padding: 5px 12px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      background: rgba(31, 111, 235, 0.08);
+      color: #1F6FEB;
+      display: inline-block;
+      transition: all 0.2s ease;
+    }
+    .badge.success { background: rgba(22, 163, 74, 0.08); color: #16A34A; }
+    .badge.warning { background: rgba(245, 158, 11, 0.08); color: #D97706; }
+    .badge.danger { background: rgba(220, 38, 38, 0.08); color: #DC2626; }
+
+    /* =====================================================================
+       Alerts
+       ===================================================================== */
+    .alert {
+      border-left: 4px solid #1F6FEB;
+      padding: 16px 20px;
+      border-radius: 10px;
+      background: rgba(31, 111, 235, 0.03);
+      margin-bottom: 12px;
+    }
+    .alert.warning { border-left-color: #F59E0B; background: rgba(245, 158, 11, 0.03); }
+    .alert.warning .badge { color: #D97706; background: rgba(245, 158, 11, 0.08); }
+    .alert.danger { border-left-color: #DC2626; background: rgba(220, 38, 38, 0.03); }
+    .alert.danger .badge { color: #DC2626; background: rgba(220, 38, 38, 0.08); }
+
+    /* =====================================================================
+       Charts and media
+       ===================================================================== */
+    .chart {
+      width: 100%;
+      border-radius: 10px;
+      border: 1px solid var(--border-subtle);
+      background: #ffffff;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.02);
+    }
+    html[data-theme="dark"] .chart { filter: brightness(0.88) contrast(1.12); }
+
+    /* =====================================================================
+       Tabs and pagination
+       ===================================================================== */
+    .tabs { display: flex; gap: 10px; margin-bottom: 20px; flex-wrap: wrap; }
+    .pagination { display: flex; justify-content: flex-end; gap: 10px; margin-top: 20px; }
+    .pill {
+      padding: 7px 14px;
+      border: 1px solid var(--border-subtle);
+      background: var(--bg-primary);
+      border-radius: 8px;
+      color: #1F6FEB;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    /* =====================================================================
+       Muted text helper
+       ===================================================================== */
+    .muted { color: var(--text-muted); }
+
+    /* =====================================================================
+       Skeletons (loading placeholders)
+       ===================================================================== */
     .skeleton {
       position: relative;
       overflow: hidden;
@@ -669,7 +945,7 @@ class DashboardRenderer(HomePageMixin, AuthPagesMixin, PatientPagesMixin, Sessio
       position: absolute;
       inset: 0;
       transform: translateX(-100%);
-      background: linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.18), transparent);
+      background: linear-gradient(90deg, transparent, rgba(148, 163, 184, 0.15), transparent);
       animation: skeleton-sweep 1.4s infinite;
     }
     @keyframes skeleton-sweep {
@@ -691,10 +967,13 @@ class DashboardRenderer(HomePageMixin, AuthPagesMixin, PatientPagesMixin, Sessio
       .nav-item { justify-content: center; padding: 10px; }
       .nav-item.active { border-left-width: 3px; }
 
-      .main { padding: 0 var(--space-3) var(--space-5); }
-      .topbar { margin: 0 calc(var(--space-3) * -1); padding: var(--space-2) var(--space-3); }
+      .main { padding: 0; }
+      .topbar { padding: 12px 20px; }
+      .page-header, .page-content, .main > section { padding-left: 20px; padding-right: 20px; }
       .search-bar { max-width: 260px; }
       .profile-info { display: none; }
+      .sidebar-profile { display: none; }
+      .stats, .two, .three, .form-grid { grid-template-columns: 1fr 1fr; }
     }
 
     /* =====================================================================
@@ -721,6 +1000,7 @@ class DashboardRenderer(HomePageMixin, AuthPagesMixin, PatientPagesMixin, Sessio
 
       .sidebar-close-btn { display: flex; }
       .hamburger-btn { display: flex; }
+      .sidebar-profile { display: flex; }
 
       .sidebar-toggle-input:checked ~ .app-shell .sidebar {
         transform: translateX(0);
@@ -729,26 +1009,29 @@ class DashboardRenderer(HomePageMixin, AuthPagesMixin, PatientPagesMixin, Sessio
         display: block;
       }
 
-      .main { padding: 0 var(--space-3) var(--space-4); }
+      .main { padding: 0; }
       .topbar {
-        margin: 0 calc(var(--space-3) * -1);
-        padding: var(--space-2) var(--space-3);
+        padding: 10px 16px;
         flex-wrap: wrap;
         row-gap: var(--space-2);
       }
+      .page-header, .page-content, .main > section { padding-left: 16px; padding-right: 16px; }
 
       .search-bar { order: 3; max-width: none; width: 100%; }
       .topbar-actions { gap: 6px; }
       .privacy-badge-label { display: none; }
       .profile-info { display: none; }
 
-      .page-header { flex-direction: column; align-items: flex-start; padding-top: var(--space-4); }
-      .page-header h1 { font-size: 20px; }
+      .page-header { flex-direction: column; align-items: flex-start; padding-top: 20px; }
+      .page-header h1 { font-size: 22px; }
       .date-chip { align-self: flex-start; }
 
-      .grid { grid-template-columns: 1fr; }
+      .stats, .two, .three, .grid, .form-grid { grid-template-columns: 1fr; }
+      .stat-value { font-size: 26px; }
 
       .icon-btn, .therapist-profile, .nav-item { min-height: 44px; min-width: 44px; }
+
+      h1 { font-size: 22px; }
     }
 
     /* Respect reduced motion preferences */
