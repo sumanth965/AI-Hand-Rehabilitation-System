@@ -82,7 +82,11 @@ class DashboardRepository:
         self.ensure_schema()
 
     def connect(self) -> sqlite3.Connection:
-        conn = sqlite3.connect(self.db_path)
+        conn = sqlite3.connect(self.db_path, timeout=30.0)
+        try:
+            conn.execute("PRAGMA journal_mode=WAL;")
+        except sqlite3.OperationalError:
+            pass
         conn.row_factory = sqlite3.Row
         return conn
 
@@ -878,8 +882,7 @@ class DashboardRepository:
         return self.digital_twin.snapshot_history(patient, limit=limit)
 
     def exercise_analytics_data(self, patient: str = "") -> list[dict]:
-        conn = sqlite3.connect(self.db_path)
-        conn.row_factory = sqlite3.Row
+        conn = self.connect()
         cursor = conn.cursor()
         
         where_clause = ""

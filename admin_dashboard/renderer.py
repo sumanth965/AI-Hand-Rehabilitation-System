@@ -87,9 +87,19 @@ class DashboardRenderer(HomePageMixin, AuthPagesMixin, PatientPagesMixin, Sessio
             f'<span class="nav-label">{label}</span></a>'
             for key, href, label, icon in nav
         )
-        toggled_theme = "dark" if theme != "dark" else "light"
+        toggled_theme = "light" if theme != "light" else "dark"
         username_val = params.get("_username", "Therapist")
         avatar_initials = username_val[:2].capitalize()
+
+        theme_icon = (
+            '''<!-- Dark mode icons created by Sofyan Rofiq - Flaticon -->
+               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>'''
+            if theme == 'light' else
+            '''<!-- Light mode icons created by Any Icon - Flaticon -->
+               <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>'''
+        )
+        
+        notification_href = "javascript:history.back()" if page.active == "notifications" else "/notifications"
 
         html_doc = f"""<!doctype html>
     <html lang="en" data-theme="{esc(theme)}">
@@ -106,14 +116,7 @@ class DashboardRenderer(HomePageMixin, AuthPagesMixin, PatientPagesMixin, Sessio
 
       <div class="app-shell">
         <aside class="sidebar glass-panel" aria-label="Primary navigation">
-          <div class="brand">
-            <div class="brand-mark" aria-hidden="true">HR</div>
-            <div class="brand-text">
-              <strong>Hand Rehab</strong>
-              <span>Therapist Console</span>
-            </div>
-            <label for="sidebar-toggle" class="sidebar-close-btn" role="button" tabindex="0" aria-label="Close navigation">✕</label>
-          </div>
+          
           <div class="therapist-profile sidebar-profile">
             <div class="avatar" aria-hidden="true">{esc(avatar_initials)}</div>
             <div class="profile-info">
@@ -133,16 +136,32 @@ class DashboardRenderer(HomePageMixin, AuthPagesMixin, PatientPagesMixin, Sessio
 
         <main class="main" id="main-content">
           <header class="topbar glass-panel">
-            <label for="sidebar-toggle" class="hamburger-btn icon-btn" role="button" tabindex="0" aria-label="Toggle navigation menu">☰</label>
             <div class="search-bar">
-              <span class="search-icon" aria-hidden="true">🔍</span>
+              <span class="search-icon" aria-hidden="true">
+                <!-- Search icons created by Magnific - Flaticon -->
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="11" cy="11" r="8"></circle><line x1="21" y1="21" x2="16.65" y2="16.65"></line></svg>
+              </span>
               <input type="text" placeholder="Search patients, sessions..." class="search-input" aria-label="Search patients and sessions">
             </div>
             <div class="topbar-actions">
-              <span class="privacy-badge">🛡️ <span class="privacy-badge-label">Privacy Mode: Active</span></span>
-              <a class="icon-btn" href="/notifications" title="Notifications" aria-label="Notifications">🔔</a>
+              <span class="privacy-badge">
+                <!-- Shield icons created by Maniprasanth - Flaticon -->
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="margin-right: 4px;"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path></svg>
+                <span class="privacy-badge-label">Privacy Mode: Active</span>
+              </span>
+              <a class="icon-btn" href="{notification_href}" title="Notifications" aria-label="Notifications">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"></path><path d="M13.73 21a2 2 0 0 1-3.46 0"></path></svg>
+              </a>
               <a class="icon-btn theme-toggle-btn" href="?theme={toggled_theme}" title="Toggle Theme" aria-label="Toggle color theme">
-                {'🌙' if theme == 'light' else '☀️'}
+                {
+                  '''
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path></svg>
+                  '''
+                  if theme == 'light' else
+                  '''
+                  <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="5"></circle><line x1="12" y1="1" x2="12" y2="3"></line><line x1="12" y1="21" x2="12" y2="23"></line><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line><line x1="1" y1="12" x2="3" y2="12"></line><line x1="21" y1="12" x2="23" y2="12"></line><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line></svg>
+                  '''
+                }
               </a>
             </div>
           </header>
@@ -166,4 +185,4 @@ class DashboardRenderer(HomePageMixin, AuthPagesMixin, PatientPagesMixin, Sessio
     </body>
     </html>"""
         return html_doc.encode("utf-8")
-
+

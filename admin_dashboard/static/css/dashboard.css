@@ -39,21 +39,46 @@ button.card:hover {
    10. KPI / STAT CARDS
    ================================================================= */
 .grid.stats .card {
-  min-height: 190px;
+  min-height: 140px;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  gap: 24px;
+  padding: 24px 32px;
+  border-bottom: 4px solid var(--accent);
+  background: var(--bg-primary);
+}
+.grid.stats .card:nth-child(2) { border-bottom-color: var(--success); }
+.grid.stats .card:nth-child(3) { border-bottom-color: #8B5CF6; } /* Purple */
+.grid.stats .card:nth-child(4) { border-bottom-color: #F97316; } /* Orange */
+.grid.stats .card:nth-child(5) { border-bottom-color: #06B6D4; } /* Teal */
+.grid.stats .card:nth-child(6) { border-bottom-color: #A855F7; } /* Violet */
+.grid.stats .card:nth-child(7) { border-bottom-color: var(--danger); }
+.grid.stats .card:nth-child(8) { border-bottom-color: var(--warning); }
+
+.stat-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 64px;
+  height: 64px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+.grid.stats .card:nth-child(1) .stat-icon { background: rgba(37, 99, 235, 0.1); color: var(--accent); }
+.grid.stats .card:nth-child(2) .stat-icon { background: rgba(22, 163, 74, 0.1); color: var(--success); }
+.grid.stats .card:nth-child(3) .stat-icon { background: rgba(139, 92, 246, 0.1); color: #8B5CF6; }
+.grid.stats .card:nth-child(4) .stat-icon { background: rgba(249, 115, 22, 0.1); color: #F97316; }
+.grid.stats .card:nth-child(5) .stat-icon { background: rgba(6, 182, 212, 0.1); color: #06B6D4; }
+.grid.stats .card:nth-child(6) .stat-icon { background: rgba(168, 85, 247, 0.1); color: #A855F7; }
+.grid.stats .card:nth-child(7) .stat-icon { background: rgba(220, 38, 38, 0.1); color: var(--danger); }
+.grid.stats .card:nth-child(8) .stat-icon { background: rgba(245, 158, 11, 0.1); color: var(--warning); }
+
+.stat-content {
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  padding: 32px;
-  border-left: 4px solid var(--accent);
-  background: linear-gradient(135deg, var(--bg-primary) 80%, var(--accent-soft) 100%);
 }
-.grid.stats .card:nth-child(2) { border-left-color: var(--success); background: linear-gradient(135deg, var(--bg-primary) 80%, var(--success-soft) 100%); }
-.grid.stats .card:nth-child(3) { border-left-color: #4F46E5; background: linear-gradient(135deg, var(--bg-primary) 80%, rgba(79, 70, 229, 0.06) 100%); }
-.grid.stats .card:nth-child(4) { border-left-color: var(--warning); background: linear-gradient(135deg, var(--bg-primary) 80%, var(--warning-soft) 100%); }
-.grid.stats .card:nth-child(5) { border-left-color: #06B6D4; background: linear-gradient(135deg, var(--bg-primary) 80%, rgba(6, 182, 212, 0.06) 100%); }
-.grid.stats .card:nth-child(6) { border-left-color: #8B5CF6; background: linear-gradient(135deg, var(--bg-primary) 80%, rgba(139, 92, 246, 0.06) 100%); }
-.grid.stats .card:nth-child(7) { border-left-color: var(--danger); background: linear-gradient(135deg, var(--bg-primary) 80%, var(--danger-soft) 100%); }
-.grid.stats .card:nth-child(8) { border-left-color: #F97316; background: linear-gradient(135deg, var(--bg-primary) 80%, rgba(249, 115, 22, 0.06) 100%); }
 
 .stat-label {
   color: var(--text-muted);
@@ -66,7 +91,7 @@ button.card:hover {
   gap: 8px;
 }
 .stat-value {
-  margin-top: 14px;
+  margin-top: 8px;
   font-size: 44px;
   font-weight: 800;
   color: var(--text-primary);
@@ -74,7 +99,7 @@ button.card:hover {
   letter-spacing: -0.03em;
 }
 .stat-sub {
-  margin-top: 10px;
+  margin-top: 6px;
   color: var(--text-muted);
   font-size: 13.5px;
   font-weight: 500;

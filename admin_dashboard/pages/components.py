@@ -321,12 +321,16 @@ function sortTable(tableId, column) {
         encoded = base64.b64encode(buf.getvalue()).decode("ascii")
         return f'<img class="chart" alt="{esc(title)}" src="data:image/png;base64,{encoded}">'
 
-    def stat_card(self, label: str, value: str, sub: str = "") -> str:
+    def stat_card(self, label: str, value: str, sub: str = "", icon: str = "") -> str:
+        icon_html = f'<div class="stat-icon">{icon}</div>' if icon else ''
         return f"""
         <section class="card">
-          <div class="stat-label">{esc(label)}</div>
-          <div class="stat-value">{esc(value)}</div>
-          <div class="stat-sub">{esc(sub)}</div>
+          {icon_html}
+          <div class="stat-content">
+            <div class="stat-label">{esc(label)}</div>
+            <div class="stat-value">{esc(value)}</div>
+            <div class="stat-sub">{esc(sub)}</div>
+          </div>
         </section>
         """
 
