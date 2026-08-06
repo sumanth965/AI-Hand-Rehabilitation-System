@@ -325,12 +325,12 @@ function sortTable(tableId, column) {
         icon_html = f'<div class="stat-icon">{icon}</div>' if icon else ''
         return f"""
         <section class="card">
-          {icon_html}
-          <div class="stat-content">
+          <div class="stat-header">
             <div class="stat-label">{esc(label)}</div>
-            <div class="stat-value">{esc(value)}</div>
-            <div class="stat-sub">{esc(sub)}</div>
+            {icon_html}
           </div>
+          <div class="stat-value">{esc(value)}</div>
+          <div class="stat-sub">{esc(sub)}</div>
         </section>
         """
 

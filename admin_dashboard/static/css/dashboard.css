@@ -39,71 +39,78 @@ button.card:hover {
    10. KPI / STAT CARDS
    ================================================================= */
 .grid.stats .card {
-  min-height: 140px;
+  min-height: 160px;
   display: flex;
-  flex-direction: row;
-  align-items: center;
-  justify-content: flex-start;
-  gap: 24px;
-  padding: 24px 32px;
-  border-bottom: 4px solid var(--accent);
+  flex-direction: column;
+  padding: 24px;
+  border: none;
+  border-radius: 20px;
   background: var(--bg-primary);
+  box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15), 0 5px 15px rgba(0, 0, 0, 0.05);
+  transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
-.grid.stats .card:nth-child(2) { border-bottom-color: var(--success); }
-.grid.stats .card:nth-child(3) { border-bottom-color: #8B5CF6; } /* Purple */
-.grid.stats .card:nth-child(4) { border-bottom-color: #F97316; } /* Orange */
-.grid.stats .card:nth-child(5) { border-bottom-color: #06B6D4; } /* Teal */
-.grid.stats .card:nth-child(6) { border-bottom-color: #A855F7; } /* Violet */
-.grid.stats .card:nth-child(7) { border-bottom-color: var(--danger); }
-.grid.stats .card:nth-child(8) { border-bottom-color: var(--warning); }
+
+.grid.stats .card:hover {
+  transform: translateY(-8px);
+  box-shadow: 0 25px 50px rgba(0, 0, 0, 0.20), 0 10px 20px rgba(0, 0, 0, 0.10);
+}
+
+.grid.stats .card:nth-child(1) { background: #eef7fc; }
+.grid.stats .card:nth-child(2) { background: #eaf8f3; }
+.grid.stats .card:nth-child(3) { background: #fff4eb; }
+.grid.stats .card:nth-child(4) { background: #f6f0ff; }
+.grid.stats .card:nth-child(5) { background: #eaf8f8; }
+.grid.stats .card:nth-child(6) { background: #fdf2f8; }
+.grid.stats .card:nth-child(7) { background: #fef2f2; }
+.grid.stats .card:nth-child(8) { background: #fffbeb; }
+
+.stat-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  width: 100%;
+}
 
 .stat-icon {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 64px;
-  height: 64px;
-  border-radius: 50%;
+  width: 52px;
+  height: 52px;
+  border-radius: 14px;
   flex-shrink: 0;
 }
-.grid.stats .card:nth-child(1) .stat-icon { background: rgba(37, 99, 235, 0.1); color: var(--accent); }
-.grid.stats .card:nth-child(2) .stat-icon { background: rgba(22, 163, 74, 0.1); color: var(--success); }
-.grid.stats .card:nth-child(3) .stat-icon { background: rgba(139, 92, 246, 0.1); color: #8B5CF6; }
-.grid.stats .card:nth-child(4) .stat-icon { background: rgba(249, 115, 22, 0.1); color: #F97316; }
-.grid.stats .card:nth-child(5) .stat-icon { background: rgba(6, 182, 212, 0.1); color: #06B6D4; }
-.grid.stats .card:nth-child(6) .stat-icon { background: rgba(168, 85, 247, 0.1); color: #A855F7; }
-.grid.stats .card:nth-child(7) .stat-icon { background: rgba(220, 38, 38, 0.1); color: var(--danger); }
-.grid.stats .card:nth-child(8) .stat-icon { background: rgba(245, 158, 11, 0.1); color: var(--warning); }
-
-.stat-content {
-  display: flex;
-  flex-direction: column;
-}
+.grid.stats .card:nth-child(1) .stat-icon { background: #d0ebf8; color: #3b82f6; }
+.grid.stats .card:nth-child(2) .stat-icon { background: #c5efdf; color: #10b981; }
+.grid.stats .card:nth-child(3) .stat-icon { background: #ffe4c9; color: #f97316; }
+.grid.stats .card:nth-child(4) .stat-icon { background: #e9d8ff; color: #8b5cf6; }
+.grid.stats .card:nth-child(5) .stat-icon { background: #c9eff0; color: #06b6d4; }
+.grid.stats .card:nth-child(6) .stat-icon { background: #fce7f3; color: #ec4899; }
+.grid.stats .card:nth-child(7) .stat-icon { background: #fee2e2; color: #ef4444; }
+.grid.stats .card:nth-child(8) .stat-icon { background: #fef3c7; color: #f59e0b; }
 
 .stat-label {
-  color: var(--text-muted);
-  font-size: 11.5px;
-  font-weight: 700;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-  display: flex;
-  align-items: center;
-  gap: 8px;
+  color: var(--text-primary);
+  opacity: 0.8;
+  font-size: 15px;
+  font-weight: 500;
+  margin-top: 4px;
 }
 .stat-value {
-  margin-top: 8px;
-  font-size: 44px;
+  margin-top: 16px;
+  font-size: 38px;
   font-weight: 800;
   color: var(--text-primary);
   line-height: 1;
   letter-spacing: -0.03em;
 }
 .stat-sub {
-  margin-top: 6px;
-  color: var(--text-muted);
-  font-size: 13.5px;
+  margin-top: auto;
+  padding-top: 12px;
+  color: var(--text-primary);
+  opacity: 0.65;
+  font-size: 13px;
   font-weight: 500;
-  line-height: 1.5;
 }
 
 /* =================================================================
