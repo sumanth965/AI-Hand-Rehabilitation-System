@@ -84,7 +84,9 @@ class DashboardRenderer(HomePageMixin, AuthPagesMixin, PatientPagesMixin, Sessio
             f'<a class="nav-item {"active" if key == page.active else ""}" '
             f'href="{href}" aria-current="{"page" if key == page.active else "false"}">'
             f'<span class="nav-icon" aria-hidden="true">{icon}</span>'
-            f'<span class="nav-label">{label}</span></a>'
+            f'<span class="nav-label">{label}</span>'
+            f'<span class="nav-chevron"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"></polyline></svg></span>'
+            f'</a>'
             for key, href, label, icon in nav
         )
         toggled_theme = "light" if theme != "light" else "dark"
@@ -115,20 +117,28 @@ class DashboardRenderer(HomePageMixin, AuthPagesMixin, PatientPagesMixin, Sessio
       <input type="checkbox" id="sidebar-toggle" class="sidebar-toggle-input" aria-hidden="true">
 
       <div class="app-shell">
-        <aside class="sidebar glass-panel" aria-label="Primary navigation">
+        <aside class="sidebar" aria-label="Primary navigation">
           
-          <div class="therapist-profile sidebar-profile">
+          <div class="therapist-profile">
             <div class="avatar" aria-hidden="true">{esc(avatar_initials)}</div>
             <div class="profile-info">
-              <strong>{esc(username_val)}</strong>
-              <span>Therapist</span>
+              <div class="profile-name">
+                <strong>{esc(username_val)}</strong>
+              </div>
+              <div class="profile-role">
+                <span>Therapist</span>
+                <svg class="verified-icon" width="12" height="12" viewBox="0 0 24 24" fill="#10B981"><path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/></svg>
+              </div>
+            </div>
+            <div class="profile-chevron">
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="6 9 12 15 18 9"></polyline></svg>
             </div>
           </div>
           <nav class="nav-menu" aria-label="Main">
             {nav_html}
-            <div class="nav-spacer" style="flex-grow: 1;"></div>
-            <a class="nav-item utility-link" href="#" aria-label="Settings"><span class="nav-icon" aria-hidden="true">⚙️</span><span class="nav-label">Settings</span></a>
-            <a class="nav-item utility-link text-danger" href="/logout" aria-label="Logout"><span class="nav-icon" aria-hidden="true">🚪</span><span class="nav-label">Logout</span></a>
+            <div class="nav-spacer" style="flex-grow: 1; border-top: 1px solid rgba(255,255,255,0.05); margin-top: 8px; padding-top: 8px;"></div>
+            <a class="nav-item utility-link" href="#" aria-label="Settings"><span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="3"></circle><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path></svg></span><span class="nav-label">Settings</span></a>
+            <a class="nav-item utility-link text-danger" href="/logout" aria-label="Logout"><span class="nav-icon" aria-hidden="true"><svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"></path><polyline points="16 17 21 12 16 7"></polyline><line x1="21" y1="12" x2="9" y2="12"></line></svg></span><span class="nav-label">Logout</span></a>
           </nav>
         </aside>
 
