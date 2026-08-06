@@ -60,10 +60,10 @@ class SessionPagesMixin:
         if len(comparison_rows) == 2:
             a, b = comparison_rows[1], comparison_rows[0]
             comparison = f"""
-            <div class="grid three" style="margin-top:16px">
-              {self.stat_card('Accuracy Change', f"{number(b['avg_accuracy']) - number(a['avg_accuracy']):+.1f}%", 'Latest vs previous filtered session')}
-              {self.stat_card('ROM Change', f"{number(b['avg_hand_angle']) - number(a['avg_hand_angle']):+.1f} deg", 'Latest vs previous filtered session')}
-              {self.stat_card('Pain Change', f"{number(b['pain_level']) - number(a['pain_level']):+.0f}/10", 'Latest vs previous filtered session')}
+            <div class="grid stats three" style="margin-top:24px; margin-bottom:32px;">
+              {self.stat_card('Accuracy Change', f"{number(b['avg_accuracy']) - number(a['avg_accuracy']):+.1f}%", 'Latest vs previous filtered session', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>')}
+              {self.stat_card('ROM Change', f"{number(b['avg_hand_angle']) - number(a['avg_hand_angle']):+.1f} deg", 'Latest vs previous filtered session', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>')}
+              {self.stat_card('Pain Change', f"{number(b['pain_level']) - number(a['pain_level']):+.0f}/10", 'Latest vs previous filtered session', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>')}
             </div>
             """
         table_rows = "".join(
@@ -105,12 +105,14 @@ class SessionPagesMixin:
           </div>
           <input id="sessionSearch" oninput="filterTable('sessionSearch','sessionsTable')" placeholder="Search session table">
           {comparison}
-          <table id="sessionsTable" style="margin-top:12px">
-            <thead><tr>
-              <th onclick="sortTable('sessionsTable',0)">Session Date</th><th>Patient</th><th>Exercise Name</th><th>Duration</th><th>Max Extension</th><th>ROM</th><th>Accuracy</th><th>Pain Before</th><th>Pain After</th><th>Pain Difference</th><th>Recovery Score</th><th>Fatigue Score</th><th>Tremor</th><th>Score</th><th>Recovery Prediction</th>
-            </tr></thead>
-            <tbody>{table_rows}</tbody>
-          </table>
+          <div class="table-container" style="margin-top:24px;">
+            <table id="sessionsTable">
+              <thead><tr>
+                <th onclick="sortTable('sessionsTable',0)">Session Date</th><th>Patient</th><th>Exercise Name</th><th>Duration</th><th>Max Extension</th><th>ROM</th><th>Accuracy</th><th>Pain Before</th><th>Pain After</th><th>Pain Difference</th><th>Recovery Score</th><th>Fatigue Score</th><th>Tremor</th><th>Score</th><th>Recovery Prediction</th>
+              </tr></thead>
+              <tbody>{table_rows}</tbody>
+            </table>
+          </div>
           <div class="pagination"><span class="pill">Client-side sorting, filtering, and table search enabled</span></div>
         </section>
         """
