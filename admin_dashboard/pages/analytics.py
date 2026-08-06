@@ -87,10 +87,10 @@ class AnalyticsPagesMixin:
             <button>Apply</button>
           </form>
         </section>
-        <section class="grid three" style="margin-top:16px">
-          {self.stat_card('Recovery Score', f"{latest_recovery:.0f}/100", latest_category)}
-          {self.stat_card('Pain Improvement', f"{avg_pain_delta:+.1f}", 'Average after-before change')}
-          {self.stat_card('Latest Pain Summary', f"{pain_before[-1]:.0f}/10 to {pain_after[-1]:.0f}/10" if pain_before else '-', f"Difference {pain_difference[-1]:+.0f}" if pain_difference else 'No pain data')}
+        <section class="grid stats three" style="margin-top:24px; margin-bottom:32px;">
+          {self.stat_card('Recovery Score', f"{latest_recovery:.0f}/100", latest_category, '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>')}
+          {self.stat_card('Pain Improvement', f"{avg_pain_delta:+.1f}", 'Average after-before change', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 18 13.5 8.5 8.5 13.5 1 6"></polyline><polyline points="17 18 23 18 23 12"></polyline></svg>')}
+          {self.stat_card('Latest Pain Summary', f"{pain_before[-1]:.0f}/10 to {pain_after[-1]:.0f}/10" if pain_before else '-', f"Difference {pain_difference[-1]:+.0f}" if pain_difference else 'No pain data', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>')}
         </section>
         <section class="grid two" style="margin-top:16px">
           <div class="card">{self.chart('ROM Progress - Daily', {'Daily ROM': daily_rom[1]}, daily_rom[0], 'degrees')}</div>

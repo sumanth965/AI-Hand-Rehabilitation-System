@@ -148,7 +148,7 @@ class ResearchPagesMixin:
           </form>
         </section>
         
-        <section class="grid three" style="margin-top:16px">
+        <section class="grid stats three" style="margin-top:16px">
           {self.stat_card('AI Agreement Rate', f"{agreement_rate:.1f}%", f"{agree_cnt} Agree / {modify_cnt} Modify / {reject_cnt} Reject")}
           {self.stat_card('Clinical Success Index', f"{demographics['Adult']:.1f}%", 'Average recovery score (Adults)')}
           {self.stat_card('Research Datapoints', f"{len(sessions)} Sessions", 'Confidential biomechanical dataset')}

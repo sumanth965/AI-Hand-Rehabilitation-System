@@ -63,16 +63,16 @@ class AdaptiveAIPagesMixin:
               <h2>AI Prescription Panel</h2>
               <p class="muted">Decision Source: Adaptive AI Rehabilitation Engine</p>
             </section>
-            <section class="grid three" style="margin-top:16px">
-              {self.stat_card('Current Difficulty Tier', str(int(number(current['difficulty_tier']))), esc(exercise_for_level(current['level'])))}
-              {self.stat_card('Readiness Score', f"{number(current['readiness_score']):.0f}/100", f"Recovery: {esc(current['recovery_trend'])}")}
-              {self.stat_card('Risk Level', str(current['risk_level']).title(), 'Safety decision from engine')}
-              {self.stat_card('Target Size', f"{number(current['target_scale']):.2f}x", f"Speed {number(current['speed_scale']):.2f}x")}
-              {self.stat_card('ROM Requirement', f"{number(current['required_rom']):.0f} deg", f"Tolerance {number(current['rotation_tolerance']):.0f} deg")}
-              {self.stat_card('Repetitions / Hold', f"{int(number(current['repetitions']))} reps", f"{number(current['hold_seconds']):.1f}s holds")}
-              {self.stat_card('Progression Recommendation', str(current['progression']).title(), esc(current['override_recommendation']))}
-              {self.stat_card('Guidance Level', str(current['guidance_level']).title(), f"{number(current['time_limit']):.0f}s time limit")}
-              {self.stat_card('Adaptive Rationale', self.short_text(current['rationale'], 32), 'Explainable AI decision')}
+            <section class="grid stats three" style="margin-top:24px; margin-bottom:32px;">
+              {self.stat_card('Current Difficulty Tier', str(int(number(current['difficulty_tier']))), esc(exercise_for_level(current['level'])), '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>')}
+              {self.stat_card('Readiness Score', f"{number(current['readiness_score']):.0f}/100", f"Recovery: {esc(current['recovery_trend'])}", '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>')}
+              {self.stat_card('Risk Level', str(current['risk_level']).title(), 'Safety decision from engine', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>')}
+              {self.stat_card('Target Size', f"{number(current['target_scale']):.2f}x", f"Speed {number(current['speed_scale']):.2f}x", '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><circle cx="12" cy="12" r="6"></circle><circle cx="12" cy="12" r="2"></circle></svg>')}
+              {self.stat_card('ROM Requirement', f"{number(current['required_rom']):.0f} deg", f"Tolerance {number(current['rotation_tolerance']):.0f} deg", '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2v20"></path><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path></svg>')}
+              {self.stat_card('Repetitions / Hold', f"{int(number(current['repetitions']))} reps", f"{number(current['hold_seconds']):.1f}s holds", '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"></polyline><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"></path></svg>')}
+              {self.stat_card('Progression Recommendation', str(current['progression']).title(), esc(current['override_recommendation']), '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 2 13 9 20 9"></polyline><path d="M13 2L20 9"></path><path d="M12 21H3v-8l9-9"></path></svg>')}
+              {self.stat_card('Guidance Level', str(current['guidance_level']).title(), f"{number(current['time_limit']):.0f}s time limit", '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>')}
+              {self.stat_card('Adaptive Rationale', self.short_text(current['rationale'], 32), 'Explainable AI decision', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>')}
             </section>
             """
 
@@ -141,21 +141,21 @@ class AdaptiveAIPagesMixin:
             <span class="pill">Communication: Optional LLM Enhancement</span>
           </div>
         </section>
-        <section class="grid three" style="margin-top:16px">
-          {self.stat_card('Weekly ROM Gain', f"{metrics['weekly_rom_improvement']:+.1f} deg", 'Research endpoint')}
-          {self.stat_card('Accuracy Change', f"{metrics['accuracy_improvement']:+.1f}%", 'Recent performance delta')}
-          {self.stat_card('Pain-Adjusted Score', f"{metrics['pain_adjusted_performance']:.1f}", 'Accuracy weighted by pain')}
-          {self.stat_card('Session Adherence', f"{metrics['session_adherence']:.0f}%", 'Consistency estimate')}
-          {self.stat_card('Difficulty Progression', f"{metrics['difficulty_progression']:+.1f}", 'Tier movement')}
-          {self.stat_card('Forearm Progress', f"{metrics['forearm_progress']:+.1f}", 'Smoothness minus compensation')}
-          {self.stat_card('Compensation Frequency', f"{metrics['compensation_frequency']:.0f}%", 'Frames/sessions above threshold')}
-          {self.stat_card('Shoulder / Elbow / Trunk', f"{metrics['shoulder_compensation']:.0f}% / {metrics['elbow_compensation']:.0f}% / {metrics['trunk_compensation']:.0f}%", 'Average compensation')}
-          {self.stat_card('Movement Efficiency', f"{metrics['movement_efficiency']:.0f}%", 'Upper limb quality')}
+        <section class="grid stats three" style="margin-top:24px; margin-bottom:32px;">
+          {self.stat_card('Weekly ROM Gain', f"{metrics['weekly_rom_improvement']:+.1f} deg", 'Research endpoint', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"></polyline></svg>')}
+          {self.stat_card('Accuracy Change', f"{metrics['accuracy_improvement']:+.1f}%", 'Recent performance delta', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18"></polyline><polyline points="17 6 23 6 23 12"></polyline></svg>')}
+          {self.stat_card('Pain-Adjusted Score', f"{metrics['pain_adjusted_performance']:.1f}", 'Accuracy weighted by pain', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 12h-4l-3 9L9 3l-3 9H2"></path></svg>')}
+          {self.stat_card('Session Adherence', f"{metrics['session_adherence']:.0f}%", 'Consistency estimate', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="18" rx="2" ry="2"></rect><line x1="16" y1="2" x2="16" y2="6"></line><line x1="8" y1="2" x2="8" y2="6"></line><line x1="3" y1="10" x2="21" y2="10"></line></svg>')}
+          {self.stat_card('Difficulty Progression', f"{metrics['difficulty_progression']:+.1f}", 'Tier movement', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="13 2 13 9 20 9"></polyline><path d="M13 2L20 9"></path><path d="M12 21H3v-8l9-9"></path></svg>')}
+          {self.stat_card('Forearm Progress', f"{metrics['forearm_progress']:+.1f}", 'Smoothness minus compensation', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"></path><polyline points="22 4 12 14.01 9 11.01"></polyline></svg>')}
+          {self.stat_card('Compensation Frequency', f"{metrics['compensation_frequency']:.0f}%", 'Frames/sessions above threshold', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon></svg>')}
+          {self.stat_card('Shoulder / Elbow / Trunk', f"{metrics['shoulder_compensation']:.0f}% / {metrics['elbow_compensation']:.0f}% / {metrics['trunk_compensation']:.0f}%", 'Average compensation', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><line x1="12" y1="8" x2="12" y2="16"></line><line x1="8" y1="12" x2="16" y2="12"></line></svg>')}
+          {self.stat_card('Movement Efficiency', f"{metrics['movement_efficiency']:.0f}%", 'Upper limb quality', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="10"></circle><polyline points="12 6 12 12 16 14"></polyline></svg>')}
         </section>
-        <section class="grid three" style="margin-top:16px">
-          {self.stat_card('AI Confidence', f"{override_stats['ai_confidence']:.0f}%", 'Learned from therapist decisions')}
-          {self.stat_card('Override Probability', f"{override_stats['override_probability'] * 100:.0f}%", 'Human-in-the-loop estimate')}
-          {self.stat_card('AI Agreement Rate', f"{override_stats['agreement_rate']:.1f}%", f"Based on {override_stats['total']} total reviews")}
+        <section class="grid stats three" style="margin-top:24px; margin-bottom:32px;">
+          {self.stat_card('AI Confidence', f"{override_stats['ai_confidence']:.0f}%", 'Learned from therapist decisions', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><polyline points="20 6 9 17 4 12"></polyline></svg>')}
+          {self.stat_card('Override Probability', f"{override_stats['override_probability'] * 100:.0f}%", 'Human-in-the-loop estimate', '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path><line x1="12" y1="9" x2="12" y2="13"></line><line x1="12" y1="17" x2="12.01" y2="17"></line></svg>')}
+          {self.stat_card('AI Agreement Rate', f"{override_stats['agreement_rate']:.1f}%", f"Based on {override_stats['total']} total reviews", '<svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path><circle cx="9" cy="7" r="4"></circle><path d="M23 21v-2a4 4 0 0 0-3-3.87"></path><path d="M16 3.13a4 4 0 0 1 0 7.75"></path></svg>')}
         </section>
         <section class="card" style="margin-top:16px">
           <h2>Most Common Override Reasons</h2>
@@ -168,17 +168,21 @@ class AdaptiveAIPagesMixin:
         <section class="grid two" style="margin-top:16px">{decision_cards}</section>
         <section class="card" style="margin-top:16px">
           <h2>Prescription History</h2>
-          <table>
-            <thead><tr><th>Date</th><th>Patient</th><th>Exercise</th><th>Readiness</th><th>Tier</th><th>Decision</th><th>Risk</th><th>Recovery</th><th>AI Confidence</th><th>Reliability</th></tr></thead>
-            <tbody>{rows}</tbody>
-          </table>
+          <div class="table-container" style="margin-top:16px;">
+            <table>
+              <thead><tr><th>Date</th><th>Patient</th><th>Exercise</th><th>Readiness</th><th>Tier</th><th>Decision</th><th>Risk</th><th>Recovery</th><th>AI Confidence</th><th>Reliability</th></tr></thead>
+              <tbody>{rows}</tbody>
+            </table>
+          </div>
         </section>
         <section class="card" style="margin-top:16px">
           <h2>Override History</h2>
-          <table>
-            <thead><tr><th>Date</th><th>Patient</th><th>Therapist</th><th>Decision</th><th>Reason</th><th>Notes</th></tr></thead>
-            <tbody>{override_rows}</tbody>
-          </table>
+          <div class="table-container" style="margin-top:16px;">
+            <table>
+              <thead><tr><th>Date</th><th>Patient</th><th>Therapist</th><th>Decision</th><th>Reason</th><th>Notes</th></tr></thead>
+              <tbody>{override_rows}</tbody>
+            </table>
+          </div>
         </section>
         """
         return Page("Adaptive AI", body, "adaptive")

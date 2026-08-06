@@ -101,7 +101,8 @@ class AuditPagesMixin:
           </div>
           
           <div style="overflow-x: auto;">
-            <table style="width: 100%; border-collapse: collapse;">
+            <div class="table-container" style="margin-top:24px;">
+<table style="width: 100%; border-collapse: collapse;">
               <thead>
                 <tr style="border-bottom: 2px solid var(--line); text-align: left; background: var(--panel-2);">
                   <th style="padding: 12px;">Timestamp</th>
@@ -117,6 +118,7 @@ class AuditPagesMixin:
                 {rows_html}
               </tbody>
             </table>
+</div>
           </div>
         </div>
         """

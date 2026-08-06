@@ -77,14 +77,15 @@ class PerformancePagesMixin:
             <button>Apply</button>
           </form>
         </section>
-        <section class="grid three" style="margin-top:16px">
+        <section class="grid stats three" style="margin-top:16px">
           {self.stat_card('Top Performing Exercise', best['exercise_name'] if best else '-', f'{best["avg_accuracy"]:.1f}% avg accuracy' if best else '')}
           {self.stat_card('Total Exercise Completions', str(total_completions), 'Across all levels')}
           {self.stat_card('Compensations Logged', str(total_compensations), 'Clinical biomechanical alerts')}
         </section>
         <section class="card" style="margin-top:16px">
           <h2>Clinical Exercise Telemetry</h2>
-          <table>
+          <div class="table-container" style="margin-top:24px;">
+<table>
             <thead>
               <tr>
                 <th>Exercise / Level</th>
@@ -99,6 +100,7 @@ class PerformancePagesMixin:
             </thead>
             <tbody>{table}</tbody>
           </table>
+</div>
         </section>
         """
         return Page("Exercise Analytics", body, "performance")

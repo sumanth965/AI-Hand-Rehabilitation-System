@@ -71,10 +71,12 @@ class SenseiPagesMixin:
             <button>Apply</button>
           </form>
           <input id="senseiSearch" oninput="filterTable('senseiSearch','senseiTable')" placeholder="Search coaching messages">
-          <table id="senseiTable" style="margin-top:12px">
-            <thead><tr><th>Date</th><th>Patient</th><th>Exercise</th><th>Generated Coaching Message</th><th>LLM Enhanced Message</th><th>Coaching Trigger</th><th>Decision Source</th><th>LLM Status</th></tr></thead>
-            <tbody>{table_rows}</tbody>
-          </table>
+          <div class="table-container" style="margin-top:24px;">
+            <table id="senseiTable">
+              <thead><tr><th>Date</th><th>Patient</th><th>Exercise</th><th>Generated Coaching Message</th><th>LLM Enhanced Message</th><th>Coaching Trigger</th><th>Decision Source</th><th>LLM Status</th></tr></thead>
+              <tbody>{table_rows}</tbody>
+            </table>
+          </div>
         </section>
         """
         return Page("Virtual Sensei Review", body, "sensei")

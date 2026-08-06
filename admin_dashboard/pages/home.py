@@ -76,10 +76,12 @@ class HomePageMixin:
         <section class="grid two" style="margin-top:16px">
           <div class="card">
             <div class="toolbar"><h2>Recent Patient Activity</h2><a class="button secondary" href="/sessions">View all</a></div>
-            <table>
+            <div class="table-container" style="margin-top:24px;">
+<table>
               <thead><tr><th>Date</th><th>Patient</th><th>Exercise</th><th>Accuracy</th><th>ROM</th><th>Duration</th></tr></thead>
               <tbody>{recent_rows}</tbody>
             </table>
+</div>
           </div>
           <div class="grid">{alert_cards}</div>
         </section>

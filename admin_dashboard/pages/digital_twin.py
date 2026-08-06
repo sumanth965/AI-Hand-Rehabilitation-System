@@ -70,7 +70,7 @@ class DigitalTwinPagesMixin:
             f"""
             <div class="card alert {'danger' if item.risk_level == 'High' else 'warning' if item.risk_level == 'Moderate' else ''}">
               <h2>{esc(item.name)} · {esc(item.strategy)}</h2>
-              <div class="grid three">
+              <div class="grid stats three">
                 {self.stat_card('Timeline', f"{item.recovery_timeline_weeks:.1f} wk", 'To functional ROM target')}
                 {self.stat_card('Expected ROM', f"{item.expected_rom:.1f} deg", '4-week forecast')}
                 {self.stat_card('Expected Accuracy', f"{item.expected_accuracy:.1f}%", '4-week forecast')}
@@ -100,7 +100,7 @@ class DigitalTwinPagesMixin:
           </form>
           <p class="muted">{esc(twin.explanation)}</p>
         </section>
-        <section class="grid three" style="margin-top:16px">
+        <section class="grid stats three" style="margin-top:16px">
           {self.stat_card('Current ROM', f"{twin.current_rom:.1f} deg", f"Velocity {twin.recovery_velocity:+.1f} deg/wk")}
           {self.stat_card('Current Accuracy', f"{twin.current_accuracy:.1f}%", f"Pain {twin.current_pain:.0f}/10")}
           {self.stat_card('Readiness', f"{twin.readiness_score:.0f}/100", f"Consistency {twin.consistency_score:.0f}%")}
@@ -112,7 +112,8 @@ class DigitalTwinPagesMixin:
           <div class="card">{self.chart('Digital Twin Snapshot Trend', {'Readiness': readiness_series, 'ROM': rom_series, 'Stagnation Risk': risk_series}, snap_labels, 'score')}</div>
           <div class="card">
             <h2>Personalized Recommendations</h2>
-            <table>
+            <div class="table-container" style="margin-top:24px;">
+<table>
               <tbody>
                 <tr><th>Best Strategy</th><td>{esc(twin.recommendations.get('best_strategy', '-'))}</td></tr>
                 <tr><th>Exercise Mix</th><td>{esc(exercise_mix)}</td></tr>
@@ -121,6 +122,7 @@ class DigitalTwinPagesMixin:
                 <tr><th>Progression Plan</th><td>{esc(twin.recommendations.get('difficulty_progression_plan', '-'))}</td></tr>
               </tbody>
             </table>
+</div>
           </div>
         </section>
         <section class="grid three" style="margin-top:16px">{risk_cards}</section>

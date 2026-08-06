@@ -69,10 +69,12 @@ class RiskPagesMixin:
         <section class="grid three" style="margin-top:16px">{''.join(cards) or '<div class="card muted">No active rehabilitation risks detected.</div>'}</section>
         <section class="card" style="margin-top:16px">
           <h2>Risk Register</h2>
-          <table>
+          <div class="table-container" style="margin-top:24px;">
+<table>
             <thead><tr><th>Patient</th><th>Risk</th><th>Severity</th><th>Clinical Detail</th><th>Last Session</th></tr></thead>
             <tbody>{''.join(rows) or '<tr><td colspan="5" class="muted">No active risk items.</td></tr>'}</tbody>
           </table>
+</div>
         </section>
         """
         return Page("Risk Detection", body, "risks")

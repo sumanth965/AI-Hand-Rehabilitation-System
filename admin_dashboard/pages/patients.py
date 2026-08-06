@@ -90,12 +90,12 @@ class PatientPagesMixin:
                 <button>Filter</button>
               </form>
             </div>
-            <div class="table-container">
-              <table id="patientsTable">
+            <div class="table-container" style="margin-top:24px;">
+<table id="patientsTable">
                 <thead><tr><th onclick="sortTable('patientsTable',0)">Patient ID</th><th onclick="sortTable('patientsTable',1)">Patient Name</th><th>Age</th><th>Condition / Injury</th><th>Registration Date</th><th>Last Session Date</th><th>Recovery Status</th><th>Sessions</th><th>Accuracy</th><th>ROM</th><th></th></tr></thead>
                 <tbody>{table_rows}</tbody>
               </table>
-            </div>
+</div>
           </div>
           {profile}
         </section>
@@ -162,7 +162,7 @@ class PatientPagesMixin:
             adaptive_panel = f"""
             <div class="card" style="margin-top:16px">
               <h2>AI Prescription Panel</h2>
-              <div class="grid three">
+              <div class="grid stats three">
                 {self.stat_card('Difficulty Tier', str(int(number(adaptive['difficulty_tier']))), f"{adaptive['progression'].title()} progression")}
                 {self.stat_card('Readiness Score', f"{number(adaptive['readiness_score']):.0f}/100", 'Adaptive AI Engine')}
                 {self.stat_card('Risk Level', adaptive['risk_level'].title(), f"Recovery: {adaptive['recovery_trend']}")}
@@ -182,8 +182,8 @@ class PatientPagesMixin:
             forearm_panel = f"""
             <div class="card" style="margin-top:16px">
               <h2>Forearm Classification</h2>
-              <div class="table-container">
-                <table>
+              <div class="table-container" style="margin-top:24px;">
+<table>
                   <tbody>
                     <tr><th>Latest Class</th><td>{esc(forearm['movement_class'])}</td></tr>
                     <tr><th>Rotation Angle</th><td>{number(forearm['rotation_angle']):.1f} deg</td></tr>
@@ -191,7 +191,7 @@ class PatientPagesMixin:
                     <tr><th>Compensation</th><td>{number(forearm['compensation_score']) * 100:.0f}%</td></tr>
                   </tbody>
                 </table>
-              </div>
+</div>
             </div>
             """
         else:
@@ -200,20 +200,20 @@ class PatientPagesMixin:
             upper_limb_panel = f"""
             <div class="card" style="margin-top:16px">
               <h2>Upper Limb Compensation</h2>
-              <div class="grid three">
+              <div class="grid stats three">
                 {self.stat_card('Compensation', f"{number(upper_limb['compensation_score']) * 100:.0f}%", esc(upper_limb['feedback']))}
                 {self.stat_card('Efficiency', f"{number(upper_limb['movement_efficiency']):.0f}%", f"{esc(upper_limb['side'])} side")}
                 {self.stat_card('Trunk Lean', f"{number(upper_limb['trunk_lean_angle']):.1f} deg", 'Pose estimate')}
               </div>
-              <div class="table-container">
-                <table style="margin-top:12px">
+              <div class="table-container" style="margin-top:24px;">
+<table style="margin-top:12px">
                   <tbody>
                     <tr><th>Shoulder Angle</th><td>{number(upper_limb['shoulder_angle']):.1f} deg</td></tr>
                     <tr><th>Elbow Angle</th><td>{number(upper_limb['elbow_angle']):.1f} deg</td></tr>
                     <tr><th>Shoulder / Elbow / Trunk Compensation</th><td>{number(upper_limb['shoulder_compensation']) * 100:.0f}% / {number(upper_limb['elbow_compensation']) * 100:.0f}% / {number(upper_limb['trunk_compensation']) * 100:.0f}%</td></tr>
                   </tbody>
                 </table>
-              </div>
+</div>
             </div>
             """
         else:
@@ -227,9 +227,9 @@ class PatientPagesMixin:
             coaching_panel = f"""
             <div class="card" style="margin-top:16px">
               <h2>Virtual Sensei Panel</h2>
-              <div class="table-container">
-                <table><thead><tr><th>Date</th><th>Exercise</th><th>Generated Coaching Message</th><th>LLM Enhanced Message</th><th>Coaching Trigger</th></tr></thead><tbody>{coaching_rows}</tbody></table>
-              </div>
+              <div class="table-container" style="margin-top:24px;">
+<table><thead><tr><th>Date</th><th>Exercise</th><th>Generated Coaching Message</th><th>LLM Enhanced Message</th><th>Coaching Trigger</th></tr></thead><tbody>{coaching_rows}</tbody></table>
+</div>
             </div>
             """
         else:
@@ -242,7 +242,7 @@ class PatientPagesMixin:
         clinical_panel = f"""
         <div class="card" style="margin-top:16px; border-left: 4px solid var(--primary)">
           <h2>Clinical Health & Decision Support</h2>
-          <div class="grid three">
+          <div class="grid stats three">
             {self.stat_card('Health Score', f"{clinical['health_score']}/100", f"Trend: {clinical['trend']}")}
             {self.stat_card('Recovery Stage', clinical['recovery_stage'], 'Based on ROM progression')}
             {self.stat_card('Risk Level', clinical['risk_level'], 'Clinical risk assessment')}
@@ -271,17 +271,17 @@ class PatientPagesMixin:
               <h2>Patient Profile</h2>
               <a class="button" href="/report.pdf?patient={quote(row['name'])}">Download PDF Report</a>
             </div>
-            <div class="table-container">
-              <table>
+            <div class="table-container" style="margin-top:24px;">
+<table>
                 <tbody>
                   <tr><th>Patient ID</th><td>{esc(row['id_number'] or row['name'])}</td><th>Name</th><td>{esc(row['name'])}</td></tr>
                   <tr><th>Age</th><td>{esc(row['age'] or '-')}</td><th>Gender</th><td>{esc(row['gender'] or '-')}</td></tr>
                   <tr><th>Condition</th><td>{esc(row['injury_type'] or '-')}</td><th>Registration Date</th><td>{esc(short_date(row['registration_date']))}</td></tr>
                 </tbody>
               </table>
-            </div>
+</div>
           </div>
-          <div class="grid three" style="margin-bottom:16px">
+          <div class="grid stats three" style="margin-bottom:16px">
             {self.stat_card('Total Sessions', str(int(number(row['sessions_count']))), 'Stored rehabilitation sessions')}
             {self.stat_card('Recovery Prediction', f"{pred:.1f}%" if pred >= 0 else 'Need more data', 'Projected ROM trend')}
             {self.stat_card('Current Recovery Stage', clinical['recovery_stage'], f"Status: {self.recovery_status(row)}")}
@@ -294,9 +294,9 @@ class PatientPagesMixin:
           </div>
           <div class="card" style="margin-top:16px">
             <h2>Therapist Notes Panel</h2>
-            <div class="table-container">
-              <table><thead><tr><th>Date</th><th>Therapist</th><th>Clinical Observations</th><th>Latest Recommendations</th></tr></thead><tbody>{notes_rows}</tbody></table>
-            </div>
+            <div class="table-container" style="margin-top:24px;">
+<table><thead><tr><th>Date</th><th>Therapist</th><th>Clinical Observations</th><th>Latest Recommendations</th></tr></thead><tbody>{notes_rows}</tbody></table>
+</div>
           </div>
           <div class="card muted" style="margin-top:16px">
             <h2>Compensation Analysis (Coming Soon)</h2>
@@ -312,9 +312,9 @@ class PatientPagesMixin:
                 <button class="danger">Delete Patient</button>
               </form>
             </div>
-            <div class="table-container">
-              <table><thead><tr><th>Date</th><th>Exercise</th><th>Accuracy</th><th>ROM</th><th>Duration</th></tr></thead><tbody>{history}</tbody></table>
-            </div>
+            <div class="table-container" style="margin-top:24px;">
+<table><thead><tr><th>Date</th><th>Exercise</th><th>Accuracy</th><th>ROM</th><th>Duration</th></tr></thead><tbody>{history}</tbody></table>
+</div>
           </div>
           {adaptive_panel}
           {coaching_panel}

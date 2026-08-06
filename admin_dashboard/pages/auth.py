@@ -496,7 +496,8 @@ class AuthPagesMixin:
         
         <div class="card glass-panel" style="margin-top: 24px;">
           <h2>Security Architecture Status</h2>
-          <table style="width: 100%; border-collapse: collapse; margin-top: 16px;">
+          <div class="table-container" style="margin-top:24px;">
+<table style="width: 100%; border-collapse: collapse; margin-top: 16px;">
             <thead>
               <tr style="border-bottom: 2px solid var(--line); text-align: left;">
                 <th style="padding: 12px;">Security Control</th>
@@ -532,6 +533,7 @@ class AuthPagesMixin:
               </tr>
             </tbody>
           </table>
+</div>
         </div>
         """
         return Page("Security Overview", body, "security")

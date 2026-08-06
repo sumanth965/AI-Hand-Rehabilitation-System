@@ -53,7 +53,7 @@ class ReportPagesMixin:
             sessions = self.repo.sessions_chrono(selected)
             pred = recovery_prediction(sessions)
             summary = f"""
-            <div class="grid three" style="margin-top:16px">
+            <div class="grid stats three" style="margin-top:16px">
               {self.stat_card('Sessions', str(len(sessions)), selected)}
               {self.stat_card('Average Accuracy', f"{number(patient['avg_accuracy']):.1f}%", 'Exercise performance')}
               {self.stat_card('Average ROM', f"{number(patient['avg_rom']):.1f} deg", 'ROM analysis')}

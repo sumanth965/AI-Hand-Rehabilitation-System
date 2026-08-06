@@ -1,13 +1,30 @@
 /* =================================================================
    8. GRID LAYOUTS
    ================================================================= */
-.main > section { padding: 0 36px 32px; }
+.main>section {
+  padding: 0 36px 32px;
+}
 
-.grid { display: grid; gap: 28px; }
-.grid > * { min-width: 0; }
-.stats { grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); }
-.two   { grid-template-columns: minmax(0, 1.25fr) minmax(340px, 0.75fr); }
-.three { grid-template-columns: repeat(auto-fit, minmax(310px, 1fr)); }
+.grid {
+  display: grid;
+  gap: 28px;
+}
+
+.grid>* {
+  min-width: 0;
+}
+
+.stats {
+  grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+}
+
+.two {
+  grid-template-columns: minmax(0, 1.25fr) minmax(340px, 0.75fr);
+}
+
+.three {
+  grid-template-columns: repeat(auto-fit, minmax(310px, 1fr));
+}
 
 /* =================================================================
    9. CARDS — Premium glass-like panels
@@ -20,10 +37,12 @@
   box-shadow: 0 15px 35px rgba(0, 0, 0, 0.15), 0 5px 15px rgba(0, 0, 0, 0.05);
   transition: transform 0.3s ease, box-shadow 0.3s ease;
 }
+
 .card:hover {
   transform: translateY(-8px);
   box-shadow: 0 25px 50px rgba(0, 0, 0, 0.20), 0 10px 20px rgba(0, 0, 0, 0.10);
 }
+
 .card.interactive:hover,
 a.card:hover,
 button.card:hover {
@@ -51,14 +70,41 @@ button.card:hover {
   box-shadow: 0 25px 50px rgba(0, 0, 0, 0.20), 0 10px 20px rgba(0, 0, 0, 0.10);
 }
 
-.grid.stats .card:nth-child(1) { background: #eef7fc; }
-.grid.stats .card:nth-child(2) { background: #eaf8f3; }
-.grid.stats .card:nth-child(3) { background: #fff4eb; }
-.grid.stats .card:nth-child(4) { background: #f6f0ff; }
-.grid.stats .card:nth-child(5) { background: #eaf8f8; }
-.grid.stats .card:nth-child(6) { background: #fdf2f8; }
-.grid.stats .card:nth-child(7) { background: #fef2f2; }
-.grid.stats .card:nth-child(8) { background: #fffbeb; }
+.grid.stats .card:nth-child(1) {
+  background: #eef7fc;
+}
+
+.grid.stats .card:nth-child(2) {
+  background: #eaf8f3;
+}
+
+.grid.stats .card:nth-child(3) {
+  background: #fff4eb;
+}
+
+.grid.stats .card:nth-child(4) {
+  background: #f6f0ff;
+}
+
+.grid.stats .card:nth-child(5) {
+  background: #eaf8f8;
+}
+
+.grid.stats .card:nth-child(6) {
+  background: #fdf2f8;
+}
+
+.grid.stats .card:nth-child(7) {
+  background: #fef2f2;
+}
+
+.grid.stats .card:nth-child(8) {
+  background: #fffbeb;
+}
+
+.grid.stats .card:nth-child(9) {
+  background: #eef7fc;
+}
 
 .stat-header {
   display: flex;
@@ -76,14 +122,51 @@ button.card:hover {
   border-radius: 14px;
   flex-shrink: 0;
 }
-.grid.stats .card:nth-child(1) .stat-icon { background: rgba(59, 130, 246, 0.25); color: #3b82f6; }
-.grid.stats .card:nth-child(2) .stat-icon { background: rgba(16, 185, 129, 0.25); color: #10b981; }
-.grid.stats .card:nth-child(3) .stat-icon { background: rgba(249, 115, 22, 0.25); color: #f97316; }
-.grid.stats .card:nth-child(4) .stat-icon { background: rgba(139, 92, 246, 0.25); color: #8b5cf6; }
-.grid.stats .card:nth-child(5) .stat-icon { background: rgba(6, 182, 212, 0.25); color: #06b6d4; }
-.grid.stats .card:nth-child(6) .stat-icon { background: rgba(236, 72, 153, 0.25); color: #ec4899; }
-.grid.stats .card:nth-child(7) .stat-icon { background: rgba(239, 68, 68, 0.25); color: #ef4444; }
-.grid.stats .card:nth-child(8) .stat-icon { background: rgba(245, 158, 11, 0.25); color: #f59e0b; }
+
+.grid.stats .card:nth-child(1) .stat-icon {
+  background: rgba(59, 130, 246, 0.25);
+  color: #3b82f6;
+}
+
+.grid.stats .card:nth-child(2) .stat-icon {
+  background: rgba(16, 185, 129, 0.25);
+  color: #10b981;
+}
+
+.grid.stats .card:nth-child(3) .stat-icon {
+  background: rgba(249, 115, 22, 0.25);
+  color: #f97316;
+}
+
+.grid.stats .card:nth-child(4) .stat-icon {
+  background: rgba(139, 92, 246, 0.25);
+  color: #8b5cf6;
+}
+
+.grid.stats .card:nth-child(5) .stat-icon {
+  background: rgba(6, 182, 212, 0.25);
+  color: #06b6d4;
+}
+
+.grid.stats .card:nth-child(6) .stat-icon {
+  background: rgba(236, 72, 153, 0.25);
+  color: #ec4899;
+}
+
+.grid.stats .card:nth-child(7) .stat-icon {
+  background: rgba(239, 68, 68, 0.25);
+  color: #ef4444;
+}
+
+.grid.stats .card:nth-child(8) .stat-icon {
+  background: rgba(245, 158, 11, 0.25);
+  color: #f59e0b;
+}
+
+.grid.stats .card:nth-child(9) .stat-icon {
+  background: rgba(59, 130, 246, 0.25);
+  color: #3b82f6;
+}
 
 .stat-label {
   color: var(--text-primary);
@@ -92,6 +175,7 @@ button.card:hover {
   font-weight: 500;
   margin-top: 4px;
 }
+
 .stat-value {
   margin-top: 16px;
   font-size: 38px;
@@ -100,6 +184,7 @@ button.card:hover {
   line-height: 1;
   letter-spacing: -0.03em;
 }
+
 .stat-sub {
   margin-top: auto;
   padding-top: 12px;
@@ -133,12 +218,15 @@ button.card:hover {
   background: var(--bg-primary);
   box-shadow: 0 4px 12px rgba(0, 0, 0, 0.02);
 }
+
 table {
   width: 100%;
   border-collapse: collapse;
   margin-top: 0;
 }
-th, td {
+
+th,
+td {
   padding: 16px 24px;
   border-bottom: 1px solid var(--border-subtle);
   text-align: left;
@@ -146,6 +234,7 @@ th, td {
   font-size: 14px;
   white-space: nowrap;
 }
+
 th {
   color: var(--text-primary);
   opacity: 0.8;
@@ -159,10 +248,22 @@ th {
   top: 0;
   z-index: 5;
 }
-tr:last-child td { border-bottom: none; }
-tr { transition: background-color 0.2s ease; }
-tr:hover td { background: var(--accent-soft); }
-td { color: var(--text-secondary); }
+
+tr:last-child td {
+  border-bottom: none;
+}
+
+tr {
+  transition: background-color 0.2s ease;
+}
+
+tr:hover td {
+  background: var(--accent-soft);
+}
+
+td {
+  color: var(--text-secondary);
+}
 
 /* =================================================================
    15. PROGRESS BARS
@@ -175,6 +276,7 @@ td { color: var(--text-secondary); }
   margin-top: 10px;
   border: 1px solid var(--border-subtle);
 }
+
 .progress span {
   display: block;
   height: 100%;
@@ -193,10 +295,24 @@ td { color: var(--text-secondary); }
   background: var(--bg-primary);
   box-shadow: var(--shadow-sm);
 }
-html[data-theme="dark"] .chart { filter: brightness(0.88) contrast(1.12); }
+
+html[data-theme="dark"] .chart {
+  filter: brightness(0.88) contrast(1.12);
+}
 
 /* =================================================================
    19. TABS & PAGINATION
    ================================================================= */
-.tabs { display: flex; gap: 10px; margin-bottom: 24px; flex-wrap: wrap; }
-.pagination { display: flex; justify-content: flex-end; gap: 10px; margin-top: 24px; }
+.tabs {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 24px;
+  flex-wrap: wrap;
+}
+
+.pagination {
+  display: flex;
+  justify-content: flex-end;
+  gap: 10px;
+  margin-top: 24px;
+}
