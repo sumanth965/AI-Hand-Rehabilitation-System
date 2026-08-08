@@ -3,7 +3,7 @@
    ================================================================= */
 .app-shell {
   display: grid;
-  grid-template-columns: var(--sidebar-collapsed-width, 70px) 1fr;
+  grid-template-columns: var(--sidebar-collapsed-width, 80px) 1fr;
   min-height: 100vh;
 }
 
@@ -27,7 +27,7 @@
   contain: layout style;
   z-index: 30;
   /* Default width – collapsed icons only */
-  width: var(--sidebar-collapsed-width, 70px);
+  width: var(--sidebar-collapsed-width, 80px);
   transition: width 0.4s cubic-bezier(0.25, 0.8, 0.25, 1), padding 0.25s ease;
   overflow: hidden;
 }
