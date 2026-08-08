@@ -44,8 +44,9 @@ Navigate menus, play games, and track your recovery — **using only your hands.
 |---|---|---|
 | 🖱️ | **Zero Keyboard Navigation** | Hover-to-Select menus powered entirely by hand gestures |
 | 📡 | **Real-Time Feedback** | Mirrored webcam feed with MediaPipe landmarks overlaid |
-| 📊 | **Therapist Dashboard** | Web interface for doctors to manage patients and view analytics |
-| 🔐 | **Dual Authentication** | Login using Clinical ID or Guest Mode (Name & Age) |
+| 🎨 | **Premium Dynamic Dashboard UI** | Beautiful, responsive web portal with StudyFlow-inspired dark blue aesthetics, sidebar animations, and seamless dark/light mode toggling |
+| 📊 | **Therapist Dashboard** | Comprehensive web interface featuring Patient Management, Session Analytics, Digital Twin simulation, and Role-Based Access Control |
+| 🔐 | **Secure Authentication** | Full login system with session tokens and secure password verification for Clinicians |
 | 🎮 | **Level-Based Progression** | Eight exercise levels from warm-up to complex forearm rotation and smart assembly |
 | 🦾 | **Biomechanical Compensation** | Real-time posture tracking (shoulder elevation/abduction, elbow drift, trunk lean) |
 | 🧠 | **Clinical Decision & Twin** | Machine learning recovery predictions, health scoring, and digital twin simulation |
@@ -58,9 +59,7 @@ The project is split into two integrated components: the **Rehabilitation Game**
 ### Adaptive AI Rehabilitation Platform Flow
 Patient exercise data flows through session metrics collection into the local SQLite database. Recovery prediction and forearm classification feed the `AdaptiveRehabEngine`, which generates the rehabilitation prescription: difficulty tier, target size, speed scale, ROM requirement, repetition count, hold duration, rotation tolerance, risk level, recovery state, readiness score, and therapist recommendations.
 
-The Virtual Sensei consumes the current session, previous session history, recovery prediction, forearm classification, readiness score, risk level, and adaptive prescription to generate deterministic coaching. Optional Ollama support is limited to rewriting that finished coaching message for clearer communication. The local LLM must not change prescriptions, difficulty, risk scores, safety decisions, diagnosis, medication advice, or progression recommendations.
-
-All adaptive prescriptions and Virtual Sensei audit details are stored in SQLite for therapist review, including decision source, rule-based safety logic, optional LLM enhancement status, rationale, trigger, and timestamp.
+The Virtual Sensei consumes the current session, previous session history, recovery prediction, forearm classification, readiness score, risk level, and adaptive prescription to generate deterministic coaching. Optional Ollama support is limited to rewriting that finished coaching message for clearer communication.
 
 ### Component Directory Map
 * **Patient Application Core**
@@ -68,14 +67,14 @@ All adaptive prescriptions and Virtual Sensei audit details are stored in SQLite
   * `ui_components.py`: Reusable Pygame user interface buttons, dashboard cards, and navigation rings.
   * `hand_rehab_assistant.py`: Auxiliary guidance text helper for interactive patient UI.
 * **Clinician Portal Core**
-  * `therapist_dashboard.py`: Lightweight HTTP server dashboard rendering patient summaries, trends, notes, twin simulation projections, and PDF export.
-  * `dashboard_auth_addon.py`: Session helper library managing dashboard login and authentication states.
+  * `admin_dashboard/`: Complete modular dashboard backend package containing `server.py`, `renderer.py`, `database.py`, `auth.py`, and organized page components. Includes a custom frontend framework with highly optimized dark mode layout.
+  * `therapist_dashboard.py`: Lightweight entry point to launch the modular admin dashboard server.
 * **Adaptive AI & Analytics Core**
   * `adaptive_ai_engine.py`: Adaptive difficulty engine computing real-time prescription configurations and risk classifications.
-  * `digital_twin_rehab.py`: Patient digital twin model projecting future recovery windows across custom rehabilitation scenarios (Plans A, B, C).
-  * `clinical_intelligence.py`: Diagnostic analytics layer calculating patient health scores, recovery phases, and highlighting clinical alert triggers.
-  * `upper_limb_analysis.py`: Biomechanical pose engine parsing joint angles to measure shoulder, elbow, and trunk compensation.
-  * `llm_wrapper.py`: Thread-safe interface querying local Ollama LLMs for semantic enhancement of Virtual Sensei feedback.
+  * `digital_twin_rehab.py`: Patient digital twin model projecting future recovery windows.
+  * `clinical_intelligence.py`: Diagnostic analytics layer calculating patient health scores.
+  * `upper_limb_analysis.py`: Biomechanical pose engine parsing joint angles to measure compensation.
+  * `llm_wrapper.py`: Thread-safe interface querying local Ollama LLMs.
 
 ## 📦 Installation
 
@@ -94,7 +93,7 @@ pip install -r requirements.txt
 ```bash
 python therapist_dashboard.py
 ```
-*(This will automatically open the local dashboard URL printed in the terminal, usually http://127.0.0.1:8080. `start_dashboard.bat` launches on http://127.0.0.1:8081.)*
+*(This will automatically open the local dashboard URL printed in the terminal, usually http://127.0.0.1:8080)*
 
 **4. Launch the Rehabilitation Session**
 ```bash
@@ -103,23 +102,6 @@ python zero_keyboard_physio.py
 
 > [!WARNING]
 > A functioning webcam is required for the Rehabilitation Session. Ensure adequate lighting and camera visibility of both hand and upper torso for optimal landmark tracking.
-
-### 🤖 Optional Local LLM (Ollama) Integration
-The Virtual Sensei coaching feedback can optionally be enhanced using a local LLM via [Ollama](https://ollama.com).
-
-1. Install Ollama and pull a supported small model (e.g., Qwen 2.5 0.5B, Smollm2 135M, or Llama 3.2 1B):
-   ```bash
-   ollama pull qwen2.5:0.5b
-   ```
-2. Enable local LLM coaching enhancement and specify configuration details by setting environment variables before running the game:
-   ```cmd
-   :: Enable LLM coaching message polishing (0 = off, 1 = on)
-   set OLLAMA_SENSEI_USE_LLM=1
-   :: Select model name (options: qwen2.5:0.5b, smollm2:135m, llama3.2:1b, llama3)
-   set OLLAMA_SENSEI_MODEL=qwen2.5:0.5b
-   :: Set maximum query timeout in seconds
-   set OLLAMA_SENSEI_TIMEOUT=8
-   ```
 
 ## ⚙️ How It Works
 
@@ -132,13 +114,10 @@ The Virtual Sensei coaching feedback can optionally be enhanced using a local LL
 
 ## ⚠️ Limitations & Future Improvements
 
-
 While this project provides a strong proof-of-concept for AI-powered rehabilitation, it has some limitations to be addressed in future versions:
 - **Environmental Dependency:** MediaPipe requires adequate lighting and clear contrast; poor lighting can drop the tracking frame rate.
 - **2D Depth Limitations:** Using a standard webcam means depth estimation is inferred. Future improvements could integrate 3D depth cameras (like Intel RealSense) for true spatial accuracy.
 - **Data Portability:** Currently, all data is stored locally in SQLite. Future versions aim to implement a secure, cloud-based PostgreSQL or Firebase backend for cross-device syncing.
-- **AI-Driven Smart Object Assembly:** As a future enhancement, the system can include an AI-driven rehabilitation game called Smart Object Assembly. In this game, patients perform therapeutic hand, wrist, and forearm movements to assemble virtual objects such as houses, machines, or robotic structures. Different rehabilitation exercises, including wrist flexion, extension, pronation, supination, and pinch movements, are mapped to specific assembly actions. The game difficulty can be automatically adjusted based on the patient's recovery progress and previous performance. This approach can improve patient engagement, support advanced hand and forearm rehabilitation, and provide a novel adaptive rehabilitation framework suitable for future research and potential patent development.
-
 
 ## 🔬 Clinical Research & Advanced Kinematic Analytics
 
@@ -155,15 +134,7 @@ We evaluate movement quality using four kinematic sub-metrics over the duration 
 * **Overall Movement Quality ($Q_m$)**:
   $$Q_m = \frac{S_m + A_c + R_o + H_s}{4}$$
 
-### 2. Advanced Hand-Only Compensation Detection
-Real-time compensatory pattern matching operates on hand landmarks (without full-body pose requirements) to identify:
-* **Sudden Landmark Translation**: Frame-to-frame displacement spikes.
-* **Inconsistent Wrist Movement**: Excessive wrist velocity variance.
-* **Unstable Trajectory**: Unstable coordinates path jerk.
-* **Abnormal Rotation Speed**: Fast forearm rotation acceleration.
-* **Excessive Lateral Movement**: Sideways wrist drift.
-
-### 3. Patient Clinical Readiness & Difficulty Intelligence
+### 2. Patient Clinical Readiness & Difficulty Intelligence
 Today's recommended game difficulty is decided adaptively by computing a Patient Readiness Score ($R_p$):
 $$R_p = \left( 0.4 \times R_{\text{rom}} + 0.3 \times A_c + 0.3 \times Q_m \right) - P_{\text{pain}} - P_{\text{fatigue}}$$
 * Recommended difficulty thresholds:
@@ -171,15 +142,12 @@ $$R_p = \left( 0.4 \times R_{\text{rom}} + 0.3 \times A_c + 0.3 \times Q_m \righ
   * **Moderate**: $50 \le R_p < 80$
   * **Hard**: $R_p \ge 80$
 
-### 4. Interactive Clinician Override Dashboard
-A direct Agree/Modify/Reject panel tracks human-in-the-loop validation, providing transparent **AI Agreement Rate** tracking.
-
 ## 🔒 Security Posture
 
 This system is designed as a **local prototype** and is currently rated for non-clinical research and development. 
-- **The Good:** The system natively prevents network exposure by binding the web dashboard exclusively to `127.0.0.1`. It also utilizes parameterized database queries to prevent SQL Injection, and sanitizes all HTML outputs to prevent Cross-Site Scripting (XSS).
-- **The Bad:** The local SQLite database (`rehab_data.db`) is not encrypted at rest. Furthermore, the Therapist Dashboard currently lacks a login portal (no username/password required). 
-- **Compliance:** Due to the lack of at-rest encryption and dashboard authentication, this software is **not yet HIPAA/GDPR compliant** and should not be used to store real Protected Health Information (PHI) outside of an encrypted, access-controlled environment.
+- **The Good:** The system natively prevents network exposure by binding the web dashboard exclusively to `127.0.0.1`. The new dashboard architecture features a fully functional login system with secure session tokens, password verification, and role-based access control. It utilizes parameterized database queries to prevent SQL Injection and sanitizes HTML outputs to prevent Cross-Site Scripting (XSS).
+- **The Bad:** The local SQLite database (`rehab_data.db`) is not encrypted at rest. 
+- **Compliance:** Due to the lack of at-rest encryption, this software is **not yet HIPAA/GDPR compliant** and should not be used to store real Protected Health Information (PHI) outside of an encrypted, access-controlled environment.
 
 ## 👨‍💻 Author
 
@@ -193,5 +161,3 @@ This system is designed as a **local prototype** and is currently rated for non-
 *Made with 🖐️ for patients on the road to recovery.*
 
 </div>
-
-
