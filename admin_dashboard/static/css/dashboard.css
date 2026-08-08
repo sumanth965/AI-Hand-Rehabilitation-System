@@ -169,10 +169,10 @@ button.card:hover {
 }
 
 .stat-label {
-  color: var(--text-primary);
-  opacity: 0.8;
+  color: var(--stat-label-color);
+  opacity: 0.85;
   font-size: 15px;
-  font-weight: 500;
+  font-weight: 600;
   margin-top: 4px;
 }
 
@@ -180,7 +180,7 @@ button.card:hover {
   margin-top: 16px;
   font-size: 38px;
   font-weight: 800;
-  color: var(--text-primary);
+  color: var(--stat-value-color);
   line-height: 1;
   letter-spacing: -0.03em;
 }
@@ -188,8 +188,8 @@ button.card:hover {
 .stat-sub {
   margin-top: auto;
   padding-top: 12px;
-  color: var(--text-primary);
-  opacity: 0.65;
+  color: var(--stat-sub-color);
+  opacity: 0.85;
   font-size: 13px;
   font-weight: 500;
 }
@@ -316,3 +316,16 @@ html[data-theme="dark"] .chart {
   gap: 10px;
   margin-top: 24px;
 }
+
+/* =================================================================
+   20. DARK MODE STATS CARDS OVERRIDES
+   ================================================================= */
+html[data-theme="dark"] .grid.stats .card:nth-child(1) { background: #1a2c4e; }
+html[data-theme="dark"] .grid.stats .card:nth-child(2) { background: #133834; }
+html[data-theme="dark"] .grid.stats .card:nth-child(3) { background: #3a2a24; }
+html[data-theme="dark"] .grid.stats .card:nth-child(4) { background: #2b2548; }
+html[data-theme="dark"] .grid.stats .card:nth-child(5) { background: #17374a; }
+html[data-theme="dark"] .grid.stats .card:nth-child(6) { background: #3d2039; }
+html[data-theme="dark"] .grid.stats .card:nth-child(7) { background: #3b1e22; }
+html[data-theme="dark"] .grid.stats .card:nth-child(8) { background: #3a3219; }
+html[data-theme="dark"] .grid.stats .card:nth-child(9) { background: #1a2f4c; }

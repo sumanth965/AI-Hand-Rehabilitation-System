@@ -21,7 +21,7 @@
   padding: var(--space-4) var(--space-3);
   gap: var(--space-3);
   border-radius: 0;
-  background: #000000;
+  background: var(--bg-sidebar);
   color: #f8fafc;
   border: none;
   contain: layout style;
@@ -325,7 +325,7 @@
   gap: 20px;
   min-height: var(--topbar-height);
   padding: 14px 36px;
-  background: #000000;
+  background: var(--bg-sidebar);
   border-bottom: 1px solid var(--border-subtle);
   box-shadow: 0 1px 4px rgba(15, 23, 42, 0.04);
   backdrop-filter: none;

@@ -8,6 +8,11 @@
   --bg-elevated: rgba(255, 255, 255, 0.92);
   --border-subtle: #E5E7EB;
   --border-strong: #D1D5DB;
+  --bg-sidebar: #000000;
+
+  --stat-label-color: #1e293b;
+  --stat-value-color: #0f172a;
+  --stat-sub-color: #334155;
 
   --text-primary: #1F2937;
   --text-secondary: #4B5563;
@@ -51,12 +56,17 @@
 }
 
 html[data-theme="dark"] {
-  --bg-canvas: #0C0E14;
-  --bg-primary: #14161E;
-  --bg-secondary: #1C1E28;
-  --bg-elevated: rgba(20, 22, 30, 0.92);
-  --border-subtle: #282A36;
-  --border-strong: #3A3D4C;
+  --bg-canvas: #101e3e; /* Rich royal blue */
+  --bg-primary: #192c4f; /* Lighter blue for cards */
+  --bg-secondary: #0b1121; /* Very dark navy */
+  --bg-elevated: rgba(25, 44, 79, 0.92);
+  --border-subtle: #243b6b;
+  --border-strong: #33508c;
+  --bg-sidebar: #0b1121; /* Dark navy topbar/sidebar */
+
+  --stat-label-color: #94a3b8;
+  --stat-value-color: #f8fafc;
+  --stat-sub-color: #cbd5e1;
 
   --text-primary: #F3F4F6;
   --text-secondary: #A0A5B5;
