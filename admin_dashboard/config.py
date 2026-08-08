@@ -51,6 +51,7 @@ LEVEL_NAMES = {
     6: "Cognitive Motor - Sequence Tap",
     7: "Forearm Rotation - Rotation Orbit",
     8: "Functional Motor - Smart Assembly",
+    9: "Fine Motor - Precision Path",
 }
 
 

@@ -933,7 +933,7 @@ class DashboardRepository:
                 comp_counts[matched_lvl] = comp_counts.get(matched_lvl, 0) + r["cnt"]
                 
         improvements = {}
-        for lvl in range(1, 9):
+        for lvl in range(1, 10):
             if patient:
                 cursor.execute("""
                     SELECT avg_accuracy FROM sessions 

@@ -39,6 +39,7 @@ LEVEL_DISPLAY_NAMES = {
     6: "Cognitive Finger Taps",
     7: "Forearm Rotation Orbit",
     8: "Smart Functional Assembly",
+    9: "Precision Path - Dots",
 }
 
 # Game Settings

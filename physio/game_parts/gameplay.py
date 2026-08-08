@@ -1,4 +1,4 @@
-﻿"""GameplayMixin implementation for PhysioSystem."""
+"""GameplayMixin implementation for PhysioSystem."""
 
 from .shared import *
 
@@ -546,6 +546,56 @@ class GameplayMixin:
             self.accuracy_attempts += 1
             self._end_level()
 
+    def _update_level9(self, hand_data: HandData):
+        """Level 9: Precision Path - Connecting Dots"""
+        if not hasattr(self, 'precision_dots') or not self.precision_dots:
+            self._spawn_precision_dots()
+            return
+
+        if hand_data.index_tip:
+            idx = self.precision_current_dot
+            if idx < len(self.precision_dots):
+                target_dot = self.precision_dots[idx]
+                target_dot.state = "ACTIVE"
+                
+                dist = distance(hand_data.index_tip, (target_dot.x, target_dot.y))
+                
+                # Check if dot is touched
+                if dist < target_dot.radius:
+                    target_dot.state = "COMPLETED"
+                    self.precision_path_points.append((target_dot.x, target_dot.y))
+                    self.precision_current_dot += 1
+                    
+                    self.accuracy_attempts += 1
+                    self.accuracy_hits += 1
+                    self.score += int(10 * getattr(self, 'score_multiplier', 1.0))
+                    self.sounds.play('pop')
+                    self.particles.emit(int(target_dot.x), int(target_dot.y), (0, 255, 200), 20)
+                    self.popups.append(ScorePopup(target_dot.x, target_dot.y - 20, "+10"))
+                    
+                    if hand_data.wrist:
+                        reach = distance(hand_data.wrist, (target_dot.x, target_dot.y))
+                        self.reach_distance = max(self.reach_distance, reach)
+                else:
+                    # Check if they hovered over a WRONG dot
+                    for i, dot in enumerate(self.precision_dots):
+                        if i != idx and dot.state == "WAITING":
+                            wrong_dist = distance(hand_data.index_tip, (dot.x, dot.y))
+                            if wrong_dist < dot.radius + 15:
+                                # Subtle correction feedback
+                                if getattr(self, 'warning_timer', 0) <= 0:
+                                    self.correctness_warning = "Follow the numbered path carefully"
+                                    self.warning_timer = 90
+                                    self.accuracy_attempts += 1 # counts as a mistake
+
+            else:
+                # All dots completed
+                self._end_level()
+        
+        import time
+        if (time.time() - self.session_start > max(getattr(self, 'session_time_limit', 60), 60)):
+            self._end_level()
+
     def _draw_level1(self):
         theme = self._get_theme()
         primary = theme["primary_color"]
@@ -926,6 +976,49 @@ class GameplayMixin:
             bubble.vy = vy
             bubble.is_golden = is_golden
             self.bubbles.append(bubble)
+        if getattr(self, 'active_prescription', None) and getattr(self, 'active_prescription').difficulty_tier == 'EASY':
+            self.bubbles[0].is_golden = True
+        elif random.random() < 0.2:
+            self.bubbles[0].is_golden = True
+
+    def _spawn_precision_dots(self):
+        from physio.models import PrecisionDot
+        import random
+        
+        num_dots = 8
+        target_size = 35
+        
+        # Use Adaptive Engine settings if available
+        if getattr(self, 'active_prescription', None):
+            tier = getattr(self, 'active_prescription').difficulty_tier
+            if tier == 'EASY':
+                num_dots = 5
+                target_size = 50
+            elif tier == 'HARD':
+                num_dots = 12
+                target_size = 25
+        
+        self.precision_dots = []
+        self.precision_path_points = []
+        self.precision_current_dot = 0
+        
+        margin = 100
+        for i in range(num_dots):
+            x = random.randint(margin, GAME_AREA_WIDTH - margin)
+            y = random.randint(margin + 50, WINDOW_HEIGHT - margin)
+            
+            # Ensure dots don't overlap too much
+            attempts = 0
+            while attempts < 50 and any(distance((x, y), (d.x, d.y)) < target_size * 3 for d in self.precision_dots):
+                x = random.randint(margin, GAME_AREA_WIDTH - margin)
+                y = random.randint(margin + 50, WINDOW_HEIGHT - margin)
+                attempts += 1
+                
+            self.precision_dots.append(PrecisionDot(x, y, target_size, i + 1))
+            
+        # Ensure first dot is marked active
+        if self.precision_dots:
+            self.precision_dots[0].state = "ACTIVE"
 
     def _spawn_falling_item(self):
         theme = self._get_theme()
@@ -1055,6 +1148,43 @@ class GameplayMixin:
         inst = getattr(self, 'font_small').render("PINCH to grab, ARM to move, WRIST to rotate", True, (200, 200, 200))
         self.screen.blit(inst, inst.get_rect(center=(cx, WINDOW_HEIGHT - 40)))
 
+    def _draw_level9(self):
+        theme = self._get_theme()
+        primary = theme["primary_color"]
+        
+        title = self.font_medium.render("LEVEL 9: Precision Path", True, primary)
+        self.screen.blit(title, (GAME_AREA_WIDTH // 2 - title.get_width() // 2, 60))
+        
+        # Draw path lines
+        if len(self.precision_path_points) >= 2:
+            pygame.draw.lines(self.screen, (0, 255, 200), False, self.precision_path_points, 3)
+            
+        # If there's a current dot, draw a line from last point to current index tip
+        if self.precision_path_points and self.precision_current_dot < len(self.precision_dots):
+            hand_data = self.hand_engine.get_hand_data()
+            if hand_data and hand_data.index_tip:
+                pygame.draw.line(self.screen, (0, 255, 200, 100), self.precision_path_points[-1], hand_data.index_tip, 2)
+
+        # Draw dots
+        import time
+        import math
+        for dot in getattr(self, 'precision_dots', []):
+            color = (100, 100, 100) # WAITING
+            if dot.state == "ACTIVE":
+                color = (0, 255, 200)
+                # Pulsing effect
+                pulse = int(math.sin(time.time() * 5) * 5)
+                pygame.draw.circle(self.screen, color, (int(dot.x), int(dot.y)), dot.radius + pulse, 2)
+            elif dot.state == "COMPLETED":
+                color = (0, 150, 100)
+            
+            pygame.draw.circle(self.screen, color, (int(dot.x), int(dot.y)), dot.radius)
+            pygame.draw.circle(self.screen, (255, 255, 255), (int(dot.x), int(dot.y)), dot.radius, 2)
+            
+            # Number
+            num_surf = self.font_small.render(str(dot.order), True, (0, 0, 0) if dot.state == "COMPLETED" else (255, 255, 255))
+            self.screen.blit(num_surf, (dot.x - num_surf.get_width()//2, dot.y - num_surf.get_height()//2))
+
     def _get_level_goals(self) -> str:
         if self.state == GameState.MAIN_MENU:
             return "Select a level to begin rehabilitation"
@@ -1070,6 +1200,8 @@ class GameplayMixin:
             return "Make a FIST, then OPEN fully to pump the object!"
         elif self.state == GameState.LEVEL6_FINGER_TAPS:
             return "Memorize the pattern and repeat it!"
+        elif self.state == GameState.LEVEL9_PRECISION_PATH:
+            return "Connect the numbered dots in sequence using your index fingertip."
         return ""
 
     def _get_current_exercise_name(self) -> str:
@@ -1286,6 +1418,10 @@ class GameplayMixin:
                 AssemblyPart("Roof", (cx, cy-40), 0.0, [GAME_AREA_WIDTH-150.0, 200.0], random.uniform(-45, 45), (200, 100, 100), roof_shape)
             ]
             VOICE.speak("Level 8: Smart Assembly. Pinch a piece to grab it, drag it to the blueprint, and rotate your wrist to fit it.")
+        elif lv == 9:
+            self.state = GameState.LEVEL9_PRECISION_PATH
+            self._spawn_precision_dots()
+            VOICE.speak("Level 9: Precision Path. Connect the numbered dots in sequence using your index fingertip.")
         self.sounds.play('select')
         self.popups.append(ScorePopup(GAME_AREA_WIDTH//2, WINDOW_HEIGHT//2 - 60, "POSTURE FIX: Sit up & keep shoulders relaxed!"))
 

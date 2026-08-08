@@ -1,4 +1,4 @@
-﻿"""RuntimeMixin implementation for PhysioSystem."""
+"""RuntimeMixin implementation for PhysioSystem."""
 
 from .shared import *
 
@@ -279,7 +279,8 @@ class RuntimeMixin:
                 GameState.LEVEL5_GRIP_RELEASE,
                 GameState.LEVEL6_FINGER_TAPS,
                 GameState.LEVEL7_WRIST_MECHANICS,
-                GameState.LEVEL8_SMART_ASSEMBLY
+                GameState.LEVEL8_SMART_ASSEMBLY,
+                GameState.LEVEL9_PRECISION_PATH
             ]
             is_gameplay = self.state in gameplay_states
             
@@ -307,7 +308,8 @@ class RuntimeMixin:
         # Check tracking & Freeze Timer
         is_playing = self.state in [GameState.LEVEL1_FLEXIBILITY, GameState.LEVEL2_STRENGTH, 
                                     GameState.LEVEL3_FINEMOTOR, GameState.LEVEL4_COORDINATION,
-                                    GameState.LEVEL5_GRIP_RELEASE, GameState.LEVEL6_FINGER_TAPS]
+                                    GameState.LEVEL5_GRIP_RELEASE, GameState.LEVEL6_FINGER_TAPS,
+                                    GameState.LEVEL9_PRECISION_PATH]
         
         now = time.time()
         dt = now - getattr(self, '_last_update_time', now)
@@ -362,6 +364,9 @@ class RuntimeMixin:
         elif self.state == GameState.LEVEL8_SMART_ASSEMBLY:
             if not getattr(self, 'tracking_lost', False):
                 self._update_level8(hand_data)
+        elif self.state == GameState.LEVEL9_PRECISION_PATH:
+            if not getattr(self, 'tracking_lost', False):
+                self._update_level9(hand_data)
         elif self.state == GameState.LEVEL_COMPLETE:
             if time.time() - self._level_complete_time > 2.5:
                 self.state = GameState.RESULTS
@@ -459,6 +464,8 @@ class RuntimeMixin:
             self._draw_level7()
         elif self.state == GameState.LEVEL8_SMART_ASSEMBLY:
             self._draw_level8()
+        elif self.state == GameState.LEVEL9_PRECISION_PATH:
+            self._draw_level9()
         elif self.state == GameState.LEVEL_COMPLETE:
             self._draw_level_complete()
         elif self.state == GameState.RESULTS:
@@ -517,7 +524,8 @@ class RuntimeMixin:
                            GameState.LEVEL3_FINEMOTOR,
                            GameState.LEVEL4_COORDINATION,
                            GameState.LEVEL5_GRIP_RELEASE,
-                           GameState.LEVEL6_FINGER_TAPS]
+                           GameState.LEVEL6_FINGER_TAPS,
+                           GameState.LEVEL9_PRECISION_PATH]
         if self.state in gameplay_states:
             hud_y = 8
             hud_h = 36

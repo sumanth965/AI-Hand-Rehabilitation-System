@@ -1,4 +1,4 @@
-﻿"""SetupMixin implementation for PhysioSystem."""
+"""SetupMixin implementation for PhysioSystem."""
 
 from .shared import *
 
@@ -111,15 +111,17 @@ class SetupMixin:
         gap = 30
         col1_x = cx - bw - (gap // 2)
         col2_x = cx + (gap // 2)
+        h = 75
         self.level_buttons = [
-            LevelButton(col1_x, 165, bw, 90, "LEVEL 1", 1, ring_radius=30),
-            LevelButton(col2_x, 165, bw, 90, "LEVEL 2", 2, ring_radius=30),
-            LevelButton(col1_x, 270, bw, 90, "LEVEL 3", 3, ring_radius=30),
-            LevelButton(col2_x, 270, bw, 90, "LEVEL 4", 4, ring_radius=30),
-            LevelButton(col1_x, 375, bw, 90, "LEVEL 5", 5, ring_radius=30),
-            LevelButton(col2_x, 375, bw, 90, "LEVEL 6", 6, ring_radius=30),
-            LevelButton(col1_x, 480, bw, 90, "LEVEL 7", 7, ring_radius=30),
-            LevelButton(col2_x, 480, bw, 90, "LEVEL 8", 8, ring_radius=30)
+            LevelButton(col1_x, 150, bw, h, "LEVEL 1", 1, ring_radius=30),
+            LevelButton(col2_x, 150, bw, h, "LEVEL 2", 2, ring_radius=30),
+            LevelButton(col1_x, 235, bw, h, "LEVEL 3", 3, ring_radius=30),
+            LevelButton(col2_x, 235, bw, h, "LEVEL 4", 4, ring_radius=30),
+            LevelButton(col1_x, 320, bw, h, "LEVEL 5", 5, ring_radius=30),
+            LevelButton(col2_x, 320, bw, h, "LEVEL 6", 6, ring_radius=30),
+            LevelButton(col1_x, 405, bw, h, "LEVEL 7", 7, ring_radius=30),
+            LevelButton(col2_x, 405, bw, h, "LEVEL 8", 8, ring_radius=30),
+            LevelButton(cx - bw//2, 490, bw, h, "LEVEL 9", 9, ring_radius=30)
         ]
         # Bottom utility buttons — evenly spaced with smaller rings
         btn_w = 210
@@ -157,6 +159,11 @@ class SetupMixin:
         self.pump_state = 0
         self.pump_reps = 0
         self.balloon_scale = 1.0
+        
+        # Level 9 Precision Path state
+        self.precision_dots = []
+        self.precision_current_dot = 0
+        self.precision_path_points = []
         
         self.simon_sequence = []
         self.simon_player_idx = 0

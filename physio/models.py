@@ -25,6 +25,7 @@ class GameState(Enum):
     LEVEL6_FINGER_TAPS = 15
     LEVEL7_WRIST_MECHANICS = 16
     LEVEL8_SMART_ASSEMBLY = 17
+    LEVEL9_PRECISION_PATH = 18
     PAUSED = 20
     LEVEL_COMPLETE = 22
     RESULTS = 21
@@ -106,3 +107,14 @@ class Seed:
     speed: float
     grabbed: bool = False
     is_golden: bool = False  # Golden seeds worth 3x
+
+
+@dataclass
+class PrecisionDot:
+    """Dot target for Level 9 Precision Path"""
+    x: float
+    y: float
+    radius: int
+    order: int
+    state: str = "WAITING"  # WAITING, ACTIVE, COMPLETED, MISSED
+    activation_time: float = 0.0
