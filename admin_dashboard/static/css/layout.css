@@ -164,20 +164,7 @@
   position: relative;
 }
 
-/* Loader bar on hover */
-.nav-item::after {
-  content: "";
-  position: absolute;
-  left: 0;
-  bottom: 0;
-  height: 2px;
-  width: 0%;
-  background: var(--accent-color, #34d399);
-  transition: width 0.6s linear;
-}
-.nav-item:hover::after {
-  width: 100%;
-}
+/* (Loader bar removed in favor of glowing border hover state) */
 
 /* (Staggered animation removed for hover implementation) */
 
@@ -188,13 +175,14 @@
 }
 
 .nav-item:hover {
-  background: #334155;
+  background: rgba(52, 211, 153, 0.08);
+  box-shadow: 0 0 0 1px rgba(52, 211, 153, 0.5), 0 0 12px rgba(52, 211, 153, 0.2);
   color: #f8fafc;
   transform: translateY(-1px);
 }
 
 .nav-item:hover .nav-chevron {
-  color: #94a3b8;
+  color: #34d399;
 }
 
 .nav-item:active {
@@ -202,14 +190,15 @@
 }
 
 .nav-item.active {
-  background: linear-gradient(90deg, #064e3b 0%, rgba(6, 78, 59, 0.7) 100%);
-  color: #6ee7b7;
+  background: linear-gradient(90deg, rgba(52, 211, 153, 0.4) 0%, rgba(52, 211, 153, 0.05) 100%);
+  color: #ffffff;
   font-weight: 600;
-  box-shadow: inset 3px 0 0 0 #34d399, 0 4px 12px rgba(6, 78, 59, 0.4);
+  box-shadow: inset 3px 0 0 0 #34d399, 0 8px 24px rgba(52, 211, 153, 0.25);
+  border: 1px solid rgba(52, 211, 153, 0.2);
 }
 
 .nav-item.active .nav-icon {
-  color: #34d399;
+  color: #ffffff;
 }
 
 .nav-item.active .nav-chevron {
