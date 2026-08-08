@@ -26,6 +26,7 @@ class GameState(Enum):
     LEVEL7_WRIST_MECHANICS = 16
     LEVEL8_SMART_ASSEMBLY = 17
     LEVEL9_PRECISION_PATH = 18
+    LEVEL10_PRECISION_PATHWAY = 19
     PAUSED = 20
     LEVEL_COMPLETE = 22
     RESULTS = 21
@@ -118,3 +119,12 @@ class PrecisionDot:
     order: int
     state: str = "WAITING"  # WAITING, ACTIVE, COMPLETED, MISSED
     activation_time: float = 0.0
+
+
+@dataclass
+class PathwayConfig:
+    """Config for Level 10 Precision Pathway"""
+    path_type: str
+    points: List[Tuple[float, float]]
+    width: float
+    recommended_direction: str

@@ -596,6 +596,92 @@ class GameplayMixin:
         if (time.time() - self.session_start > max(getattr(self, 'session_time_limit', 60), 60)):
             self._end_level()
 
+    def _update_level10(self, hand_data: HandData):
+        """Level 10: Precision Pathway - Fine Motor & Wrist Control"""
+        if not getattr(self, 'pathway_started', False):
+            self._spawn_precision_pathway()
+            return
+            
+        import time
+        import numpy as np
+        
+        if hand_data.index_tip:
+            hx, hy = hand_data.index_tip
+            points = self.pathway_config.points
+            
+            current_p = getattr(self, 'pathway_current_proj', points[0])
+            
+            if not getattr(self, 'pathway_grabbed', False):
+                dist_to_start = np.linalg.norm(np.array([hx, hy]) - np.array(current_p))
+                if dist_to_start < 40:
+                    self.pathway_grabbed = True
+                    self.sounds.play('select')
+                else:
+                    pass # Don't update progression if not grabbed
+            
+            if getattr(self, 'pathway_grabbed', False):
+                self.pathway_samples += 1
+                
+                # Find closest distance to any segment on the path
+                min_dist = float('inf')
+                best_proj = current_p
+                
+                for i in range(len(points)-1):
+                    p1 = np.array(points[i])
+                    p2 = np.array(points[i+1])
+                    p3 = np.array([hx, hy])
+                    
+                    l2 = np.sum((p1-p2)**2)
+                    if l2 == 0:
+                        dist = np.linalg.norm(p3 - p1)
+                    else:
+                        t = max(0, min(1, np.dot(p3 - p1, p2 - p1) / l2))
+                        projection = p1 + t * (p2 - p1)
+                        dist = np.linalg.norm(p3 - projection)
+                    if dist < min_dist:
+                        min_dist = dist
+                        best_proj = p1 if l2 == 0 else projection
+                        
+                half_width = self.pathway_config.width / 2
+                
+                # If they stray too far from the path, they drop the marker
+                if min_dist > half_width + 40:
+                    self.pathway_grabbed = False
+                    self.correctness_warning = "LOST MARKER - Return to Start"
+                    self.warning_timer = 45
+                else:
+                    self.pathway_current_proj = best_proj
+                    self.pathway_total_deviation += min_dist
+                    
+                    # Check boundaries
+                    if min_dist > half_width:
+                        self.pathway_boundary_violations += 1
+                        self.correctness_warning = "PATH DEVIATION"
+                        self.warning_timer = 30
+                    elif min_dist > half_width * 0.7:
+                        self.correctness_warning = "WARNING - Approaching Boundary"
+                        self.warning_timer = 15
+                    
+                # End condition
+                end_p = np.array(points[-1])
+                dist_to_end = np.linalg.norm(np.array(self.pathway_current_proj) - end_p)
+                if dist_to_end < 40:
+                    avg_deviation = self.pathway_total_deviation / max(1, self.pathway_samples)
+                    accuracy = max(0.0, min(100.0, 100.0 * (1.0 - (avg_deviation / half_width))))
+                    self.accuracy_attempts = 100
+                    self.accuracy_hits = int(accuracy)
+                    
+                    violation_penalty = min(30, self.pathway_boundary_violations * 2)
+                    self.score = int(max(0, accuracy - violation_penalty))
+                    
+                    self.popups.append(ScorePopup(hx, hy - 40, "PATH COMPLETE!", COLOR_SUCCESS))
+                    self.sounds.play('level_complete')
+                    self._end_level()
+                    return
+                
+        if (time.time() - self.session_start > max(getattr(self, 'session_time_limit', 60), 60)):
+            self._end_level()
+
     def _draw_level1(self):
         theme = self._get_theme()
         primary = theme["primary_color"]
@@ -1020,6 +1106,55 @@ class GameplayMixin:
         if self.precision_dots:
             self.precision_dots[0].state = "ACTIVE"
 
+    def _spawn_precision_pathway(self):
+        from physio.models import PathwayConfig
+        import math
+        
+        width = 80
+        if getattr(self, 'active_prescription', None):
+            tier = getattr(self, 'active_prescription').difficulty_tier
+            if tier == 'EASY':
+                width = 120
+            elif tier == 'HARD':
+                width = 50
+                
+        points = []
+        cx, cy = GAME_AREA_WIDTH // 2, WINDOW_HEIGHT // 2
+        
+        import random
+        path_types = ["Straight", "S-Curve", "Zig-Zag"]
+        path_type = random.choice(path_types)
+        
+        if path_type == "Straight":
+            points = [(150, cy), (GAME_AREA_WIDTH - 150, cy)]
+        elif path_type == "S-Curve":
+            for i in range(101):
+                t = i / 100.0
+                x = 150 + t * (GAME_AREA_WIDTH - 300)
+                y = cy + math.sin(t * math.pi * 2) * 150
+                points.append((x, y))
+        elif path_type == "Zig-Zag":
+            points = [
+                (150, cy),
+                (300, cy - 150),
+                (500, cy + 150),
+                (700, cy - 150),
+                (GAME_AREA_WIDTH - 150, cy)
+            ]
+            
+        self.pathway_config = PathwayConfig(
+            path_type=path_type,
+            points=points,
+            width=width,
+            recommended_direction="Right"
+        )
+        self.pathway_started = True
+        self.pathway_boundary_violations = 0
+        self.pathway_total_deviation = 0.0
+        self.pathway_samples = 0
+        self.pathway_current_proj = points[0]
+        self.pathway_grabbed = False
+
     def _spawn_falling_item(self):
         theme = self._get_theme()
         spd = theme["speed_multiplier"] * getattr(self, 'adaptive_speed_scale', 1.0)
@@ -1185,6 +1320,34 @@ class GameplayMixin:
             num_surf = self.font_small.render(str(dot.order), True, (0, 0, 0) if dot.state == "COMPLETED" else (255, 255, 255))
             self.screen.blit(num_surf, (dot.x - num_surf.get_width()//2, dot.y - num_surf.get_height()//2))
 
+    def _draw_level10(self):
+        theme = self._get_theme()
+        primary = theme["primary_color"]
+        
+        title = self.font_medium.render("LEVEL 10: Precision Pathway", True, primary)
+        self.screen.blit(title, (GAME_AREA_WIDTH // 2 - title.get_width() // 2, 60))
+        
+        if not getattr(self, 'pathway_config', None):
+            return
+            
+        points = self.pathway_config.points
+        width = self.pathway_config.width
+        
+        if len(points) >= 2:
+            # Draw boundary (thicker line behind)
+            pygame.draw.lines(self.screen, (40, 40, 60), False, points, int(width))
+            # Draw centerline
+            pygame.draw.lines(self.screen, primary, False, points, 2)
+            
+            # Start and End markers
+            start_p = getattr(self, 'pathway_current_proj', points[0])
+            end_p = points[-1]
+            pygame.draw.circle(self.screen, (100, 255, 100), (int(start_p[0]), int(start_p[1])), 15)
+            self.screen.blit(self.font_tiny.render("START", True, (255,255,255)), (start_p[0]-20, start_p[1]-30))
+            
+            pygame.draw.circle(self.screen, (255, 100, 100), (int(end_p[0]), int(end_p[1])), 15)
+            self.screen.blit(self.font_tiny.render("END", True, (255,255,255)), (end_p[0]-15, end_p[1]-30))
+
     def _get_level_goals(self) -> str:
         if self.state == GameState.MAIN_MENU:
             return "Select a level to begin rehabilitation"
@@ -1202,6 +1365,8 @@ class GameplayMixin:
             return "Memorize the pattern and repeat it!"
         elif self.state == GameState.LEVEL9_PRECISION_PATH:
             return "Connect the numbered dots in sequence using your index fingertip."
+        elif self.state == GameState.LEVEL10_PRECISION_PATHWAY:
+            return "Guide your index finger from START to END along the pathway."
         return ""
 
     def _get_current_exercise_name(self) -> str:
@@ -1422,6 +1587,10 @@ class GameplayMixin:
             self.state = GameState.LEVEL9_PRECISION_PATH
             self._spawn_precision_dots()
             VOICE.speak("Level 9: Precision Path. Connect the numbered dots in sequence using your index fingertip.")
+        elif lv == 10:
+            self.state = GameState.LEVEL10_PRECISION_PATHWAY
+            self.pathway_started = False
+            VOICE.speak("Level 10: Precision Pathway. Carefully guide your index finger along the path from start to finish.")
         self.sounds.play('select')
         self.popups.append(ScorePopup(GAME_AREA_WIDTH//2, WINDOW_HEIGHT//2 - 60, "POSTURE FIX: Sit up & keep shoulders relaxed!"))
 

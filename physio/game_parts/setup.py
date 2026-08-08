@@ -121,7 +121,8 @@ class SetupMixin:
             LevelButton(col2_x, 320, bw, h, "LEVEL 6", 6, ring_radius=30),
             LevelButton(col1_x, 405, bw, h, "LEVEL 7", 7, ring_radius=30),
             LevelButton(col2_x, 405, bw, h, "LEVEL 8", 8, ring_radius=30),
-            LevelButton(cx - bw//2, 490, bw, h, "LEVEL 9", 9, ring_radius=30)
+            LevelButton(col1_x, 490, bw, h, "LEVEL 9", 9, ring_radius=30),
+            LevelButton(col2_x, 490, bw, h, "LEVEL 10", 10, ring_radius=30)
         ]
         # Bottom utility buttons — evenly spaced with smaller rings
         btn_w = 210
@@ -164,6 +165,13 @@ class SetupMixin:
         self.precision_dots = []
         self.precision_current_dot = 0
         self.precision_path_points = []
+        
+        # Level 10 Precision Pathway state
+        self.pathway_config = None
+        self.pathway_boundary_violations = 0
+        self.pathway_total_deviation = 0.0
+        self.pathway_samples = 0
+        self.pathway_started = False
         
         self.simon_sequence = []
         self.simon_player_idx = 0

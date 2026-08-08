@@ -40,6 +40,7 @@ LEVEL_DISPLAY_NAMES = {
     7: "Forearm Rotation Orbit",
     8: "Smart Functional Assembly",
     9: "Precision Path - Dots",
+    10: "Precision Pathway",
 }
 
 # Game Settings
