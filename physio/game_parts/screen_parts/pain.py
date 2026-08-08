@@ -155,7 +155,7 @@ class PainScreenMixin:
         # Floating PIP Hand Alignment Camera
         pip_w, pip_h = 340, 255
         pip_x = cx - pip_w // 2
-        pip_y = cy + 75
+        pip_y = cy + 40
         
         # Draw camera with cyan rounded border matching the mockup
         border_col = (0, 180, 220)

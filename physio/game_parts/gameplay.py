@@ -689,7 +689,7 @@ class GameplayMixin:
 
         # Title (pushed down to clear HUD bar)
         title = self.font_medium.render(f"LEVEL 1: {level_name}", True, primary)
-        self.screen.blit(title, (50, 75))
+        self.screen.blit(title, (50, 85))
 
         # Bubble counter
         total_bubbles = len(self.bubbles)
@@ -723,7 +723,7 @@ class GameplayMixin:
 
         # Title pushed lower
         title = self.font_medium.render(f"LEVEL 2: {level_name}", True, primary)
-        self.screen.blit(title, (50, 75))
+        self.screen.blit(title, (50, 85))
 
         # Timer bar lower
         if self.session_start:
@@ -731,7 +731,7 @@ class GameplayMixin:
             remaining = max(0, 1.0 - elapsed / self.session_time_limit)
             bar_w = GAME_AREA_WIDTH - 150
             bar_x = 50
-            bar_y = 120
+            bar_y = 135
             pygame.draw.rect(self.screen, (40, 40, 50), (bar_x, bar_y, bar_w, 12), border_radius=6)
             r = int(255 * (1 - remaining))
             g = int(200 * remaining)
@@ -778,7 +778,7 @@ class GameplayMixin:
 
         # Title pushed lower
         title = self.font_medium.render(f"LEVEL 3: {level_name}", True, primary)
-        self.screen.blit(title, (50, 75))
+        self.screen.blit(title, (50, 85))
 
         # Timer bar lower
         if self.session_start:
@@ -786,7 +786,7 @@ class GameplayMixin:
             remaining = max(0, 1.0 - elapsed / self.session_time_limit)
             bar_w = GAME_AREA_WIDTH - 150
             bar_x = 50
-            bar_y = 120
+            bar_y = 135
             pygame.draw.rect(self.screen, (40, 40, 50), (bar_x, bar_y, bar_w, 12), border_radius=6)
             r = int(255 * (1 - remaining))
             g = int(200 * remaining)
@@ -816,7 +816,7 @@ class GameplayMixin:
         level_name = theme.get('level4_name', 'Magic Trace')
 
         title = self.font_medium.render(f"LEVEL 4: {level_name}", True, primary)
-        self.screen.blit(title, (50, 75))
+        self.screen.blit(title, (50, 85))
         
         # Timer bar
         if self.session_start:
@@ -824,7 +824,7 @@ class GameplayMixin:
             remaining = max(0, 1.0 - elapsed / self.session_time_limit)
             bar_w = GAME_AREA_WIDTH - 150
             bar_x = 50
-            bar_y = 120
+            bar_y = 135
             pygame.draw.rect(self.screen, (40, 40, 50), (bar_x, bar_y, bar_w, 12), border_radius=6)
             r = int(255 * (1 - remaining))
             g = int(200 * remaining)
@@ -867,7 +867,7 @@ class GameplayMixin:
         level_name = theme.get('level5_name', 'Balloon Pump')
 
         title = self.font_medium.render(f"LEVEL 5: {level_name}", True, primary)
-        self.screen.blit(title, (50, 75))
+        self.screen.blit(title, (50, 85))
         
         # Timer bar
         if self.session_start:
@@ -875,7 +875,7 @@ class GameplayMixin:
             remaining = max(0, 1.0 - elapsed / self.session_time_limit)
             bar_w = GAME_AREA_WIDTH - 150
             bar_x = 50
-            bar_y = 120
+            bar_y = 135
             pygame.draw.rect(self.screen, (40, 40, 50), (bar_x, bar_y, bar_w, 12), border_radius=6)
             r = int(255 * (1 - remaining))
             g = int(200 * remaining)
@@ -912,7 +912,7 @@ class GameplayMixin:
         level_name = theme.get('level6_name', 'Memory Sequence')
 
         title = self.font_medium.render(f"LEVEL 6: {level_name}", True, primary)
-        self.screen.blit(title, (50, 75))
+        self.screen.blit(title, (50, 85))
         
         # Timer
         if self.session_start:
@@ -920,7 +920,7 @@ class GameplayMixin:
             remaining = max(0, 1.0 - elapsed / self.session_time_limit)
             bar_w = GAME_AREA_WIDTH - 150
             bar_x = 50
-            bar_y = 120
+            bar_y = 135
             pygame.draw.rect(self.screen, (40, 40, 50), (bar_x, bar_y, bar_w, 12), border_radius=6)
             r = int(255 * (1 - remaining))
             g = int(200 * remaining)
@@ -1205,7 +1205,7 @@ class GameplayMixin:
         
         level_name = theme.get('level7_name', 'Rotation Orbit')
         title = getattr(self, 'font_medium').render(f"LEVEL 7: {level_name}", True, primary)
-        self.screen.blit(title, (50, 75))
+        self.screen.blit(title, (50, 85))
         
         # 1. Draw Planet (Center)
         pygame.draw.circle(self.screen, (20, 50, 100), (cx, cy), 60) # Core
@@ -1249,7 +1249,7 @@ class GameplayMixin:
         
         level_name = theme.get('level8_name', 'Toy Builder')
         title = getattr(self, 'font_medium').render(f"LEVEL 8: {level_name}", True, primary)
-        self.screen.blit(title, (50, 75))
+        self.screen.blit(title, (50, 85))
         
         import math
         import pygame
@@ -1325,7 +1325,7 @@ class GameplayMixin:
         primary = theme["primary_color"]
         
         title = self.font_medium.render("LEVEL 10: Precision Pathway", True, primary)
-        self.screen.blit(title, (GAME_AREA_WIDTH // 2 - title.get_width() // 2, 60))
+        self.screen.blit(title, (GAME_AREA_WIDTH // 2 - title.get_width() // 2, 85))
         
         if not getattr(self, 'pathway_config', None):
             return

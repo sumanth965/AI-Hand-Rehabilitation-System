@@ -485,7 +485,7 @@ class RuntimeMixin:
         _no_sidebar = [GameState.AGE_SELECT,
                        GameState.PATIENT_REGISTRATION, GameState.LEVEL_COMPLETE,
                        GameState.PAIN_SCALE, GameState.HISTORY, GameState.CLOUD_SYNC,
-                       GameState.THERAPIST_DASHBOARD]
+                       GameState.THERAPIST_DASHBOARD, GameState.PAIN_AFTER_SESSION]
         if self.state not in _no_sidebar:
             hand_data = self.hand_engine.get_hand_data()
             camera_frame = self.hand_engine.get_frame()
@@ -531,19 +531,21 @@ class RuntimeMixin:
                            GameState.LEVEL4_COORDINATION,
                            GameState.LEVEL5_GRIP_RELEASE,
                            GameState.LEVEL6_FINGER_TAPS,
+                           GameState.LEVEL7_WRIST_MECHANICS,
+                           GameState.LEVEL8_SMART_ASSEMBLY,
                            GameState.LEVEL9_PRECISION_PATH,
                            GameState.LEVEL10_PRECISION_PATHWAY]
         if self.state in gameplay_states:
-            hud_y = 8
-            hud_h = 36
-            hud_w = GAME_AREA_WIDTH - 20
+            hud_y = 15
+            hud_h = 60
+            hud_w = GAME_AREA_WIDTH - 275
             hud_rect = pygame.Rect(10, hud_y, hud_w, hud_h)
 
-            # Semi-transparent HUD background
+            # Modern flat HUD background matching HomeIcon
             hud_surf = pygame.Surface((hud_w, hud_h), pygame.SRCALPHA)
-            hud_surf.fill((10, 15, 30, 200))
+            hud_surf.fill((20, 22, 35, 230))
             self.screen.blit(hud_surf, (10, hud_y))
-            pygame.draw.rect(self.screen, (0, 180, 220), hud_rect, 2, border_radius=8)
+            pygame.draw.rect(self.screen, (0, 180, 220), hud_rect, 2, border_radius=15)
 
             hud_font = self.font_hud  # cached — no per-frame allocation
 
@@ -589,7 +591,7 @@ class RuntimeMixin:
             # Score
             score_str = f"SCORE: {self.score}"
             sc = hud_font.render(score_str, True, (255, 255, 255))
-            self.screen.blit(sc, (20, hud_y + 8))
+            self.screen.blit(sc, (30, hud_y + (hud_h - sc.get_height()) // 2))
 
             # Accuracy
             acc = (self.accuracy_hits / self.accuracy_attempts * 100) \
@@ -598,18 +600,18 @@ class RuntimeMixin:
                         (255, 180, 0)  if acc >= 40 else (220, 80, 80)
             acc_str = f"ACC: {acc:.0f}%"
             ac = hud_font.render(acc_str, True, acc_color)
-            self.screen.blit(ac, (180, hud_y + 8))
+            self.screen.blit(ac, (200, hud_y + (hud_h - ac.get_height()) // 2))
 
             # Combo
             if self.combo > 1:
                 combo_color = (255, 215, 0) if self.combo >= 5 else (255, 180, 60)
                 co = hud_font.render(f"x{self.combo} COMBO", True, combo_color)
-                self.screen.blit(co, (310, hud_y + 8))
+                self.screen.blit(co, (350, hud_y + (hud_h - co.get_height()) // 2))
 
             # Multiplier badge
             if self.score_multiplier > 1.0:
                 mx = hud_font.render(f"{self.score_multiplier:.0f}x BOOST", True, (255, 100, 255))
-                self.screen.blit(mx, (470, hud_y + 8))
+                self.screen.blit(mx, (530, hud_y + (hud_h - mx.get_height()) // 2))
         
         # Draw feedback text (center screen) — use cached font to avoid per-frame allocation
         if self.feedback_text and self.feedback_timer > 0:
@@ -619,14 +621,22 @@ class RuntimeMixin:
             self.screen.blit(shadow, shadow.get_rect(center=(GAME_AREA_WIDTH // 2 + 3, WINDOW_HEIGHT // 3 + 3)))
             self.screen.blit(feedback_surf, feedback_rect)
             
-        # Draw correctness warning (top center)
+        # Draw correctness warning (floating toast below timer bar)
         if getattr(self, 'correctness_warning', "") and getattr(self, 'state', None) in gameplay_states:
             c_color = (255, 100, 100) if "Bend" in self.correctness_warning else (100, 255, 100)
             warning_surf = self.font_hud.render(self.correctness_warning, True, c_color)
-            warning_rect = warning_surf.get_rect(center=(GAME_AREA_WIDTH // 2, 70))
-            shadow_warn = self.font_hud.render(self.correctness_warning, True, (0, 0, 0))
-            self.screen.blit(shadow_warn, shadow_warn.get_rect(center=(GAME_AREA_WIDTH // 2 + 2, 72)))
-            self.screen.blit(warning_surf, warning_rect)
+            
+            toast_w = warning_surf.get_width() + 40
+            toast_h = warning_surf.get_height() + 16
+            toast_x = (GAME_AREA_WIDTH - toast_w) // 2
+            toast_y = 165
+            
+            toast_bg = pygame.Surface((toast_w, toast_h), pygame.SRCALPHA)
+            toast_bg.fill((20, 22, 35, 230))
+            self.screen.blit(toast_bg, (toast_x, toast_y))
+            pygame.draw.rect(self.screen, c_color, (toast_x, toast_y, toast_w, toast_h), 2, border_radius=12)
+            
+            self.screen.blit(warning_surf, warning_surf.get_rect(center=(GAME_AREA_WIDTH // 2, toast_y + toast_h // 2)))
         
         # Apply screen shake offset
         if self.shake_offset != (0, 0):
