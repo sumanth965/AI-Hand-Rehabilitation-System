@@ -296,6 +296,8 @@ function sortTable(tableId, column) {
   table.dataset.sort = asc ? String(column) : "";
   rows.forEach(row => body.appendChild(row));
 }
+
+/* Sidebar toggle handled by CSS hover */
 """
 
     def chart(self, title: str, series: dict[str, list[float]], labels: list[str], ylabel: str = "") -> str:

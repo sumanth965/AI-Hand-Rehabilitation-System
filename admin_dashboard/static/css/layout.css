@@ -3,7 +3,7 @@
    ================================================================= */
 .app-shell {
   display: grid;
-  grid-template-columns: var(--sidebar-width) 1fr;
+  grid-template-columns: var(--sidebar-collapsed-width, 70px) 1fr;
   min-height: 100vh;
 }
 
@@ -26,7 +26,42 @@
   border: none;
   contain: layout style;
   z-index: 30;
-  transition: width 0.25s ease, padding 0.25s ease;
+  /* Default width – collapsed icons only */
+  width: var(--sidebar-collapsed-width, 70px);
+  transition: width 0.4s cubic-bezier(0.25, 0.8, 0.25, 1), padding 0.25s ease;
+  overflow: hidden;
+}
+
+/* Hover state – expand menu */
+.sidebar:hover {
+  width: var(--sidebar-width, 250px);
+}
+
+.nav-label, .nav-chevron, .profile-info, .profile-chevron {
+  opacity: 0;
+  pointer-events: none;
+  transition: opacity 0.3s ease;
+  white-space: nowrap;
+}
+
+.sidebar:hover .nav-label,
+.sidebar:hover .nav-chevron,
+.sidebar:hover .profile-info,
+.sidebar:hover .profile-chevron {
+  opacity: 1;
+  pointer-events: auto;
+  transition-delay: 0.1s;
+}
+
+/* Loader bar animation */
+@keyframes loaderBar {
+  0% {
+    width: 0%;
+  }
+
+  100% {
+    width: 100%;
+  }
 }
 
 .therapist-profile {
@@ -124,9 +159,27 @@
   min-height: 44px;
   border: none;
   margin-bottom: 8px;
-  transition: all 0.2s ease;
+  transition: background 0.2s ease, transform 0.2s ease;
   white-space: nowrap;
+  position: relative;
 }
+
+/* Loader bar on hover */
+.nav-item::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: 0;
+  height: 2px;
+  width: 0%;
+  background: var(--accent-color, #34d399);
+  transition: width 0.6s linear;
+}
+.nav-item:hover::after {
+  width: 100%;
+}
+
+/* (Staggered animation removed for hover implementation) */
 
 .nav-chevron {
   margin-left: auto;
@@ -139,6 +192,7 @@
   color: #f8fafc;
   transform: translateY(-1px);
 }
+
 .nav-item:hover .nav-chevron {
   color: #94a3b8;
 }
@@ -153,9 +207,11 @@
   font-weight: 600;
   box-shadow: inset 3px 0 0 0 #34d399, 0 4px 12px rgba(6, 78, 59, 0.4);
 }
+
 .nav-item.active .nav-icon {
   color: #34d399;
 }
+
 .nav-item.active .nav-chevron {
   display: none;
 }
@@ -181,6 +237,7 @@
 .nav-item.utility-link.text-danger {
   color: #ef4444;
 }
+
 .nav-item.utility-link.text-danger:hover {
   background: rgba(239, 68, 68, 0.1);
   color: #ef4444;
