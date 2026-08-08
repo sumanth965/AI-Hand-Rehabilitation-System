@@ -239,10 +239,17 @@ class DashboardHandler(BaseHTTPRequestHandler):
         if not page_factory:
             self.send_error(HTTPStatus.NOT_FOUND, "Page not found")
             return
+
+        theme_val = params.get("theme")
+        if not theme_val:
+            theme_val = self.get_cookie("theme") or "light"
+        params["theme"] = theme_val
+
         body = self.renderer.layout(page_factory(), params)
         self.send_response(HTTPStatus.OK)
         self.send_header("Content-Type", "text/html; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
+        self.send_header("Set-Cookie", f"theme={theme_val}; Path=/; Max-Age=31536000")
         self.end_headers()
         self.wfile.write(body)
 
