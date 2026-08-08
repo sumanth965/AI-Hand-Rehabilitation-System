@@ -1,4 +1,4 @@
-﻿"""Screen rendering and interaction helpers for PhysioSystem."""
+"""Screen rendering and interaction helpers for PhysioSystem."""
 
 from ..shared import *
 
@@ -100,7 +100,9 @@ class NavigationScreenMixin:
             "Grip & Release Cycle\n(Balloon Pump)",
             "Fine Motor Tap Precision\n(Simon Tap)",
             "Forearm Pronate & Supinate\n(Rotation Orbit)",
-            "Functional Spatial Coord\n(Toy Builder)"
+            "Functional Spatial Coord\n(Toy Builder)",
+            "Precision Path - Dots\n(Hand Trace)",
+            "Precision Pathway\n(Fine Motor Control)"
         ]
         btn_font = pygame.font.SysFont("segoeui", 16)
         for i, button in enumerate(self.level_buttons):
@@ -110,7 +112,7 @@ class NavigationScreenMixin:
 
         # Instructions
         inst = self.font_tiny.render("Hover your finger over a level to select", True, COLOR_TEXT)
-        inst_rect = inst.get_rect(center=(GAME_AREA_WIDTH // 2, 575))
+        inst_rect = inst.get_rect(center=(GAME_AREA_WIDTH // 2, 595))
         self.screen.blit(inst, inst_rect)
 
         # History, Calibration, and Exit utility buttons

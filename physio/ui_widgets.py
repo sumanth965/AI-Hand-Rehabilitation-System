@@ -117,8 +117,7 @@ class SelectionRing:
             sel_text = font_sel.render("SELECTING", True, (180, 255, 200))
             screen.blit(sel_text, sel_text.get_rect(center=(self.x, self.y + 12)))
         else:
-            hint = font_hint.render("HOVER", True, (120, 180, 200))
-            screen.blit(hint, hint.get_rect(center=(self.x, self.y)))
+            pygame.draw.circle(screen, (0, 150, 180), (self.x, self.y), 4)
 
 
 class LevelButton:
@@ -190,16 +189,20 @@ class LevelButton:
         badge_size = 28 if self.rect.height > 60 else 24
         badge_y = self.rect.centery - badge_size // 2
         badge_rect = pygame.Rect(self.rect.x + 10, badge_y, badge_size, badge_size)
-        badge_color = (50, 255, 150) if is_hovering else (0, 150, 200)
-        pygame.draw.rect(screen, badge_color, badge_rect, border_radius=7)
-        badge_text = font_badge.render(str(self.level_num), True, (0, 0, 0))
-        screen.blit(badge_text, badge_text.get_rect(center=badge_rect.center))
+        
+        has_badge = bool(self.level_num)
+        if has_badge:
+            badge_color = (50, 255, 150) if is_hovering else (0, 150, 200)
+            pygame.draw.rect(screen, badge_color, badge_rect, border_radius=7)
+            badge_text = font_badge.render(str(self.level_num), True, (0, 0, 0))
+            screen.blit(badge_text, badge_text.get_rect(center=badge_rect.center))
 
         text_color = (255, 255, 255) if is_hovering else (200, 210, 230)
         
         # Split text by newlines for multiline age group cards
         lines = [line.strip() for line in self.text.split('\n') if line.strip()]
-        text_left = self.rect.x + 10 + badge_size + 10
+        
+        text_left = self.rect.x + (10 + badge_size + 10 if has_badge else 20)
         text_right = self.ring.x - self.ring.radius - 10
         center_x = (text_left + text_right) // 2
         

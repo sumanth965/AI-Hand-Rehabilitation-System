@@ -129,9 +129,9 @@ class SetupMixin:
         btn_gap = 12
         total_w = btn_w * 3 + btn_gap * 2
         start_x = cx - total_w // 2
-        self.history_button = LevelButton(start_x, 585, btn_w, 50, "RECOVERY HISTORY", 9, ring_radius=20)
-        self.calibrate_button = LevelButton(start_x + btn_w + btn_gap, 585, btn_w, 50, "ROM DIAGNOSTICS", 8, ring_radius=20)
-        self.exit_button = LevelButton(start_x + (btn_w + btn_gap) * 2, 585, btn_w, 50, "EXIT SYSTEM", 99, ring_radius=20)
+        self.history_button = LevelButton(start_x, 620, btn_w, 50, "RECOVERY HISTORY", "", ring_radius=20)
+        self.calibrate_button = LevelButton(start_x + btn_w + btn_gap, 620, btn_w, 50, "ROM DIAGNOSTICS", "", ring_radius=20)
+        self.exit_button = LevelButton(start_x + (btn_w + btn_gap) * 2, 620, btn_w, 50, "EXIT SYSTEM", "", ring_radius=20)
         self.logout_button = Button(20, 15, 140, 40, "← LOGOUT", (50, 50, 70))
         self.logout_button.duration = 1.2
         self.home_icon = HomeIcon(GAME_AREA_WIDTH - 250, 15, 240, 60)
