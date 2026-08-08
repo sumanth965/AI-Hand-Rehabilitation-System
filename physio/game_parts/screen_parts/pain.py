@@ -1,4 +1,4 @@
-﻿"""Screen rendering and interaction helpers for PhysioSystem."""
+"""Screen rendering and interaction helpers for PhysioSystem."""
 
 from ..shared import *
 
@@ -7,10 +7,11 @@ class PainScreenMixin:
     def _update_pain_scale(self, hand_data: HandData):
         """Select a pain dot (0-10) using either hands-free hover (1.5s) or physical mouse click"""
         cx, cy = WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2
-        dot_spacing = 90
-        total_w = 10 * dot_spacing
+        box_w, box_h = 60, 75
+        box_gap = 25
+        total_w = 11 * box_w + 10 * box_gap
         start_x = cx - total_w // 2
-        dy = cy - 60
+        dy = cy - 80
 
         m_pos = pygame.mouse.get_pos()
         m_clicked = pygame.mouse.get_pressed()[0]
@@ -18,11 +19,11 @@ class PainScreenMixin:
         # 1. Physical Mouse Click Support (Instant Selection for high accessibility)
         if m_clicked:
             for i in range(11):
-                dx = start_x + i * dot_spacing
-                dist = math.sqrt((m_pos[0] - dx)**2 + (m_pos[1] - dy)**2)
-                if dist < 32:  # Expanded hit radius to 32px for easy touch clicks
+                rect = pygame.Rect(start_x + i * (box_w + box_gap), dy, box_w, box_h)
+                # Expand hit rect slightly for easier touch clicks
+                hit_rect = rect.inflate(20, 20)
+                if hit_rect.collidepoint(m_pos):
                     self._accept_pain_score(i)
-                    # Clear hover cache
                     if hasattr(self, '_pain_hover'):
                         del self._pain_hover
                         del self._pain_hover_t
@@ -31,10 +32,10 @@ class PainScreenMixin:
         # 2. Hands-Free Hover Support
         if hand_data.index_tip:
             for i in range(11):
-                dx = start_x + i * dot_spacing
-                dist = math.sqrt((hand_data.index_tip[0] - dx)**2 +
-                                 (hand_data.index_tip[1] - dy)**2)
-                if dist < 28:
+                rect = pygame.Rect(start_x + i * (box_w + box_gap), dy, box_w, box_h)
+                # Expand hit rect for easier hover targeting
+                hit_rect = rect.inflate(20, 20)
+                if hit_rect.collidepoint(hand_data.index_tip):
                     if not hasattr(self, '_pain_hover') or self._pain_hover != i:
                         self._pain_hover    = i
                         self._pain_hover_t  = time.time()
@@ -91,61 +92,79 @@ class PainScreenMixin:
         colors_nrs = [(50,220,120),(100,230,130),(160,230,100),(200,230,80),
                       (255,220,0),(255,190,0),(255,150,0),(255,100,0),
                       (240,60,60),(220,30,30),(200,0,0)]
-        dot_spacing = 90
-        total_w = 10 * dot_spacing
+        box_w, box_h = 60, 75
+        box_gap = 25
+        total_w = 11 * box_w + 10 * box_gap
         start_x = cx - total_w // 2
         hover_i  = getattr(self, '_pain_hover', -1)
         hover_t  = getattr(self, '_pain_hover_t', t)
 
         for i in range(11):
-            dx = start_x + i * dot_spacing
-            dy = cy - 60
+            dx = start_x + i * (box_w + box_gap)
+            dy = cy - 80
             col = colors_nrs[i]
-            r   = 22 if i != hover_i else 30
+            rect = pygame.Rect(dx, dy, box_w, box_h)
 
-            # Ring progress if hovered
             if i == hover_i:
                 progress = min((t - hover_t) / 1.5, 1.0)
-                pygame.draw.circle(self.screen, col, (dx, dy), r + 6, 5)
-                arc_r = r + 10
-                # Draw progress arc by drawing segments
-                segs = int(progress * 36)
-                for s in range(segs):
-                    a1 = math.radians(-90 + s * 10)
-                    a2 = math.radians(-90 + (s+1) * 10)
-                    p1 = (int(dx + arc_r * math.cos(a1)), int(dy + arc_r * math.sin(a1)))
-                    p2 = (int(dx + arc_r * math.cos(a2)), int(dy + arc_r * math.sin(a2)))
-                    pygame.draw.line(self.screen, (255,255,255), p1, p2, 3)
-            else:
-                pygame.draw.circle(self.screen, tuple(int(c*0.5) for c in col), (dx, dy), r)
+                
+                # Subtle dark background
+                pygame.draw.rect(self.screen, tuple(int(c*0.15) for c in col), rect, border_radius=10)
+                
+                # Cool bottom-up fill loader effect
+                fill_h = int(box_h * progress)
+                if fill_h > 0:
+                    fill_rect = pygame.Rect(dx, dy + box_h - fill_h, box_w, fill_h)
+                    old_clip = self.screen.get_clip()
+                    self.screen.set_clip(fill_rect.clip(old_clip))
+                    # Draw solid rounded rect; only the bottom fill_rect part is visible!
+                    pygame.draw.rect(self.screen, tuple(int(c*0.6) for c in col), rect, border_radius=10)
+                    self.screen.set_clip(old_clip)
 
-            pygame.draw.circle(self.screen, col, (dx, dy), r, 3)
+                # Glowing border that expands
+                pygame.draw.rect(self.screen, col, rect, max(2, int(7 * progress)), border_radius=10)
+                
+                # Text turns white as it fills
+                nm_col = (255, 255, 255) if progress > 0.5 else col
+            else:
+                # Normal state: empty background with solid thin colored border
+                pygame.draw.rect(self.screen, tuple(int(c*0.05) for c in col), rect, border_radius=10)
+                pygame.draw.rect(self.screen, col, rect, 2, border_radius=10)
+                nm_col = col
 
             # Number
-            nm = self.font_medium.render(str(i), True, col if i != hover_i else (255,255,255))
-            self.screen.blit(nm, nm.get_rect(center=(dx, dy)))
+            nm = self.font_large.render(str(i), True, nm_col)
+            self.screen.blit(nm, nm.get_rect(center=rect.center))
 
             # Descriptor below
             dc = self.font_hint.render(descriptors[i], True, col)
-            self.screen.blit(dc, dc.get_rect(center=(dx, dy + 50)))
+            self.screen.blit(dc, dc.get_rect(center=(rect.centerx, rect.bottom + 18)))
 
-        # Selected pain label
+        # Selected pain label / Feedback
         if hover_i >= 0:
             lbl = self.font_medium.render(
                 f"Pain: {hover_i}/10 — {descriptors[hover_i]}   Hold 1.5s to confirm",
                 True, colors_nrs[hover_i])
-            self.screen.blit(lbl, lbl.get_rect(center=(cx, cy + 35)))
+            self.screen.blit(lbl, lbl.get_rect(center=(cx, cy + 45)))
         else:
             hint = self.font_small.render(
                 "Point your index finger at a number to select",
-                True, (80, 120, 160))
-            self.screen.blit(hint, hint.get_rect(center=(cx, cy + 35)))
+                True, (140, 160, 180))
+            self.screen.blit(hint, hint.get_rect(center=(cx, cy + 45)))
 
         # Floating PIP Hand Alignment Camera
-        pip_w, pip_h = 320, 240
+        pip_w, pip_h = 340, 255
         pip_x = cx - pip_w // 2
-        pip_y = 425
-        self._draw_camera_preview(pip_x, pip_y, pip_w, pip_h, label="PAIN ASSESS HAND ALIGNMENT")
+        pip_y = cy + 75
+        
+        # Draw camera with cyan rounded border matching the mockup
+        border_col = (0, 180, 220)
+        pygame.draw.rect(self.screen, (10, 15, 25), (pip_x - 2, pip_y - 2, pip_w + 4, pip_h + 4), border_radius=8)
+        pygame.draw.rect(self.screen, border_col, (pip_x - 2, pip_y - 2, pip_w + 4, pip_h + 4), 2, border_radius=8)
+        self._draw_camera_preview(pip_x, pip_y, pip_w, pip_h, label="")
+        
+        lbl_pip = self.font_tiny.render("PAIN ASSESS HAND ALIGNMENT", True, border_col)
+        self.screen.blit(lbl_pip, lbl_pip.get_rect(center=(cx, pip_y + pip_h + 15)))
 
         # Clinical note
         note = self.font_hint.render(
