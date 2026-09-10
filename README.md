@@ -47,34 +47,46 @@ Navigate menus, play games, and track your recovery — **using only your hands.
 | 🎨 | **Premium Dynamic Dashboard UI** | Beautiful, responsive web portal with StudyFlow-inspired dark blue aesthetics, sidebar animations, and seamless dark/light mode toggling |
 | 📊 | **Therapist Dashboard** | Comprehensive web interface featuring Patient Management, Session Analytics, Digital Twin simulation, and Role-Based Access Control |
 | 🔐 | **Secure Authentication** | Full login system with session tokens and secure password verification for Clinicians |
-| 🎮 | **Level-Based Progression** | Eight exercise levels from warm-up to complex forearm rotation and smart assembly |
+| 🎮 | **10-Level Progressive Exercises** | Ten clinical exercise levels ranging from gross motor warm-ups to fine-motor pinch, forearm rotation, and precision pathway tracing |
 | 🦾 | **Biomechanical Compensation** | Real-time posture tracking (shoulder elevation/abduction, elbow drift, trunk lean) |
 | 🧠 | **Clinical Decision & Twin** | Machine learning recovery predictions, health scoring, and digital twin simulation |
 | 🗣️ | **Interactive Virtual Sensei** | Context-aware voice guidance powered by rules and optional local LLM polish |
+
+## 📚 Research Documentation
+
+For the complete scientific methodology, mathematical formulations, master variable dictionary, experimental protocol, statistical analysis plan, and research paper blueprint:
+
+👉 **See [`RESEARCH_ANALYSIS.md`](RESEARCH_ANALYSIS.md)**
+
+---
 
 ## 🚀 System Architecture
 
 The project is split into two integrated components: the **Rehabilitation Game** (patient runtime) and the **Therapist Dashboard** (clinician portal), supported by modular AI, biomechanics, and clinical analysis layers.
 
 ### Adaptive AI Rehabilitation Platform Flow
-Patient exercise data flows through session metrics collection into the local SQLite database. Recovery prediction and forearm classification feed the `AdaptiveRehabEngine`, which generates the rehabilitation prescription: difficulty tier, target size, speed scale, ROM requirement, repetition count, hold duration, rotation tolerance, risk level, recovery state, readiness score, and therapist recommendations.
+Patient exercise data flows through session metrics collection into the local SQLite database. Recovery prediction and forearm classification feed the `AdaptiveRehabEngine`, which generates the rehabilitation prescription: difficulty tier (1–5), target scale, speed scale, ROM requirement, repetition count, hold duration, rotation tolerance, risk level, recovery state, readiness score, and therapist recommendations.
 
-The Virtual Sensei consumes the current session, previous session history, recovery prediction, forearm classification, readiness score, risk level, and adaptive prescription to generate deterministic coaching. Optional Ollama support is limited to rewriting that finished coaching message for clearer communication.
+The Virtual Sensei consumes the current session, previous session history, recovery prediction, forearm classification, readiness score, risk level, and adaptive prescription to generate deterministic coaching. Optional Ollama support is strictly limited to rewriting that finished coaching message for clearer spoken communication.
 
 ### Component Directory Map
 * **Patient Application Core**
-  * `zero_keyboard_physio.py`: Main Pygame patient game loop, camera thread, voice coaching feedback, ROM calibration, and levels 1-8.
+  * `zero_keyboard_physio.py`: Main Pygame patient game loop, camera thread, voice coaching feedback, ROM calibration, and 10 clinical exercise levels.
   * `ui_components.py`: Reusable Pygame user interface buttons, dashboard cards, and navigation rings.
   * `hand_rehab_assistant.py`: Auxiliary guidance text helper for interactive patient UI.
 * **Clinician Portal Core**
-  * `admin_dashboard/`: Complete modular dashboard backend package containing `server.py`, `renderer.py`, `database.py`, `auth.py`, and organized page components. Includes a custom frontend framework with highly optimized dark mode layout.
+  * `admin_dashboard/`: Complete modular dashboard backend package containing `server.py`, `renderer.py`, `database.py`, `auth.py`, and organized page components. Includes a custom frontend framework with dark mode layout.
   * `therapist_dashboard.py`: Lightweight entry point to launch the modular admin dashboard server.
 * **Adaptive AI & Analytics Core**
-  * `adaptive_ai_engine.py`: Adaptive difficulty engine computing real-time prescription configurations and risk classifications.
+  * `adaptive_ai_engine.py`: Explainable rule-based difficulty engine computing real-time prescription configurations and risk classifications across Tiers 1–5.
   * `digital_twin_rehab.py`: Patient digital twin model projecting future recovery windows.
   * `clinical_intelligence.py`: Diagnostic analytics layer calculating patient health scores.
   * `upper_limb_analysis.py`: Biomechanical pose engine parsing joint angles to measure compensation.
-  * `llm_wrapper.py`: Thread-safe interface querying local Ollama LLMs.
+  * `llm_wrapper.py`: Thread-safe interface querying optional local Ollama LLMs for coaching message phrasing.
+* **Research & Data Validation Core (V1 Upgrade)**
+  * `research_export.py`: CLI and automated tool extracting authentic SQLite sessions into pseudonymized (`P001`), quality-flagged `research_dataset.csv`.
+  * `tests/test_accuracy.py`: Unit test suite verifying mathematical edge cases, zero-attempt handling (`NULL`), and tracking quality thresholds.
+  * `research_validation/`: Protocols, data dictionaries, software test reports, and clinician evaluation templates.
 
 ## 📦 Installation
 
@@ -100,52 +112,59 @@ python therapist_dashboard.py
 python zero_keyboard_physio.py
 ```
 
+**5. Export Research Dataset**
+```bash
+python research_export.py --db rehab_data.db --output research_dataset.csv
+```
+
 > [!WARNING]
 > A functioning webcam is required for the Rehabilitation Session. Ensure adequate lighting and camera visibility of both hand and upper torso for optimal landmark tracking.
 
 ## ⚙️ How It Works
 
-1. **Capture** — Webcam frames are captured and mirrored in real time.
+1. **Capture** — Webcam frames are captured and mirrored in real time (30/60 FPS).
 2. **Detect** — MediaPipe Hands identifies 21 hand landmarks; MediaPipe Pose tracks upper limb joints.
-3. **Analyze** — Joint angles and deviation paths are computed. Compensation scores are generated for the upper limb.
-4. **Adapt** — The game adjusts difficulty (target size, speed, hold thresholds) based on active AI prescriptions.
-5. **Log** — Metrics, prescriptions, notes, and twins are persisted to SQLite.
-6. **Review** — Therapists review recovery trends and simulate rehabilitation strategy projections on the web dashboard.
+3. **Analyze** — Knuckle angles, wrist rotation/deviation, jerk-derived smoothness, and compensation metrics are computed.
+4. **Adapt** — The game adjusts 10 difficulty parameters (target size, speed, hold thresholds, tolerances) based on active AI prescriptions.
+5. **Log** — Metrics, prescriptions, notes, and twins are persisted to SQLite with data quality flags (`VALID`, `NO_VALID_ATTEMPTS`, `TRACKING_ERROR`).
+6. **Review** — Therapists review recovery trends, inspect explainable AI rationales, and simulate rehabilitation strategy projections on the web dashboard.
 
-## ⚠️ Limitations & Future Improvements
+## ⚠️ Limitations & Scientific Notice
 
-While this project provides a strong proof-of-concept for AI-powered rehabilitation, it has some limitations to be addressed in future versions:
-- **Environmental Dependency:** MediaPipe requires adequate lighting and clear contrast; poor lighting can drop the tracking frame rate.
-- **2D Depth Limitations:** Using a standard webcam means depth estimation is inferred. Future improvements could integrate 3D depth cameras (like Intel RealSense) for true spatial accuracy.
-- **Data Portability:** Currently, all data is stored locally in SQLite. Future versions aim to implement a secure, cloud-based PostgreSQL or Firebase backend for cross-device syncing.
+While this project provides a strong proof-of-concept for AI-powered rehabilitation, it has limitations:
+- **Environmental Dependency:** MediaPipe requires adequate lighting and clear contrast; poor lighting can drop the tracking frame rate below 50% (flagged as `TRACKING_ERROR`).
+- **2D Depth Limitations:** Using a standard monocular webcam means depth estimation is inferred; measurements are software-derived heuristic estimates, not gold-standard goniometric data.
+- **Data Portability & Encryption:** Data is stored locally in SQLite (`rehab_data.db`). While patient names are deterministically encrypted, the database is not encrypted at rest.
 
-## 🔬 Clinical Research & Advanced Kinematic Analytics
+## 🔬 Research-Grade Telemetry & Kinematics
 
-In this version, we introduced advanced clinical telemetry, research validation metrics, and publication-ready graphs:
+In the **Research-Grade Accuracy & Data Collection V1** upgrade, the telemetry and validation pipelines were standardized:
 
 ### 1. Kinematic Quality Evaluation Model
 We evaluate movement quality using four kinematic sub-metrics over the duration of the session:
 * **Smoothness Score ($S_m$)**: Calculated using the time-derivative of acceleration (jerk) over the index tip coordinate stream, normalized via exponential decay:
-  $$S_m = 100 \times e^{-\lambda_j \cdot \overline{\text{Jerk}}}$$
-* **Accuracy Score ($A_c$)**: Ratio of hit attempts to total targets during active gameplay.
+  $$S_m = 100 \times e^{-0.08 \cdot \overline{\text{Jerk}}}$$
+* **Accuracy Score ($A_c$)**: Ratio of hit attempts to total targets during active gameplay ($A_c = \frac{\text{Hits}}{\text{Attempts}} \times 100$). Stored as `NULL` if 0 attempts occur.
 * **Range of Motion Achievement ($R_o$)**: Flexion/extension joint angle performance normalized against the patient's calibrated baseline maximum ROM.
 * **Hold Stability ($H_s$)**: Calculated by computing the spatial standard deviation of index finger coordinates during static holding periods:
-  $$H_s = 100 \times e^{-\lambda_d \cdot \sigma_{\text{hold}}}$$
+  $$H_s = 100 \times e^{-0.04 \cdot \sigma_{\text{hold}}}$$
 * **Overall Movement Quality ($Q_m$)**:
   $$Q_m = \frac{S_m + A_c + R_o + H_s}{4}$$
 
-### 2. Patient Clinical Readiness & Difficulty Intelligence
-Today's recommended game difficulty is decided adaptively by computing a Patient Readiness Score ($R_p$):
-$$R_p = \left( 0.4 \times R_{\text{rom}} + 0.3 \times A_c + 0.3 \times Q_m \right) - P_{\text{pain}} - P_{\text{fatigue}}$$
-* Recommended difficulty thresholds:
-  * **Easy**: $R_p < 50$
-  * **Moderate**: $50 \le R_p < 80$
-  * **Hard**: $R_p \ge 80$
+### 2. Patient Readiness & Closed-Loop Adaptation
+Today's recommended game difficulty is decided adaptively by computing a Patient Readiness Score ($R_p \in [0, 100]$):
+$$R_p = 30 \left(\frac{A_c}{100}\right) + 22 \left(\frac{\text{ROM}}{90}\right) + 16 \left(\frac{10 - \text{Pain}}{10}\right) + 12 \times \text{Consistency} + 10 \times S_m + 6 \times (1 - \text{Fatigue}) + 4 \times Q_m$$
+
+* **Progression Actions:**
+  * **Advance (Tiers 4–5)**: $R_p \ge 72$ with stable/improving ROM and accuracy trends.
+  * **Maintain (Tier 3)**: $42 \le R_p < 72$ to consolidate motor control.
+  * **Support (Tier 2)**: $R_p < 42$ providing assisted target scaling.
+  * **Regress (Tier 1)**: Triggered immediately by safety blocks (Pain $\ge 7$, Fatigue $\ge 0.75$, or acute ROM drop $\le -8^\circ$).
 
 ## 🔒 Security Posture
 
 This system is designed as a **local prototype** and is currently rated for non-clinical research and development. 
-- **The Good:** The system natively prevents network exposure by binding the web dashboard exclusively to `127.0.0.1`. The new dashboard architecture features a fully functional login system with secure session tokens, password verification, and role-based access control. It utilizes parameterized database queries to prevent SQL Injection and sanitizes HTML outputs to prevent Cross-Site Scripting (XSS).
+- **The Good:** The system natively prevents network exposure by binding the web dashboard exclusively to `127.0.0.1`. The dashboard architecture features a fully functional login system with secure session tokens, password verification, and role-based access control. It utilizes parameterized database queries to prevent SQL Injection and sanitizes HTML outputs to prevent Cross-Site Scripting (XSS).
 - **The Bad:** The local SQLite database (`rehab_data.db`) is not encrypted at rest. 
 - **Compliance:** Due to the lack of at-rest encryption, this software is **not yet HIPAA/GDPR compliant** and should not be used to store real Protected Health Information (PHI) outside of an encrypted, access-controlled environment.
 
