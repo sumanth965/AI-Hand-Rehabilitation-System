@@ -1,4 +1,4 @@
-﻿"""ClinicalMixin implementation for PhysioSystem."""
+"""ClinicalMixin implementation for PhysioSystem."""
 
 from .shared import *
 
@@ -9,7 +9,59 @@ class ClinicalMixin:
             pending_summary = getattr(self, "_pending_session_summary", None)
             if pending_summary is None:
                 duration = time.time() - self.session_start
-                avg_accuracy = (self.accuracy_hits / self.accuracy_attempts * 100) if self.accuracy_attempts > 0 else 0
+                
+                # Standard research accuracy mapping
+                level_accuracy_types = {
+                    1: "hit_rate",
+                    2: "hit_rate",
+                    3: "hit_rate",
+                    4: "proximity_rate",
+                    5: "completion_rate",
+                    6: "hit_rate",
+                    7: "hit_rate",
+                    8: "binary_completion",
+                    9: "hit_rate",
+                    10: "path_accuracy"
+                }
+                level_exercise_names = {
+                    1: "Bubble Pop",
+                    2: "Fruit Catch",
+                    3: "Pinch & Drop",
+                    4: "Path Tracing",
+                    5: "Grip & Release",
+                    6: "Memory Sequence",
+                    7: "Rotation Orbit",
+                    8: "Smart Assembly",
+                    9: "Precision Dots",
+                    10: "Precision Pathway"
+                }
+                accuracy_type = getattr(self, "accuracy_type", level_accuracy_types.get(self.current_level, "hit_rate"))
+                exercise_name = level_exercise_names.get(self.current_level, f"Level {self.current_level}")
+                
+                # Safe research accuracy
+                if self.accuracy_attempts > 0:
+                    avg_accuracy = round(min(100.0, max(0.0, (self.accuracy_hits / self.accuracy_attempts) * 100.0)), 2)
+                else:
+                    avg_accuracy = None
+                
+                # Tracking quality
+                valid_f = getattr(self, 'tracking_frames_valid', 0)
+                total_f = getattr(self, 'tracking_frames_total', 0)
+                tracking_quality = round((valid_f / total_f * 100.0), 2) if total_f > 0 else None
+                
+                # Quality flag
+                session_aborted = 1 if getattr(self, 'session_aborted', 0) else 0
+                if session_aborted:
+                    quality_flag = "ABORTED_EARLY"
+                elif self.accuracy_attempts == 0:
+                    quality_flag = "NO_VALID_ATTEMPTS"
+                elif self.accuracy_hits > self.accuracy_attempts or self.accuracy_hits < 0:
+                    quality_flag = "ACCURACY_ERROR"
+                elif tracking_quality is not None and tracking_quality < 50.0:
+                    quality_flag = "TRACKING_ERROR"
+                else:
+                    quality_flag = "VALID"
+                
                 avg_hand_angle = sum(self.angle_history) / len(self.angle_history) if len(self.angle_history) > 0 else 0
                 self._pending_session_summary = {
                     "duration": duration,
@@ -20,6 +72,13 @@ class ClinicalMixin:
                     "reach_distance": self.reach_distance,
                     "accuracy_hits": self.accuracy_hits,
                     "accuracy_attempts": self.accuracy_attempts,
+                    "accuracy_type": accuracy_type,
+                    "exercise_name": exercise_name,
+                    "tracking_quality": tracking_quality,
+                    "tracking_frames_valid": valid_f,
+                    "tracking_frames_total": total_f,
+                    "session_aborted": session_aborted,
+                    "quality_flag": quality_flag,
                     "angle_history": list(self.angle_history),
                     "pain_before_session": int(getattr(self, "pain_before_session", self.pain_level)),
                 }
@@ -34,15 +93,28 @@ class ClinicalMixin:
             self.score = pending_summary["score"]
             self.max_extension = pending_summary["max_extension"]
             self.reach_distance = pending_summary["reach_distance"]
+            accuracy_hits = pending_summary.get("accuracy_hits", self.accuracy_hits)
+            accuracy_attempts = pending_summary.get("accuracy_attempts", self.accuracy_attempts)
+            accuracy_type = pending_summary.get("accuracy_type", "hit_rate")
+            exercise_name = pending_summary.get("exercise_name", f"Level {self.current_level}")
+            tracking_quality = pending_summary.get("tracking_quality")
+            tracking_frames_valid = pending_summary.get("tracking_frames_valid", 0)
+            tracking_frames_total = pending_summary.get("tracking_frames_total", 0)
+            session_aborted = pending_summary.get("session_aborted", 0)
+            quality_flag = pending_summary.get("quality_flag", "VALID")
+
             pain_before_session = int(pending_summary.get("pain_before_session", self.pain_level))
             pain_after_session = int(getattr(self, "pain_after_session", pain_before_session))
             pain_difference = pain_after_session - pain_before_session
             movement_smoothness = 0.7
             if isinstance(getattr(self, "forearm_assessment", None), dict):
                 movement_smoothness = float(self.forearm_assessment.get("smoothness", 0.7))
+            
+            # Clinical readiness and recovery scores require a float value
+            acc_for_clinical = avg_accuracy if avg_accuracy is not None else 0.0
             recovery_score_value = functional_recovery_score(
                 avg_hand_angle,
-                avg_accuracy,
+                acc_for_clinical,
                 pain_after_session,
                 1.0,
                 movement_smoothness,
@@ -61,6 +133,11 @@ class ClinicalMixin:
             sub_rom = qm_metrics["rom"]
             sub_stability = qm_metrics["stability"]
 
+            # Calculate session number for patient
+            session_number = 1
+            if hasattr(self.db, 'get_patient_session_count'):
+                session_number = self.db.get_patient_session_count(self.patient_name or "Unknown") + 1
+
             self.db.save_session(
                 self.current_level, self.score, duration,
                 avg_accuracy, self.max_extension,
@@ -76,6 +153,16 @@ class ClinicalMixin:
                 sub_accuracy=sub_accuracy,
                 sub_rom=sub_rom,
                 sub_stability=sub_stability,
+                successful_hits=accuracy_hits,
+                total_attempts=accuracy_attempts,
+                accuracy_type=accuracy_type,
+                exercise_name=exercise_name,
+                session_number=session_number,
+                tracking_quality=tracking_quality,
+                tracking_frames_valid=tracking_frames_valid,
+                tracking_frames_total=tracking_frames_total,
+                session_aborted=session_aborted,
+                quality_flag=quality_flag
             )
             session_id = getattr(self.db, 'last_session_id', None)
             
@@ -109,10 +196,11 @@ class ClinicalMixin:
 
             try:
                 recovery_prediction = self._get_recovery_prediction()
+                rec_accuracy = avg_accuracy if avg_accuracy is not None else 0.0
                 next_prescription = self.adaptive_engine.recommend(
                     self.patient_name or "Unknown",
                     self.current_level,
-                    avg_accuracy,
+                    rec_accuracy,
                     avg_hand_angle,
                     self.pain_level,
                     duration,
@@ -129,7 +217,7 @@ class ClinicalMixin:
                     self.patient_name or "Unknown",
                     self.current_level,
                     next_prescription,
-                    avg_accuracy,
+                    rec_accuracy,
                     avg_hand_angle,
                     self.pain_level,
                     fatigue_index=fatigue_index,

@@ -1,0 +1,13 @@
+Patient_ID,Session_ID,Date,Exercise,Level,Difficulty,Accuracy_Type,Successful_Hits,Total_Attempts,Accuracy,Tracking_Quality,ROM,Movement_Quality,Smoothness,Compensation_Events,Pain_Before,Pain_After,Pain_Delta,Completion_Time,Readiness,Previous_Accuracy,Previous_Readiness,Previous_Difficulty,New_Difficulty,Session_Aborted,Quality_Flag
+P001,81,2026-08-14 08:26:05,Precision Pathway,10,1,hit_rate,0,0,75.00,,482.5,82.5,0.70,0,7,5,-2,12.7,67.4,,,,1,0,VALID
+P001,82,2026-08-14 08:27:27,Precision Pathway,10,1,hit_rate,0,0,42.00,,628.4,82.5,0.70,0,7,3,-4,27.1,63.5,75.00,67.4,1,1,0,VALID
+P001,83,2026-08-14 08:28:21,Smart Assembly,8,1,hit_rate,0,0,100.00,,437.1,66.2,0.70,24,7,0,-7,31.8,80.2,42.00,63.5,1,1,0,VALID
+P001,84,2026-08-14 08:32:41,Precision Dots,9,1,hit_rate,0,0,0.00,,485.1,82.5,0.70,20,7,7,0,70.2,50.9,100.00,80.2,1,1,0,VALID
+P001,85,2026-08-14 08:34:12,Smart Assembly,8,1,hit_rate,0,0,0.00,,394.0,66.2,0.70,5,7,5,-2,70.1,50.2,0.00,50.9,1,1,0,VALID
+P001,86,2026-08-14 08:34:51,Smart Assembly,8,1,hit_rate,0,0,100.00,,390.9,64.4,0.70,14,7,5,-2,25.8,80.2,0.00,50.2,1,1,0,VALID
+P001,87,2026-08-14 08:38:37,Rotation Orbit,7,1,hit_rate,0,0,66.67,,601.4,71.3,0.90,0,7,4,-3,45.2,72.4,100.00,80.2,1,1,0,VALID
+P002,88,2026-08-27 14:38:01,Memory Sequence,6,2,hit_rate,0,0,20.00,,378.6,72.7,0.70,0,4,4,0,18.1,59.5,,,,2,0,VALID
+P002,89,2026-09-04 15:15:07,Bubble Pop,1,3,hit_rate,0,0,100.00,,440.5,73.9,0.70,11,2,3,1,19.4,83.1,20.00,59.5,2,3,0,VALID
+P002,90,2026-09-04 15:15:50,Fruit Catch,2,2,hit_rate,0,0,33.33,,425.0,55.8,0.70,0,2,5,3,30.0,67.2,100.00,83.1,3,2,0,VALID
+P003,79,2026-08-08 14:50:42,Precision Dots,9,1,hit_rate,0,0,88.89,,518.0,82.5,0.70,0,10,4,-6,43.0,65.0,,,,1,0,VALID
+P003,80,2026-08-08 14:54:40,Bubble Pop,1,1,hit_rate,0,0,100.00,,459.5,72.5,0.70,24,8,8,0,16.9,78.3,88.89,65.0,1,1,0,VALID

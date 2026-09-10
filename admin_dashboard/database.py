@@ -406,7 +406,17 @@ class DashboardRepository:
                               ("sub_smoothness", "REAL DEFAULT 0"),
                               ("sub_accuracy", "REAL DEFAULT 0"),
                               ("sub_rom", "REAL DEFAULT 0"),
-                              ("sub_stability", "REAL DEFAULT 0")]:
+                              ("sub_stability", "REAL DEFAULT 0"),
+                              ("successful_hits", "INTEGER DEFAULT 0"),
+                              ("total_attempts", "INTEGER DEFAULT 0"),
+                              ("accuracy_type", "TEXT DEFAULT 'hit_rate'"),
+                              ("exercise_name", "TEXT DEFAULT ''"),
+                              ("session_number", "INTEGER DEFAULT 0"),
+                              ("tracking_quality", "REAL DEFAULT NULL"),
+                              ("tracking_frames_valid", "INTEGER DEFAULT 0"),
+                              ("tracking_frames_total", "INTEGER DEFAULT 0"),
+                              ("session_aborted", "INTEGER DEFAULT 0"),
+                              ("quality_flag", "TEXT DEFAULT 'VALID'")]:
                 try:
                     conn.execute(f"SELECT {col} FROM sessions LIMIT 1")
                 except sqlite3.OperationalError:

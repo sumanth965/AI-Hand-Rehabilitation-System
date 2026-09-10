@@ -1,4 +1,4 @@
-﻿"""Screen rendering and interaction helpers for PhysioSystem."""
+"""Screen rendering and interaction helpers for PhysioSystem."""
 
 from ..shared import *
 
@@ -125,8 +125,8 @@ class CalibrationScreenMixin:
         # Draw tech background grids
         self._draw_cyber_grid()
         
-        title_surf = self.font_large.render("HAND DIAGNOSTICS & CALIBRATION", True, (0, 200, 255))
-        self.screen.blit(title_surf, title_surf.get_rect(center=(cx, 45)))
+        title_surf = self.font_medium.render("HAND DIAGNOSTICS & CALIBRATION", True, (0, 200, 255))
+        self.screen.blit(title_surf, title_surf.get_rect(midleft=(40, 45)))
         pygame.draw.line(self.screen, (0, 150, 200), (0, 80), (GAME_AREA_WIDTH, 80), 2)
         
         prev_x, prev_y = GAME_AREA_WIDTH - 360, 100

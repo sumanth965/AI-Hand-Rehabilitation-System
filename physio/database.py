@@ -46,7 +46,17 @@ class DatabaseManager:
                     pain_difference INTEGER DEFAULT 0,
                     functional_recovery_score REAL DEFAULT 0,
                     recovery_category TEXT DEFAULT 'Not recorded',
-                    movement_smoothness REAL DEFAULT 0
+                    movement_smoothness REAL DEFAULT 0,
+                    successful_hits INTEGER DEFAULT 0,
+                    total_attempts INTEGER DEFAULT 0,
+                    accuracy_type TEXT DEFAULT 'hit_rate',
+                    exercise_name TEXT DEFAULT '',
+                    session_number INTEGER DEFAULT 0,
+                    tracking_quality REAL DEFAULT NULL,
+                    tracking_frames_valid INTEGER DEFAULT 0,
+                    tracking_frames_total INTEGER DEFAULT 0,
+                    session_aborted INTEGER DEFAULT 0,
+                    quality_flag TEXT DEFAULT 'VALID'
                 )
             """)
             cursor.execute("""
@@ -110,7 +120,17 @@ class DatabaseManager:
                               ("sub_smoothness", "REAL DEFAULT 0"),
                               ("sub_accuracy", "REAL DEFAULT 0"),
                               ("sub_rom", "REAL DEFAULT 0"),
-                              ("sub_stability", "REAL DEFAULT 0")]:
+                              ("sub_stability", "REAL DEFAULT 0"),
+                              ("successful_hits", "INTEGER DEFAULT 0"),
+                              ("total_attempts", "INTEGER DEFAULT 0"),
+                              ("accuracy_type", "TEXT DEFAULT 'hit_rate'"),
+                              ("exercise_name", "TEXT DEFAULT ''"),
+                              ("session_number", "INTEGER DEFAULT 0"),
+                              ("tracking_quality", "REAL DEFAULT NULL"),
+                              ("tracking_frames_valid", "INTEGER DEFAULT 0"),
+                              ("tracking_frames_total", "INTEGER DEFAULT 0"),
+                              ("session_aborted", "INTEGER DEFAULT 0"),
+                              ("quality_flag", "TEXT DEFAULT 'VALID'")]:
                 try:
                     cursor.execute(f"SELECT {col} FROM sessions LIMIT 1")
                 except sqlite3.OperationalError:
@@ -252,7 +272,7 @@ class DatabaseManager:
             return []
     
     def save_session(self, level: int, score: int, duration: float,
-                    avg_accuracy: float, max_extension: float,
+                    avg_accuracy: Optional[float], max_extension: float,
                     reach_distance: float = 0, avg_hand_angle: float = 0,
                     pain_level: int = 0, patient_id: str = "Unknown",
                     pain_before_session: int | None = None,
@@ -264,7 +284,17 @@ class DatabaseManager:
                     sub_smoothness: float = 0.0,
                     sub_accuracy: float = 0.0,
                     sub_rom: float = 0.0,
-                    sub_stability: float = 0.0):
+                    sub_stability: float = 0.0,
+                    successful_hits: int = 0,
+                    total_attempts: int = 0,
+                    accuracy_type: str = "hit_rate",
+                    exercise_name: str = "",
+                    session_number: int = 0,
+                    tracking_quality: Optional[float] = None,
+                    tracking_frames_valid: int = 0,
+                    tracking_frames_total: int = 0,
+                    session_aborted: int = 0,
+                    quality_flag: str = "VALID"):
         try:
             pain_before = int(pain_level if pain_before_session is None else pain_before_session)
             pain_after = int(pain_before if pain_after_session is None else pain_after_session)
@@ -280,20 +310,27 @@ class DatabaseManager:
                    max_finger_extension, reach_distance, avg_hand_angle, pain_level,
                    pain_before_session, pain_after_session, pain_difference,
                    functional_recovery_score, recovery_category, movement_smoothness,
-                   movement_quality_score, sub_smoothness, sub_accuracy, sub_rom, sub_stability)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   movement_quality_score, sub_smoothness, sub_accuracy, sub_rom, sub_stability,
+                   successful_hits, total_attempts, accuracy_type, exercise_name,
+                   session_number, tracking_quality, tracking_frames_valid, tracking_frames_total,
+                   session_aborted, quality_flag)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (enc_patient_id, level, score, duration, avg_accuracy,
                    max_extension, reach_distance, avg_hand_angle, pain_before,
                    pain_before, pain_after, pain_difference,
                    functional_recovery_score, recovery_category, movement_smoothness,
-                   movement_quality_score, sub_smoothness, sub_accuracy, sub_rom, sub_stability))
+                   movement_quality_score, sub_smoothness, sub_accuracy, sub_rom, sub_stability,
+                   successful_hits, total_attempts, accuracy_type, exercise_name,
+                   session_number, tracking_quality, tracking_frames_valid, tracking_frames_total,
+                   session_aborted, quality_flag))
             
             self.last_session_id = cursor.lastrowid
             
             conn.commit()
             conn.close()
             
-            print(f"[SUCCESS] Session saved: Level {level}, Score {score}, Accuracy {avg_accuracy:.1f}%")
+            acc_str = f"{avg_accuracy:.1f}%" if avg_accuracy is not None else "N/A (No Valid Attempts)"
+            print(f"[SUCCESS] Session saved: Level {level}, Score {score}, Accuracy {acc_str}, Type {accuracy_type}, Flag {quality_flag}")
         except Exception as e:
             import logging
             logging.basicConfig(filename='db_error.txt', level=logging.ERROR, 
@@ -301,6 +338,20 @@ class DatabaseManager:
             logging.error(f"Failed to save session (locked or missing db): {str(e)}")
             print("Database locked/missing! Logged error to db_error.txt instead of crashing.")
     
+    def get_patient_session_count(self, patient_id: str) -> int:
+        """Return the number of previous sessions recorded for a patient."""
+        try:
+            conn = sqlite3.connect(self.db_path)
+            cursor = conn.cursor()
+            enc_patient_id = security_utils.encrypt_deterministic(patient_id)
+            cursor.execute("SELECT COUNT(*) FROM sessions WHERE patient_id = ?", (enc_patient_id,))
+            row = cursor.fetchone()
+            conn.close()
+            return int(row[0]) if row else 0
+        except Exception as e:
+            print(f"Error fetching patient session count: {e}")
+            return 0
+
     def get_last_session(self):
         """Get the most recent session data"""
         if self.last_session_id is None:
@@ -546,3 +597,59 @@ class DatabaseManager:
             surf = pygame.Surface((660, 560))
             surf.fill((8, 12, 22))
             return surf
+
+
+# =====================================================================
+# RESEARCH VALIDATION UTILITIES
+# =====================================================================
+
+def validate_accuracy(hits: int, attempts: int) -> tuple[Optional[float], str]:
+    """
+    Standardize research accuracy calculation:
+    IF total_attempts > 0:
+        accuracy = hits / attempts * 100 (clamped 0-100)
+    ELSE:
+        accuracy = None, quality_flag = 'NO_VALID_ATTEMPTS'
+        
+    Returns:
+        (accuracy_or_none, quality_flag)
+    """
+    if attempts < 0 or hits < 0:
+        return None, "ACCURACY_ERROR"
+    if hits > attempts:
+        return None, "ACCURACY_ERROR"
+    if attempts == 0:
+        return None, "NO_VALID_ATTEMPTS"
+    
+    accuracy = round(min(100.0, max(0.0, (hits / attempts) * 100.0)), 2)
+    return accuracy, "VALID"
+
+
+def validate_session_data(session_dict: dict) -> tuple[bool, str]:
+    """
+    Validates a session dictionary against research constraints.
+    Returns (is_valid_for_research, quality_flag).
+    """
+    attempts = session_dict.get("total_attempts", 0)
+    hits = session_dict.get("successful_hits", 0)
+    acc = session_dict.get("avg_accuracy")
+    tracking_quality = session_dict.get("tracking_quality")
+    aborted = session_dict.get("session_aborted", 0)
+
+    if aborted:
+        return False, "ABORTED_EARLY"
+
+    if attempts < 0 or hits < 0 or hits > attempts:
+        return False, "ACCURACY_ERROR"
+
+    if attempts == 0:
+        return False, "NO_VALID_ATTEMPTS"
+
+    if acc is not None and (acc < 0.0 or acc > 100.0):
+        return False, "ACCURACY_ERROR"
+
+    if tracking_quality is not None and tracking_quality < 50.0:
+        return False, "TRACKING_ERROR"
+
+    return True, "VALID"
+

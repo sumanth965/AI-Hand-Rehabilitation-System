@@ -310,11 +310,18 @@ class RuntimeMixin:
         is_playing = self.state in [GameState.LEVEL1_FLEXIBILITY, GameState.LEVEL2_STRENGTH, 
                                     GameState.LEVEL3_FINEMOTOR, GameState.LEVEL4_COORDINATION,
                                     GameState.LEVEL5_GRIP_RELEASE, GameState.LEVEL6_FINGER_TAPS,
+                                    GameState.LEVEL7_WRIST_MECHANICS, GameState.LEVEL8_SMART_ASSEMBLY,
                                     GameState.LEVEL9_PRECISION_PATH, GameState.LEVEL10_PRECISION_PATHWAY]
         
         now = time.time()
         dt = now - getattr(self, '_last_update_time', now)
         self._last_update_time = now
+
+        # Research tracking quality instrumentation
+        if is_playing:
+            self.tracking_frames_total = getattr(self, 'tracking_frames_total', 0) + 1
+            if hand_data.index_tip is not None:
+                self.tracking_frames_valid = getattr(self, 'tracking_frames_valid', 0) + 1
 
         if is_playing and hand_data.index_tip is None:
             self.tracking_lost = True
@@ -593,12 +600,15 @@ class RuntimeMixin:
             sc = hud_font.render(score_str, True, (255, 255, 255))
             self.screen.blit(sc, (30, hud_y + (hud_h - sc.get_height()) // 2))
 
-            # Accuracy
-            acc = (self.accuracy_hits / self.accuracy_attempts * 100) \
-                  if self.accuracy_attempts > 0 else 0.0
-            acc_color = (50, 220, 120) if acc >= 70 else \
-                        (255, 180, 0)  if acc >= 40 else (220, 80, 80)
-            acc_str = f"ACC: {acc:.0f}%"
+            # Accuracy (Research display: clearly indicate when no valid attempts have occurred)
+            if self.accuracy_attempts > 0:
+                acc = (self.accuracy_hits / self.accuracy_attempts * 100)
+                acc_color = (50, 220, 120) if acc >= 70 else \
+                            (255, 180, 0)  if acc >= 40 else (220, 80, 80)
+                acc_str = f"ACC: {acc:.0f}%"
+            else:
+                acc_color = (150, 160, 175)
+                acc_str = "ACC: --"
             ac = hud_font.render(acc_str, True, acc_color)
             self.screen.blit(ac, (200, hud_y + (hud_h - ac.get_height()) // 2))
 

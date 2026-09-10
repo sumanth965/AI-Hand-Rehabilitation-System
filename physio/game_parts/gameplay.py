@@ -99,8 +99,15 @@ class GameplayMixin:
                             reach = distance(hand_data.wrist, (bubble.x, bubble.y))
                             self.reach_distance = max(self.reach_distance, reach)
 
-        # Check if all bubbles popped (only when list is non-empty)
-        if (self.bubbles and all(b.popped for b in self.bubbles)) or (time.time() - getattr(self, 'level_wall_start', 0.0) > self.session_time_limit * 1.5):
+        # Check if all bubbles popped or session timed out
+        time_expired = (time.time() - getattr(self, 'level_wall_start', 0.0) > self.session_time_limit * 1.5)
+        all_popped = bool(self.bubbles and all(b.popped for b in self.bubbles))
+        if all_popped or time_expired:
+            # Research Accuracy: count every presented but unpopped bubble as a missed attempt
+            for bubble in self.bubbles:
+                if not bubble.popped:
+                    self.accuracy_attempts += 1
+                    bubble.popped = True  # Prevent duplicate counting
             self._end_level()
     
     def _update_level2(self, hand_data: HandData):
@@ -186,10 +193,16 @@ class GameplayMixin:
         
         # End after 30 seconds
         if (time.time() - self.session_start > self.session_time_limit) or (time.time() - getattr(self, 'level_wall_start', 0.0) > self.session_time_limit * 1.5):
+            # Research Accuracy Rule: Count active presented catchable items that were not caught as missed attempts
+            # Bombs, shields, freezes, and powerups do not distort the denominator.
+            for item in self.falling_items:
+                if not item.is_bomb and not item.is_powerup and not getattr(item, 'is_shield', False) and not getattr(item, 'is_freeze', False):
+                    self.accuracy_attempts += 1
+            self.falling_items.clear()
             self._end_level()
     
     def _update_level3(self, hand_data: HandData):
-        """Level 3: Pinch & Drop (Fine Motor)"""
+        """Level 3: Pinch & Drop (Fine Motor) - Accuracy Type: hit_rate"""
         # Update seeds
         for seed in self.seeds[:]:
             if not seed.grabbed:
@@ -230,6 +243,7 @@ class GameplayMixin:
             # Remove if off screen
             if seed.y > WINDOW_HEIGHT and not seed.grabbed:
                 self.seeds.remove(seed)
+                self.accuracy_attempts += 1 # Missed an ungrabbed presented seed
                 self.combo = 0 # Missed a seed
                 self.consecutive_misses += 1
                 if self.consecutive_misses >= 3:
@@ -242,6 +256,11 @@ class GameplayMixin:
         
         # End after 30 seconds
         if (time.time() - self.session_start > self.session_time_limit) or (time.time() - getattr(self, 'level_wall_start', 0.0) > self.session_time_limit * 1.5):
+            # Count any remaining ungrabbed seeds as missed attempts
+            for seed in self.seeds:
+                if not seed.grabbed:
+                    self.accuracy_attempts += 1
+            self.seeds.clear()
             self._end_level()
 
     def _update_level4(self, hand_data: HandData):
@@ -306,7 +325,7 @@ class GameplayMixin:
             self._end_level()
 
     def _update_level5(self, hand_data: HandData):
-        """Level 5: Grip & Release (Spasticity Pump)"""
+        """Level 5: Grip & Release (Spasticity Pump) - Accuracy Type: completion_rate"""
         # Constantly deflate slowly (deflation rate adapts to pacing)
         if self.balloon_scale > 1.0:
             self.balloon_scale -= 0.005 * getattr(self, 'pacing_multiplier', 1.0)
@@ -316,11 +335,15 @@ class GameplayMixin:
             self.last_rep_time = time.time()
             
         if hand_data.is_fist and self.pump_state == 0:
+            # Cycle attempt initiated (grip phase)
             self.pump_state = 1
+            self.grip_cycle_start = time.time()
             self.balloon_scale = max(0.5, self.balloon_scale - 0.2)
             self.sounds.play('catch')
         elif not hand_data.is_fist and hand_data.finger_extension > 120 and self.pump_state == 1:
+            # Successful grip and full release completed
             self.pump_state = 0
+            self.grip_cycle_start = None
             self.pump_reps += 1
             self.accuracy_hits += 1
             self.accuracy_attempts += 1
@@ -336,6 +359,12 @@ class GameplayMixin:
             
             if self.combo % 3 == 0:
                 self._trigger_feedback()
+        elif self.pump_state == 1 and getattr(self, 'grip_cycle_start', None) and (time.time() - self.grip_cycle_start > 5.0):
+            # Attempted grip cycle but failed to achieve full release within 5 seconds window
+            self.pump_state = 0
+            self.grip_cycle_start = None
+            self.accuracy_attempts += 1  # Record failed cycle attempt
+            self.combo = 0
                 
         if time.time() - self.last_rep_time > 8.0:
             self.last_rep_time = time.time() # Reset trigger timer
@@ -344,11 +373,14 @@ class GameplayMixin:
                 
         # End after 30 seconds
         if (time.time() - self.session_start > self.session_time_limit) or (time.time() - getattr(self, 'level_wall_start', 0.0) > self.session_time_limit * 1.5):
-            self.accuracy_attempts = max(self.accuracy_attempts, 5) # Provide base attempts
+            if self.pump_state == 1:
+                # Incomplete rep in progress at session termination
+                self.accuracy_attempts += 1
+                self.pump_state = 0
             self._end_level()
 
     def _update_level6(self, hand_data: HandData):
-        """Level 6: Memory Sequence (Cognitive Motor)"""
+        """Level 6: Memory Sequence (Cognitive Motor) - Accuracy Type: hit_rate"""
         cx, cy = GAME_AREA_WIDTH // 2, WINDOW_HEIGHT // 2
         pads = {
             1: (cx - 150, cy - 80),
@@ -432,12 +464,11 @@ class GameplayMixin:
                 self.simon_active_pad = None
 
         if (time.time() - self.session_start > self.session_time_limit) or (time.time() - getattr(self, 'level_wall_start', 0.0) > self.session_time_limit * 1.5):
-            self.accuracy_attempts = max(self.accuracy_attempts, 5)
             self._end_level()
 
 
     def _update_level7(self, hand_data: HandData):
-        """Level 7: Rotation Orbit (Forearm Pronation/Supination)"""
+        """Level 7: Rotation Orbit (Forearm Pronation/Supination) - Accuracy Type: hit_rate"""
         cx, cy = GAME_AREA_WIDTH // 2, WINDOW_HEIGHT // 2
         
         if not getattr(self, 'wrist_mode', None):
@@ -472,7 +503,7 @@ class GameplayMixin:
         if diff < getattr(self, 'rotation_tolerance', 25.0): # tolerance adapts for "locking on"
             self.wrist_hold_time += 1/30.0
             if self.wrist_hold_time > getattr(self, 'rotation_hold_required', 1.5):
-                # Success!
+                # Success! Target angle checkpoint reached
                 self.score += int(15 * getattr(self, 'score_multiplier', 1.0))
                 self.accuracy_hits += 1
                 self.accuracy_attempts += 1
@@ -490,12 +521,18 @@ class GameplayMixin:
             
         import time
         if (time.time() - getattr(self, 'session_start', 0)) > getattr(self, 'session_time_limit', 60):
+            # Final in-progress orbital checkpoint timed out before completion
             self.accuracy_attempts += 1
             self._end_level()
 
         self.satellite_angle = current_angle
+
     def _update_level8(self, hand_data: HandData):
-        """Level 8: Smart Object Assembly"""
+        """
+        Level 8: Smart Object Assembly - Accuracy Type: binary_completion
+        Measures task-level binary completion: whole object assembled before timeout = 100%,
+        timeout before all parts placed = 0%.
+        """
         if not hand_data.index_tip or not getattr(hand_data, 'is_pinching', False) and not getattr(self, 'was_pinching', False):
             pass
             
@@ -547,7 +584,7 @@ class GameplayMixin:
             self._end_level()
 
     def _update_level9(self, hand_data: HandData):
-        """Level 9: Precision Path - Connecting Dots"""
+        """Level 9: Precision Path - Connecting Dots - Accuracy Type: hit_rate"""
         if not hasattr(self, 'precision_dots') or not self.precision_dots:
             self._spawn_precision_dots()
             return
@@ -594,10 +631,20 @@ class GameplayMixin:
         
         import time
         if (time.time() - self.session_start > max(getattr(self, 'session_time_limit', 60), 60)):
+            # Research Accuracy: count remaining unreached dots as missed target attempts
+            remaining_dots = len(getattr(self, 'precision_dots', [])) - getattr(self, 'precision_current_dot', 0)
+            if remaining_dots > 0:
+                self.accuracy_attempts += remaining_dots
             self._end_level()
 
     def _update_level10(self, hand_data: HandData):
-        """Level 10: Precision Pathway - Fine Motor & Wrist Control"""
+        """
+        Level 10: Precision Pathway - Accuracy Type: path_accuracy
+        Measures proportion of trajectory tracking samples maintained within the acceptable
+        pathway corridor width (min_dist <= half_width).
+        0% = completely off-path for all samples.
+        100% = perfectly within corridor for 100% of trajectory samples.
+        """
         if not getattr(self, 'pathway_started', False):
             self._spawn_precision_pathway()
             return
@@ -644,6 +691,10 @@ class GameplayMixin:
                         
                 half_width = self.pathway_config.width / 2
                 
+                # Track samples maintained within path corridor
+                if min_dist <= half_width:
+                    self.pathway_on_path_samples = getattr(self, 'pathway_on_path_samples', 0) + 1
+                
                 # If they stray too far from the path, they drop the marker
                 if min_dist > half_width + 40:
                     self.pathway_grabbed = False
@@ -666,10 +717,16 @@ class GameplayMixin:
                 end_p = np.array(points[-1])
                 dist_to_end = np.linalg.norm(np.array(self.pathway_current_proj) - end_p)
                 if dist_to_end < 40:
-                    avg_deviation = self.pathway_total_deviation / max(1, self.pathway_samples)
-                    accuracy = max(0.0, min(100.0, 100.0 * (1.0 - (avg_deviation / half_width))))
-                    self.accuracy_attempts = 100
-                    self.accuracy_hits = int(accuracy)
+                    samples = getattr(self, 'pathway_samples', 0)
+                    on_path = getattr(self, 'pathway_on_path_samples', 0)
+                    if samples > 0:
+                        self.accuracy_attempts = samples
+                        self.accuracy_hits = on_path
+                        accuracy = round((on_path / samples) * 100.0, 2)
+                    else:
+                        self.accuracy_attempts = 0
+                        self.accuracy_hits = 0
+                        accuracy = 0.0
                     
                     violation_penalty = min(30, self.pathway_boundary_violations * 2)
                     self.score = int(max(0, accuracy - violation_penalty))
@@ -680,6 +737,18 @@ class GameplayMixin:
                     return
                 
         if (time.time() - self.session_start > max(getattr(self, 'session_time_limit', 60), 60)):
+            samples = getattr(self, 'pathway_samples', 0)
+            on_path = getattr(self, 'pathway_on_path_samples', 0)
+            if samples > 0:
+                self.accuracy_attempts = samples
+                self.accuracy_hits = on_path
+                accuracy = round((on_path / samples) * 100.0, 2)
+            else:
+                self.accuracy_attempts = 0
+                self.accuracy_hits = 0
+                accuracy = 0.0
+            violation_penalty = min(30, getattr(self, 'pathway_boundary_violations', 0) * 2)
+            self.score = int(max(0, accuracy - violation_penalty))
             self._end_level()
 
     def _draw_level1(self):
@@ -1531,6 +1600,24 @@ class GameplayMixin:
         self.reach_distance = 0
         self.accuracy_hits = 0
         self.accuracy_attempts = 0
+        self.tracking_frames_valid = 0
+        self.tracking_frames_total = 0
+        self.session_aborted = 0
+        
+        level_accuracy_types = {
+            1: "hit_rate",
+            2: "hit_rate",
+            3: "hit_rate",
+            4: "proximity_rate",
+            5: "completion_rate",
+            6: "hit_rate",
+            7: "hit_rate",
+            8: "binary_completion",
+            9: "hit_rate",
+            10: "path_accuracy"
+        }
+        self.accuracy_type = level_accuracy_types.get(lv, "hit_rate")
+        
         self.pacing_multiplier = 1.0
         self.consecutive_misses = 0
         self.last_pacing_voice_time = 0.0
@@ -1557,6 +1644,8 @@ class GameplayMixin:
             self.pump_state = 0
             self.pump_reps = 0
             self.balloon_scale = 1.0
+            self.grip_cycle_start = None
+            self.last_rep_time = time.time()
             VOICE.speak("Level 5: Balloon Pump. Close your hand into a fist, then open it fully to pump up the balloon.")
         elif lv == 6:
             self.state = GameState.LEVEL6_FINGER_TAPS
@@ -1590,6 +1679,10 @@ class GameplayMixin:
         elif lv == 10:
             self.state = GameState.LEVEL10_PRECISION_PATHWAY
             self.pathway_started = False
+            self.pathway_samples = 0
+            self.pathway_on_path_samples = 0
+            self.pathway_boundary_violations = 0
+            self.pathway_total_deviation = 0.0
             VOICE.speak("Level 10: Precision Pathway. Carefully guide your index finger along the path from start to finish.")
         self.sounds.play('select')
         self.popups.append(ScorePopup(GAME_AREA_WIDTH//2, WINDOW_HEIGHT//2 - 60, "POSTURE FIX: Sit up & keep shoulders relaxed!"))

@@ -1,0 +1,253 @@
+"""
+Research Dataset Exporter for AI Hand Rehabilitation System
+Extracts authentic session metrics directly from SQLite database into research_dataset.csv.
+"""
+
+import os
+import sqlite3
+import argparse
+import csv
+from typing import Optional, Dict, Any, List
+import security_utils
+
+DEFAULT_DB_PATH = "rehab_data.db"
+DEFAULT_OUTPUT_CSV = "research_dataset.csv"
+
+EXERCISE_NAMES = {
+    1: "Bubble Pop",
+    2: "Fruit Catch",
+    3: "Pinch & Drop",
+    4: "Path Tracing",
+    5: "Grip & Release",
+    6: "Memory Sequence",
+    7: "Rotation Orbit",
+    8: "Smart Assembly",
+    9: "Precision Dots",
+    10: "Precision Pathway"
+}
+
+ACCURACY_TYPES = {
+    1: "hit_rate",
+    2: "hit_rate",
+    3: "hit_rate",
+    4: "proximity_rate",
+    5: "completion_rate",
+    6: "hit_rate",
+    7: "hit_rate",
+    8: "binary_completion",
+    9: "hit_rate",
+    10: "path_accuracy"
+}
+
+CSV_HEADERS = [
+    "Patient_ID",
+    "Session_ID",
+    "Date",
+    "Exercise",
+    "Level",
+    "Difficulty",
+    "Accuracy_Type",
+    "Successful_Hits",
+    "Total_Attempts",
+    "Accuracy",
+    "Tracking_Quality",
+    "ROM",
+    "Movement_Quality",
+    "Smoothness",
+    "Compensation_Events",
+    "Pain_Before",
+    "Pain_After",
+    "Pain_Delta",
+    "Completion_Time",
+    "Readiness",
+    "Previous_Accuracy",
+    "Previous_Readiness",
+    "Previous_Difficulty",
+    "New_Difficulty",
+    "Session_Aborted",
+    "Quality_Flag"
+]
+
+
+def export_research_dataset(
+    db_path: str = DEFAULT_DB_PATH,
+    output_csv: str = DEFAULT_OUTPUT_CSV,
+    pseudonymize: bool = True,
+    valid_only: bool = False
+) -> int:
+    """
+    Exports authentic clinical/research sessions from SQLite into research_dataset.csv.
+    
+    Args:
+        db_path: Path to rehab_data.db
+        output_csv: Output CSV filename
+        pseudonymize: If True, replaces patient IDs with P001, P002... for IRB/HIPAA compliance
+        valid_only: If True, only includes sessions where quality_flag == 'VALID'
+        
+    Returns:
+        Number of exported rows
+    """
+    if not os.path.exists(db_path):
+        raise FileNotFoundError(f"Database file not found: {db_path}")
+
+    conn = sqlite3.connect(db_path)
+    conn.row_factory = sqlite3.Row
+    cursor = conn.cursor()
+
+    # Query all sessions ordered chronologically by patient and timestamp
+    sessions_query = """
+        SELECT * FROM sessions
+        ORDER BY patient_id, datetime(timestamp) ASC, id ASC
+    """
+    cursor.execute(sessions_query)
+    sessions = cursor.fetchall()
+
+    # Query compensation events count by session_id
+    cursor.execute("""
+        SELECT session_id, COUNT(*) as comp_count
+        FROM compensation_events
+        WHERE session_id IS NOT NULL
+        GROUP BY session_id
+    """)
+    comp_counts = {row["session_id"]: row["comp_count"] for row in cursor.fetchall()}
+
+    # Query adaptive prescriptions by session_id
+    cursor.execute("""
+        SELECT session_id, difficulty_tier, readiness_score
+        FROM adaptive_prescriptions
+        WHERE session_id IS NOT NULL
+        ORDER BY id ASC
+    """)
+    prescriptions_by_session = {}
+    for row in cursor.fetchall():
+        prescriptions_by_session[row["session_id"]] = {
+            "difficulty_tier": row["difficulty_tier"],
+            "readiness_score": row["readiness_score"]
+        }
+
+    conn.close()
+
+    patient_mapping: Dict[str, str] = {}
+    next_patient_idx = 1
+    rows_written = 0
+
+    # Track patient history across chronological rows for transition metrics
+    patient_history: Dict[str, Dict[str, Any]] = {}
+
+    with open(output_csv, mode="w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(CSV_HEADERS)
+
+        for s in sessions:
+            enc_patient_id = s["patient_id"]
+            dec_patient_id = security_utils.decrypt_deterministic(enc_patient_id) if enc_patient_id else "Unknown"
+
+            if pseudonymize:
+                if dec_patient_id not in patient_mapping:
+                    patient_mapping[dec_patient_id] = f"P{next_patient_idx:03d}"
+                    next_patient_idx += 1
+                patient_display_id = patient_mapping[dec_patient_id]
+            else:
+                patient_display_id = dec_patient_id
+
+            session_id = s["id"]
+            timestamp = s["timestamp"]
+            level = s["level"] or 1
+            exercise = s["exercise_name"] or EXERCISE_NAMES.get(level, f"Level {level}")
+            acc_type = s["accuracy_type"] or ACCURACY_TYPES.get(level, "hit_rate")
+            
+            successful_hits = s["successful_hits"] if s["successful_hits"] is not None else 0
+            total_attempts = s["total_attempts"] if s["total_attempts"] is not None else 0
+            raw_accuracy = s["avg_accuracy"]
+            accuracy_str = f"{raw_accuracy:.2f}" if raw_accuracy is not None else ""
+
+            tracking_quality = s["tracking_quality"]
+            tracking_str = f"{tracking_quality:.1f}" if tracking_quality is not None else ""
+
+            rom = f"{s['max_finger_extension']:.1f}" if s["max_finger_extension"] is not None else ""
+            mov_quality = f"{s['movement_quality_score']:.1f}" if s["movement_quality_score"] is not None else ""
+            smoothness = f"{s['movement_smoothness']:.2f}" if s["movement_smoothness"] is not None else ""
+            comp_events = comp_counts.get(session_id, 0)
+
+            pain_before = s["pain_before_session"] if s["pain_before_session"] is not None else s["pain_level"]
+            pain_after = s["pain_after_session"] if s["pain_after_session"] is not None else pain_before
+            pain_delta = s["pain_difference"] if s["pain_difference"] is not None else (pain_after - pain_before)
+
+            completion_time = f"{s['duration']:.1f}" if s["duration"] is not None else ""
+            session_aborted = s["session_aborted"] if s["session_aborted"] is not None else 0
+            quality_flag = s["quality_flag"] or "VALID"
+
+            if valid_only and quality_flag != "VALID":
+                continue
+
+            # Prescription data
+            rx = prescriptions_by_session.get(session_id, {})
+            current_diff = rx.get("difficulty_tier", "STANDARD")
+            readiness = f"{rx.get('readiness_score', 50.0):.1f}" if "readiness_score" in rx else ""
+
+            # Transition metrics (previous vs new)
+            prev_data = patient_history.get(dec_patient_id, {})
+            prev_acc = prev_data.get("accuracy", "")
+            prev_readiness = prev_data.get("readiness", "")
+            prev_diff = prev_data.get("difficulty", "")
+            new_diff = current_diff
+
+            row = [
+                patient_display_id,
+                session_id,
+                timestamp,
+                exercise,
+                level,
+                current_diff,
+                acc_type,
+                successful_hits,
+                total_attempts,
+                accuracy_str,
+                tracking_str,
+                rom,
+                mov_quality,
+                smoothness,
+                comp_events,
+                pain_before,
+                pain_after,
+                pain_delta,
+                completion_time,
+                readiness,
+                prev_acc,
+                prev_readiness,
+                prev_diff,
+                new_diff,
+                session_aborted,
+                quality_flag
+            ]
+
+            writer.writerow(row)
+            rows_written += 1
+
+            # Update history for this patient
+            patient_history[dec_patient_id] = {
+                "accuracy": accuracy_str,
+                "readiness": readiness,
+                "difficulty": current_diff
+            }
+
+    print(f"[SUCCESS] Exported {rows_written} research session records to {output_csv}")
+    if pseudonymize:
+        print(f"[PRIVACY] Pseudonymized {len(patient_mapping)} patient profiles.")
+    return rows_written
+
+
+if __name__ == "__main__":
+    parser = argparse.ArgumentParser(description="Export research dataset from AI Rehabilitation SQLite DB")
+    parser.add_argument("--db", default=DEFAULT_DB_PATH, help="Path to rehab_data.db")
+    parser.add_argument("--output", default=DEFAULT_OUTPUT_CSV, help="Output CSV path")
+    parser.add_argument("--no-pseudonymize", action="store_true", help="Keep decrypted patient names (not recommended for publication)")
+    parser.add_argument("--valid-only", action="store_true", help="Include only sessions with quality_flag == VALID")
+    args = parser.parse_args()
+
+    export_research_dataset(
+        db_path=args.db,
+        output_csv=args.output,
+        pseudonymize=not args.no_pseudonymize,
+        valid_only=args.valid_only
+    )

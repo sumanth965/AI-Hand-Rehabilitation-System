@@ -281,56 +281,76 @@ class MedicalSidebar:
 
 
 class MedicalSidebarV2:
-    """Professional clinical telemetry sidebar for Phase 2."""
+    """Professional clinical telemetry sidebar with sleek dark cyber-clinical HUD aesthetics."""
 
     def __init__(self):
         self.x = GAME_AREA_WIDTH
         self.width = SIDEBAR_WIDTH
-        self.font_title = pygame.font.SysFont("segoeui", 21, bold=True)
+        self.font_title = pygame.font.SysFont("segoeui", 20, bold=True)
         self.font_label = pygame.font.SysFont("segoeui", 14)
-        self.font_data = pygame.font.SysFont("segoeui", 20, bold=True)
+        self.font_label_bold = pygame.font.SysFont("segoeui", 14, bold=True)
+        self.font_data = pygame.font.SysFont("segoeui", 18, bold=True)
         self.font_small = pygame.font.SysFont("segoeui", 13)
+        self.font_small_bold = pygame.font.SysFont("segoeui", 13, bold=True)
+        self.font_tiny = pygame.font.SysFont("segoeui", 11, bold=True)
 
     def _draw_text(self, screen, text, font, color, pos):
         screen.blit(font.render(str(text), True, color), pos)
 
-    def _panel(self, screen, rect, border=None):
-        pygame.draw.rect(screen, (255, 255, 255), rect, border_radius=12)
-        border_col = border if border else (226, 232, 240)
-        pygame.draw.rect(screen, border_col, rect, 1, border_radius=12)
+    def _panel(self, screen, rect, border_col=(0, 180, 220)):
+        pygame.draw.rect(screen, (20, 28, 45), rect, border_radius=12)
+        b_col = border_col if border_col else (0, 180, 220)
+        pygame.draw.rect(screen, b_col, rect, 2, border_radius=12)
 
-    def _metric(self, screen, rect, label, value, color=COLOR_MED_TEXT):
-        pygame.draw.rect(screen, (248, 250, 252), rect, border_radius=12)
-        pygame.draw.rect(screen, (226, 232, 240), rect, 1, border_radius=12)
-        self._draw_text(screen, label.upper(), self.font_small, (100, 116, 139), (rect.x + 14, rect.y + 12))
+    def _metric(self, screen, rect, label, value, color=(240, 248, 255)):
+        pygame.draw.rect(screen, (20, 28, 45), rect, border_radius=10)
+        pygame.draw.rect(screen, (0, 160, 200), rect, 1, border_radius=10)
+        self._draw_text(screen, label.upper(), self.font_tiny, (130, 170, 205), (rect.x + 10, rect.y + 6))
         value_surf = self.font_data.render(str(value), True, color)
-        screen.blit(value_surf, (rect.x + 14, rect.y + 32))
+        screen.blit(value_surf, (rect.x + 10, rect.y + 22))
 
-    def _status_pill(self, screen, rect, text, color):
-        bg = tuple(max(0, min(255, int(c * 0.15 + 255 * 0.85))) for c in color)
-        pygame.draw.rect(screen, bg, rect, border_radius=rect.height // 2)
-        txt = self.font_label.render(text, True, color)
-        screen.blit(txt, txt.get_rect(center=rect.center))
+    def _status_pill(self, screen, rect, text, border_color, bg_color=None, text_color=None, show_reticle=True):
+        bg = bg_color if bg_color else (20, 28, 45)
+        pygame.draw.rect(screen, bg, rect, border_radius=12)
+        pygame.draw.rect(screen, border_color, rect, 2, border_radius=12)
+        
+        fg = text_color if text_color else (240, 248, 255)
+        
+        if show_reticle:
+            # Concentric target ring circles on the right (matching level buttons in main menu)
+            rcx = rect.right - 22
+            rcy = rect.centery
+            pygame.draw.circle(screen, border_color, (rcx, rcy), 11, 1)
+            pygame.draw.circle(screen, border_color, (rcx, rcy), 6, 1)
+            pygame.draw.circle(screen, border_color, (rcx, rcy), 2)
+            
+            txt = self.font_label_bold.render(text, True, fg)
+            txt_rect = txt.get_rect(midleft=(rect.x + 14, rect.centery))
+        else:
+            txt = self.font_label_bold.render(text, True, fg)
+            txt_rect = txt.get_rect(center=rect.center)
+            
+        screen.blit(txt, txt_rect)
 
     def _bar(self, screen, x, y, w, ratio, color):
         ratio = max(0.0, min(1.0, ratio))
-        pygame.draw.rect(screen, (220, 229, 238), (x, y, w, 8), border_radius=4)
+        pygame.draw.rect(screen, (25, 38, 58), (x, y, w, 8), border_radius=4)
         if ratio > 0:
             pygame.draw.rect(screen, color, (x, y, int(w * ratio), 8), border_radius=4)
 
-    def _wrap(self, screen, text, x, y, max_chars, color=COLOR_MED_TEXT):
+    def _wrap(self, screen, text, x, y, max_chars, color=(215, 230, 245)):
         line = ""
         for word in text.split():
             test = f"{line}{word} "
             if len(test) > max_chars:
                 self._draw_text(screen, line.strip(), self.font_small, color, (x, y))
-                y += 16
+                y += 18
                 line = f"{word} "
             else:
                 line = test
         if line:
             self._draw_text(screen, line.strip(), self.font_small, color, (x, y))
-            y += 16
+            y += 18
         return y
 
     def draw(self, screen, camera_frame, hand_data: HandData,
@@ -346,25 +366,43 @@ class MedicalSidebarV2:
              readiness_score: float = 50.0,
              rec_difficulty: str = "Moderate",
              rec_explanation: str = "Baseline therapy."):
-        pygame.draw.rect(screen, (248, 250, 252), (self.x, 0, self.width, WINDOW_HEIGHT))
-        pygame.draw.line(screen, (226, 232, 240), (self.x, 0), (self.x, WINDOW_HEIGHT), 1)
+        # Background: sleek obsidian slate matching main menu
+        pygame.draw.rect(screen, (12, 18, 30), (self.x, 0, self.width, WINDOW_HEIGHT))
+        
+        # Subtle ambient grid lines
+        for gy in range(0, WINDOW_HEIGHT, 40):
+            pygame.draw.line(screen, (18, 26, 42), (self.x, gy), (self.x + self.width, gy), 1)
 
-        # Clean header text (No background box)
-        self._draw_text(screen, "AI Rehabilitation Monitor", self.font_title, (15, 23, 42),
-                        (self.x + 24, 26))
-        self._draw_text(screen, "Live clinical session", self.font_small, (100, 116, 139),
-                        (self.x + 24, 54))
+        # Glowing cyan left separator
+        pygame.draw.line(screen, (0, 180, 220), (self.x, 0), (self.x, WINDOW_HEIGHT), 2)
+        pygame.draw.line(screen, (0, 90, 130), (self.x + 2, 0), (self.x + 2, WINDOW_HEIGHT), 1)
 
-        cam_y = 96
-        feed_h = 184
+        # Header
+        header_y = 20
+        self._draw_text(screen, "AI Rehabilitation Monitor", self.font_title, (0, 225, 255),
+                        (self.x + 20, header_y))
+        
+        # Live status indicator dot + subtitle
+        dot_y = header_y + 32
+        pygame.draw.circle(screen, (50, 255, 150), (self.x + 24, dot_y), 4)
+        self._draw_text(screen, "Live clinical session", self.font_small, (135, 175, 205),
+                        (self.x + 36, dot_y - 8))
+                        
+        # Tech accent line under header
+        line_y = header_y + 48
+        pygame.draw.line(screen, (24, 40, 64), (self.x + 16, line_y), (self.x + self.width - 16, line_y), 1)
+        pygame.draw.line(screen, (0, 180, 220), (self.x + 16, line_y), (self.x + 75, line_y), 2)
+
+        cam_y = 72
+        feed_h = 168
         cam_rect = pygame.Rect(self.x + 12, cam_y, self.width - 24, feed_h)
         cam_drawn = False
 
         if is_calibration:
-            self._panel(screen, cam_rect, border=(120, 180, 215))
-            msg = self.font_label.render("Diagnostics scanner active", True, COLOR_MED_PRIMARY)
+            self._panel(screen, cam_rect, border_col=(0, 180, 220))
+            msg = self.font_label_bold.render("Diagnostics scanner active", True, (0, 220, 255))
             screen.blit(msg, msg.get_rect(center=(cam_rect.centerx, cam_rect.centery - 10)))
-            sub = self.font_small.render("Use the central camera preview", True, COLOR_MED_MUTED)
+            sub = self.font_small.render("Use the central camera preview", True, (130, 165, 195))
             screen.blit(sub, sub.get_rect(center=(cam_rect.centerx, cam_rect.centery + 12)))
             cam_drawn = True
         elif camera_frame is not None:
@@ -373,101 +411,162 @@ class MedicalSidebarV2:
                 frame_rgb = cv2.cvtColor(frame_resized, cv2.COLOR_BGR2RGB)
                 frame_surface = pygame.surfarray.make_surface(frame_rgb.swapaxes(0, 1))
                 screen.blit(frame_surface, cam_rect.topleft)
-                border = COLOR_DANGER if hand_data.index_tip is None else COLOR_MED_PRIMARY
-                pygame.draw.rect(screen, border, cam_rect, 2, border_radius=8)
+                
+                has_hand = hand_data.index_tip is not None
+                border_col = (0, 180, 220) if has_hand else (255, 75, 90)
+                corner_col = (50, 255, 200) if has_hand else (255, 95, 110)
+                
+                pygame.draw.rect(screen, border_col, cam_rect, 2, border_radius=10)
+                
+                # Tech corner HUD brackets
+                cl = 14
+                px, py, pw, ph = cam_rect.x, cam_rect.y, cam_rect.width, cam_rect.height
+                pygame.draw.line(screen, corner_col, (px, py), (px + cl, py), 2)
+                pygame.draw.line(screen, corner_col, (px, py), (px, py + cl), 2)
+                pygame.draw.line(screen, corner_col, (px + pw - 1, py), (px + pw - cl, py), 2)
+                pygame.draw.line(screen, corner_col, (px + pw - 1, py), (px + pw - 1, py + cl), 2)
+                pygame.draw.line(screen, corner_col, (px, py + ph - 1), (px + cl, py + ph - 1), 2)
+                pygame.draw.line(screen, corner_col, (px, py + ph - 1), (px, py + ph - cl), 2)
+                pygame.draw.line(screen, corner_col, (px + pw - 1, py + ph - 1), (px + pw - cl, py + ph - 1), 2)
+                pygame.draw.line(screen, corner_col, (px + pw - 1, py + ph - 1), (px + pw - 1, py + ph - cl), 2)
+
+                # Translucent bottom status tag
                 overlay = pygame.Surface((cam_rect.width, 24), pygame.SRCALPHA)
-                overlay.fill((0, 0, 0, 105))
+                overlay.fill((10, 16, 26, 210))
                 screen.blit(overlay, (cam_rect.x, cam_rect.bottom - 24))
-                self._draw_text(screen, "Hand skeleton overlay", self.font_small,
-                                (255, 255, 255), (cam_rect.x + 8, cam_rect.bottom - 20))
+                
+                # Status dot
+                dot_c = (50, 255, 150) if has_hand else (255, 75, 90)
+                pygame.draw.circle(screen, dot_c, (cam_rect.x + 12, cam_rect.bottom - 12), 4)
+                
+                tag_label = "Hand skeleton active" if has_hand else "Searching for hand..."
+                self._draw_text(screen, tag_label, self.font_small,
+                                (210, 235, 255), (cam_rect.x + 22, cam_rect.bottom - 20))
                 cam_drawn = True
             except Exception:
                 pass
 
         if not cam_drawn:
-            self._panel(screen, cam_rect, border=(230, 170, 175))
-            off = self.font_label.render("Camera unavailable", True, COLOR_DANGER)
+            self._panel(screen, cam_rect, border_col=(255, 75, 90))
+            off = self.font_label_bold.render("Camera offline", True, (255, 90, 105))
             screen.blit(off, off.get_rect(center=cam_rect.center))
 
-        y = cam_rect.bottom + 16
+        y = cam_rect.bottom + 12
 
         if is_menu:
-            # Render menu-specific sidebar (Readiness & Recommended Difficulty)
-            self._status_pill(screen, pygame.Rect(self.x + 12, y, self.width - 24, 36),
-                              f"Readiness Score: {readiness_score:.1f}/100", COLOR_MED_PRIMARY)
+            # 1. Readiness Score pill
+            readiness_rect = pygame.Rect(self.x + 12, y, self.width - 24, 40)
+            self._status_pill(screen, readiness_rect,
+                              f"Readiness Score: {readiness_score:.1f}/100",
+                              (0, 180, 220), bg_color=(20, 28, 45),
+                              text_color=(0, 225, 255), show_reticle=True)
             y += 48
             
-            diff_col = COLOR_MED_SUCCESS if rec_difficulty == "Easy" else COLOR_MED_WARNING if rec_difficulty == "Moderate" else COLOR_DANGER
-            self._status_pill(screen, pygame.Rect(self.x + 12, y, self.width - 24, 36),
-                              f"Recommended Diff: {rec_difficulty}", diff_col)
-            y += 52
+            # 2. Recommended Difficulty pill
+            diff_clean = rec_difficulty.capitalize()
+            if diff_clean == "Easy":
+                diff_border = (50, 230, 140)
+                diff_bg = (16, 36, 30)
+                diff_txt = (60, 255, 160)
+            elif diff_clean == "Moderate":
+                diff_border = (255, 190, 40)
+                diff_bg = (38, 30, 16)
+                diff_txt = (255, 205, 60)
+            else: # Hard or default
+                diff_border = (255, 75, 95)
+                diff_bg = (40, 18, 26)
+                diff_txt = (255, 105, 125)
+
+            diff_rect = pygame.Rect(self.x + 12, y, self.width - 24, 40)
+            self._status_pill(screen, diff_rect,
+                              f"Recommended Diff: {diff_clean}",
+                              diff_border, bg_color=diff_bg,
+                              text_color=diff_txt, show_reticle=True)
+            y += 50
             
-            panel = pygame.Rect(self.x + 12, y, self.width - 24, 240)
-            self._panel(screen, panel)
-            self._draw_text(screen, "CLINICAL RATIONALE", self.font_small, COLOR_MED_MUTED, (panel.x + 14, panel.y + 12))
-            self._wrap(screen, rec_explanation, panel.x + 14, panel.y + 38, 32, COLOR_MED_TEXT)
+            # 3. Clinical Rationale card
+            panel = pygame.Rect(self.x + 12, y, self.width - 24, WINDOW_HEIGHT - y - 16)
+            self._panel(screen, panel, border_col=(0, 180, 220))
+            
+            # Title header with mini cyan badge
+            badge_rect = pygame.Rect(panel.x + 14, panel.y + 13, 4, 16)
+            pygame.draw.rect(screen, (0, 200, 240), badge_rect, border_radius=2)
+            self._draw_text(screen, "CLINICAL RATIONALE", self.font_small_bold, (0, 220, 255),
+                            (panel.x + 24, panel.y + 12))
+            pygame.draw.line(screen, (28, 45, 72), (panel.x + 12, panel.y + 36),
+                             (panel.right - 12, panel.y + 36), 1)
+            
+            self._wrap(screen, rec_explanation, panel.x + 14, panel.y + 46, 33, (215, 230, 245))
             return
 
         has_hand = hand_data.index_tip is not None
         status = "Tracking stable" if has_hand else "Hand not detected"
-        self._status_pill(screen, pygame.Rect(self.x + 12, y, self.width - 24, 36),
-                          status, COLOR_MED_SUCCESS if has_hand else COLOR_DANGER)
-        y += 48
+        status_border = (50, 230, 140) if has_hand else (255, 75, 95)
+        status_bg = (16, 36, 30) if has_hand else (40, 18, 26)
+        status_txt = (60, 255, 160) if has_hand else (255, 105, 125)
+        self._status_pill(screen, pygame.Rect(self.x + 12, y, self.width - 24, 32),
+                          status, status_border, bg_color=status_bg,
+                          text_color=status_txt, show_reticle=True)
+        y += 38
 
         if is_results:
             return
 
         correctness_lower = correctness_text.lower()
-        correct_col = COLOR_MED_SUCCESS if correctness_lower.startswith(("correct", "good", "ready")) else COLOR_DANGER
-        self._status_pill(screen, pygame.Rect(self.x + 12, y, self.width - 24, 36),
-                          correctness_text, correct_col)
-        y += 48
+        is_correct = correctness_lower.startswith(("correct", "good", "ready"))
+        correct_border = (50, 230, 140) if is_correct else (255, 75, 95)
+        correct_bg = (16, 36, 30) if is_correct else (40, 18, 26)
+        correct_txt = (60, 255, 160) if is_correct else (255, 105, 125)
+        self._status_pill(screen, pygame.Rect(self.x + 12, y, self.width - 24, 32),
+                          correctness_text, correct_border, bg_color=correct_bg,
+                          text_color=correct_txt, show_reticle=False)
+        y += 38
 
         acc = (accuracy_hits / accuracy_attempts * 100) if accuracy_attempts > 0 else 0.0
-        acc_col = COLOR_MED_SUCCESS if acc >= 70 else COLOR_MED_WARNING if acc >= 40 else COLOR_DANGER
+        acc_col = (50, 230, 140) if acc >= 70 else (255, 190, 40) if acc >= 40 else (255, 75, 95)
         rom = sum(hand_data.knuckle_angles[:4]) / len(hand_data.knuckle_angles[:4]) if hand_data.knuckle_angles else 0.0
-        card_w = (self.width - 34) // 2
+        card_w = (self.width - 32) // 2
 
-        self._metric(screen, pygame.Rect(self.x + 12, y, card_w, 64), "Score", score)
-        self._metric(screen, pygame.Rect(self.x + 22 + card_w, y, card_w, 64), "Accuracy", f"{acc:.0f}%", acc_col)
-        y += 74
-        self._metric(screen, pygame.Rect(self.x + 12, y, card_w, 64), "Exercises", exercise_count)
+        self._metric(screen, pygame.Rect(self.x + 12, y, card_w, 48), "Score", score)
+        self._metric(screen, pygame.Rect(self.x + 20 + card_w, y, card_w, 48), "Accuracy", f"{acc:.0f}%", acc_col)
+        y += 54
+        self._metric(screen, pygame.Rect(self.x + 12, y, card_w, 48), "Exercises", exercise_count)
         mins = int(session_elapsed // 60)
         secs = int(session_elapsed % 60)
-        self._metric(screen, pygame.Rect(self.x + 22 + card_w, y, card_w, 64), "Timer", f"{mins:02d}:{secs:02d}")
-        y += 74
-        self._metric(screen, pygame.Rect(self.x + 12, y, card_w, 64), "Current ROM", f"{rom:.0f} deg", COLOR_MED_PRIMARY)
-        pain_col = COLOR_MED_SUCCESS if pain_level <= 3 else COLOR_MED_WARNING if pain_level <= 6 else COLOR_DANGER
-        self._metric(screen, pygame.Rect(self.x + 22 + card_w, y, card_w, 64), "Pain Score", f"{pain_level}/10", pain_col)
-        y += 74
+        self._metric(screen, pygame.Rect(self.x + 20 + card_w, y, card_w, 48), "Timer", f"{mins:02d}:{secs:02d}")
+        y += 54
+        self._metric(screen, pygame.Rect(self.x + 12, y, card_w, 48), "Current ROM", f"{rom:.0f}°", (0, 200, 240))
+        pain_col = (50, 230, 140) if pain_level <= 3 else (255, 190, 40) if pain_level <= 6 else (255, 75, 95)
+        self._metric(screen, pygame.Rect(self.x + 20 + card_w, y, card_w, 48), "Pain Score", f"{pain_level}/10", pain_col)
+        y += 54
 
-        panel = pygame.Rect(self.x + 12, y, self.width - 24, 72)
+        panel = pygame.Rect(self.x + 12, y, self.width - 24, 52)
         self._panel(screen, panel)
-        self._draw_text(screen, "EXERCISE NAME", self.font_small, COLOR_MED_MUTED, (panel.x + 14, panel.y + 12))
-        self._draw_text(screen, exercise_name, self.font_data, COLOR_MED_TEXT, (panel.x + 14, panel.y + 36))
-        y = panel.bottom + 16
+        self._draw_text(screen, "EXERCISE NAME", self.font_small_bold, (0, 180, 220), (panel.x + 14, panel.y + 6))
+        self._draw_text(screen, exercise_name, self.font_data, (240, 248, 255), (panel.x + 14, panel.y + 24))
+        y = panel.bottom + 8
 
         pred_text = "Need more data"
-        pred_col = COLOR_MED_MUTED
+        pred_col = (130, 165, 195)
         if recovery_prediction is not None and recovery_prediction >= 0:
             pred_text = f"{recovery_prediction:.1f}% predicted recovery"
-            pred_col = COLOR_MED_PRIMARY
-        panel = pygame.Rect(self.x + 12, y, self.width - 24, 68)
+            pred_col = (50, 230, 140)
+        panel = pygame.Rect(self.x + 12, y, self.width - 24, 50)
         self._panel(screen, panel)
-        self._draw_text(screen, "RECOVERY PREDICTION", self.font_small, COLOR_MED_MUTED, (panel.x + 14, panel.y + 12))
-        self._draw_text(screen, pred_text, self.font_label, pred_col, (panel.x + 14, panel.y + 36))
-        y = panel.bottom + 16
+        self._draw_text(screen, "RECOVERY PREDICTION", self.font_small_bold, (0, 180, 220), (panel.x + 14, panel.y + 6))
+        self._draw_text(screen, pred_text, self.font_label_bold, pred_col, (panel.x + 14, panel.y + 24))
+        y = panel.bottom + 8
 
-        panel = pygame.Rect(self.x + 12, y, self.width - 24, 114)
+        panel = pygame.Rect(self.x + 12, y, self.width - 24, WINDOW_HEIGHT - y - 10)
         self._panel(screen, panel)
-        self._draw_text(screen, "STATUS MESSAGE", self.font_small, COLOR_MED_MUTED, (panel.x + 14, panel.y + 12))
+        self._draw_text(screen, "STATUS MESSAGE", self.font_small_bold, (0, 180, 220), (panel.x + 14, panel.y + 8))
         next_y = self._wrap(screen, level_goals or "Ready for guided rehabilitation.",
-                            panel.x + 14, panel.y + 38, 34, COLOR_MED_TEXT)
+                            panel.x + 14, panel.y + 26, 34, (215, 230, 245))
         if hand_data.is_pinching or hand_data.is_fist:
             gesture = "Pinch active" if hand_data.is_pinching else "Fist active"
-            self._draw_text(screen, gesture, self.font_small, COLOR_MED_PRIMARY,
-                            (panel.x + 14, min(next_y + 4, panel.bottom - 22)))
-        self._bar(screen, panel.x + 14, panel.bottom - 16, panel.width - 28, acc / 100.0, acc_col)
+            self._draw_text(screen, gesture, self.font_small_bold, (0, 220, 255),
+                            (panel.x + 14, min(next_y + 2, panel.bottom - 20)))
+        self._bar(screen, panel.x + 14, panel.bottom - 12, panel.width - 28, acc / 100.0, acc_col)
 
 
 class PostGameSummary:
@@ -750,18 +849,7 @@ class PostGameSummary:
 
         # ── AI CLINICAL SUMMARY PANEL ─────────────────────────────────
         by = max(ly, ry) + 6
-        bh = WINDOW_HEIGHT - by - 50
         bw = GAME_AREA_WIDTH - 44
-        panel_rect = pygame.Rect(22, by, bw, bh)
-        pygame.draw.rect(screen, (12, 22, 48), panel_rect, border_radius=10)
-        pygame.draw.rect(screen, (0, 130, 170), panel_rect, 1, border_radius=10)
-
-        # Accent stripe
-        pygame.draw.rect(screen, (0, 160, 200), pygame.Rect(22, by, 4, bh), border_radius=2)
-
-        # Heading
-        h_surf = self.font_small.render("AI CLINICAL SUMMARY & RECOMMENDATION", True, (0, 200, 245))
-        screen.blit(h_surf, (38, by + 10))
 
         # Wrap summary text
         words = summary_text.split()
@@ -777,8 +865,24 @@ class PostGameSummary:
         if line:
             lines.append(line.strip())
 
-        sy = by + 34
-        for ln in lines[:3]:
+        # Fit panel neatly around clinical summary text so it never overlaps the action buttons below
+        num_summary_lines = min(len(lines), 2)
+        content_h = 30 + (num_summary_lines * 18) + 4 + 18 + 20 + 12
+        bh = max(116, min(content_h, 134))
+
+        panel_rect = pygame.Rect(22, by, bw, bh)
+        pygame.draw.rect(screen, (12, 22, 48), panel_rect, border_radius=10)
+        pygame.draw.rect(screen, (0, 130, 170), panel_rect, 1, border_radius=10)
+
+        # Accent stripe
+        pygame.draw.rect(screen, (0, 160, 200), pygame.Rect(22, by, 4, bh), border_radius=2)
+
+        # Heading
+        h_surf = self.font_small.render("AI CLINICAL SUMMARY & RECOMMENDATION", True, (0, 200, 245))
+        screen.blit(h_surf, (38, by + 10))
+
+        sy = by + 32
+        for ln in lines[:num_summary_lines]:
             s_surf = self.font_tiny.render(ln, True, (185, 200, 220))
             screen.blit(s_surf, (38, sy))
             sy += 18
@@ -789,7 +893,7 @@ class PostGameSummary:
         screen.blit(rec_title, (38, sy))
 
         r_surf = self.font_tiny.render(ai_recommendation, True, (240, 245, 255))
-        screen.blit(r_surf, (38, sy + 22))
+        screen.blit(r_surf, (38, sy + 20))
 
         # ── FOOTER ────────────────────────────────────────────────────
         footer_rect = pygame.Rect(0, WINDOW_HEIGHT - 40, GAME_AREA_WIDTH, 40)

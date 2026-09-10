@@ -1,4 +1,4 @@
-﻿"""
+"""
 Main Game Application (PhysioSystem) for the Zero-Keyboard AI Physiotherapy System.
 """
 
@@ -222,8 +222,8 @@ class PhysioSystem:
         self.quick_start_button = CloseButton(GAME_AREA_WIDTH // 2 - 240, 560, 480, 60)
         self.quick_start_button.duration = 2.0
         
-        # Repositioned buttons to prevent footer overlap
-        btn_y = 495
+        # Repositioned buttons below AI summary panel to prevent overlap
+        btn_y = 608
         bw, bh = 170, 44
         cx = GAME_AREA_WIDTH // 2
         
@@ -232,10 +232,12 @@ class PhysioSystem:
         self.home_button  = CloseButton(cx + 0,   btn_y, bw, bh)
         self.close_button = CloseButton(cx + 180, btn_y, bw, bh)
         
-        # Calibration buttons
-        self.cal_start_button = CloseButton(GAME_AREA_WIDTH // 2 - 130, 460, 260, 60)
+        # Calibration buttons (centered inside left panel: x=20..580, center=300)
+        cal_btn_w, cal_btn_h = 280, 52
+        cal_btn_x = 20 + (560 - cal_btn_w) // 2  # 160
+        self.cal_start_button = CloseButton(cal_btn_x, 470, cal_btn_w, cal_btn_h)
         self.cal_start_button.duration = 1.5
-        self.cal_finish_button = CloseButton(GAME_AREA_WIDTH // 2 - 130, 540, 260, 60)
+        self.cal_finish_button = CloseButton(cal_btn_x, 470, cal_btn_w, cal_btn_h)
         self.cal_finish_button.duration = 1.5
         
         for b in [self.menu_button, self.next_button, self.home_button, self.close_button]:
@@ -4055,8 +4057,8 @@ class PhysioSystem:
         # Draw tech background grids
         self._draw_cyber_grid()
         
-        title_surf = self.font_large.render("HAND DIAGNOSTICS & CALIBRATION", True, (0, 200, 255))
-        self.screen.blit(title_surf, title_surf.get_rect(center=(cx, 45)))
+        title_surf = self.font_medium.render("HAND DIAGNOSTICS & CALIBRATION", True, (0, 200, 255))
+        self.screen.blit(title_surf, title_surf.get_rect(midleft=(40, 45)))
         pygame.draw.line(self.screen, (0, 150, 200), (0, 80), (GAME_AREA_WIDTH, 80), 2)
         
         prev_x, prev_y = GAME_AREA_WIDTH - 360, 100

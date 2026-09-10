@@ -6,12 +6,12 @@ from ..shared import *
 class PainScreenMixin:
     def _update_pain_scale(self, hand_data: HandData):
         """Select a pain dot (0-10) using either hands-free hover (1.5s) or physical mouse click"""
-        cx, cy = WINDOW_WIDTH // 2, WINDOW_HEIGHT // 2
+        cx = WINDOW_WIDTH // 2
         box_w, box_h = 60, 75
         box_gap = 25
         total_w = 11 * box_w + 10 * box_gap
         start_x = cx - total_w // 2
-        dy = cy - 80
+        dy = 155
 
         m_pos = pygame.mouse.get_pos()
         m_clicked = pygame.mouse.get_pressed()[0]
@@ -71,11 +71,11 @@ class PainScreenMixin:
 
         # Header
         pygame.draw.rect(self.screen, (15, 25, 55),
-                         pygame.Rect(0, 0, WINDOW_WIDTH, 80))
+                         pygame.Rect(0, 0, WINDOW_WIDTH, 70))
         after_session = self.state == GameState.PAIN_AFTER_SESSION
         title = "Post-Session Pain Assessment" if after_session else "Pain Level Assessment"
         h1 = self.font_large.render(title, True, (0, 200, 255))
-        self.screen.blit(h1, h1.get_rect(center=(cx, 40)))
+        self.screen.blit(h1, h1.get_rect(center=(cx, 35)))
 
         prompt = (
             "Please rate your pain level after completing today's exercises.  (0 = No Pain   10 = Worst Pain)"
@@ -83,7 +83,7 @@ class PainScreenMixin:
             else "Please rate your current pain level from 0 to 10.  (0 = No Pain   10 = Worst Pain)"
         )
         sub = self.font_small.render(prompt, True, (130, 160, 200))
-        self.screen.blit(sub, sub.get_rect(center=(cx, cy - 160)))
+        self.screen.blit(sub, sub.get_rect(center=(cx, 110)))
 
         # WHO NRS descriptors
         descriptors = {0:"None", 1:"Min", 2:"Mild", 3:"Mild",
@@ -99,9 +99,10 @@ class PainScreenMixin:
         hover_i  = getattr(self, '_pain_hover', -1)
         hover_t  = getattr(self, '_pain_hover_t', t)
 
+        dy = 155
+
         for i in range(11):
             dx = start_x + i * (box_w + box_gap)
-            dy = cy - 80
             col = colors_nrs[i]
             rect = pygame.Rect(dx, dy, box_w, box_h)
 
@@ -138,24 +139,25 @@ class PainScreenMixin:
 
             # Descriptor below
             dc = self.font_hint.render(descriptors[i], True, col)
-            self.screen.blit(dc, dc.get_rect(center=(rect.centerx, rect.bottom + 18)))
+            self.screen.blit(dc, dc.get_rect(center=(rect.centerx, rect.bottom + 16)))
 
-        # Selected pain label / Feedback
+        # Selected pain label / Feedback (placed safely above camera PIP)
+        hint_y = 285
         if hover_i >= 0:
             lbl = self.font_medium.render(
                 f"Pain: {hover_i}/10 — {descriptors[hover_i]}   Hold 1.5s to confirm",
                 True, colors_nrs[hover_i])
-            self.screen.blit(lbl, lbl.get_rect(center=(cx, cy + 45)))
+            self.screen.blit(lbl, lbl.get_rect(center=(cx, hint_y)))
         else:
             hint = self.font_small.render(
                 "Point your index finger at a number to select",
                 True, (140, 160, 180))
-            self.screen.blit(hint, hint.get_rect(center=(cx, cy + 45)))
+            self.screen.blit(hint, hint.get_rect(center=(cx, hint_y)))
 
         # Floating PIP Hand Alignment Camera
-        pip_w, pip_h = 340, 255
+        pip_w, pip_h = 320, 240
         pip_x = cx - pip_w // 2
-        pip_y = cy + 40
+        pip_y = 325
         
         # Draw camera with cyan rounded border matching the mockup
         border_col = (0, 180, 220)
@@ -164,13 +166,13 @@ class PainScreenMixin:
         self._draw_camera_preview(pip_x, pip_y, pip_w, pip_h, label="")
         
         lbl_pip = self.font_tiny.render("PAIN ASSESS HAND ALIGNMENT", True, border_col)
-        self.screen.blit(lbl_pip, lbl_pip.get_rect(center=(cx, pip_y + pip_h + 15)))
+        self.screen.blit(lbl_pip, lbl_pip.get_rect(center=(cx, pip_y + pip_h + 16)))
 
         # Clinical note
         note = self.font_hint.render(
             "NRS Scale — Even with 0 (No Pain), repetitive coordination and ROM exercises are critical to rebuild neural motor pathways.",
             True, (60, 90, 130))
-        self.screen.blit(note, note.get_rect(center=(cx, WINDOW_HEIGHT - 22)))
+        self.screen.blit(note, note.get_rect(center=(cx, WINDOW_HEIGHT - 25)))
 
         # Cursor
         hand_data = self.hand_engine.get_hand_data()
