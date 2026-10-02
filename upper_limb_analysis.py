@@ -2,9 +2,10 @@
 Upper limb biomechanics and compensation analysis.
 
 This module uses MediaPipe Pose landmarks to estimate shoulder, elbow, trunk,
-and forearm compensation during hand rehabilitation. It is intentionally
-explainable and conservative: metrics are approximate 2-D webcam estimates, not
-clinical goniometer measurements.
+and forearm compensation during hand rehabilitation. It deploys heuristic compensation
+thresholds (approximate 2D webcam estimates, not clinically validated or diagnostic
+thresholds). These heuristic thresholds require empirical validation across different
+body sizes, camera distances, seating positions, and operating environments.
 """
 
 from __future__ import annotations

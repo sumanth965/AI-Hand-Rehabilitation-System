@@ -21,7 +21,8 @@ class ClinicalMixin:
                     7: "hit_rate",
                     8: "binary_completion",
                     9: "hit_rate",
-                    10: "path_accuracy"
+                    10: "path_accuracy",
+                    11: "manipulation_success_rate"
                 }
                 level_exercise_names = {
                     1: "Bubble Pop",
@@ -33,7 +34,8 @@ class ClinicalMixin:
                     7: "Rotation Orbit",
                     8: "Smart Assembly",
                     9: "Precision Dots",
-                    10: "Precision Pathway"
+                    10: "Precision Pathway",
+                    11: "Coin Vault"
                 }
                 accuracy_type = getattr(self, "accuracy_type", level_accuracy_types.get(self.current_level, "hit_rate"))
                 exercise_name = level_exercise_names.get(self.current_level, f"Level {self.current_level}")
@@ -48,20 +50,36 @@ class ClinicalMixin:
                 valid_f = getattr(self, 'tracking_frames_valid', 0)
                 total_f = getattr(self, 'tracking_frames_total', 0)
                 tracking_quality = round((valid_f / total_f * 100.0), 2) if total_f > 0 else None
+                tracking_valid_duration = round((valid_f / total_f) * duration, 2) if total_f > 0 else 0.0
+                active_engagement_duration = round(getattr(self, 'active_engagement_duration', tracking_valid_duration), 2)
                 
-                # Quality flag
+                # Quality flag: Distinguish between tracking error, motor failure, abort, and valid sessions
                 session_aborted = 1 if getattr(self, 'session_aborted', 0) else 0
                 if session_aborted:
-                    quality_flag = "ABORTED_EARLY"
+                    quality_flag = "ABORTED_SESSION"
+                elif total_f == 0 or valid_f == 0:
+                    quality_flag = "MISSING_DATA"
+                elif tracking_quality is not None and tracking_quality < 50.0:
+                    quality_flag = "TRACKING_ERROR"
+                elif self.accuracy_attempts > 0 and self.accuracy_hits == 0:
+                    quality_flag = "MOTOR_FAILURE"
                 elif self.accuracy_attempts == 0:
                     quality_flag = "NO_VALID_ATTEMPTS"
                 elif self.accuracy_hits > self.accuracy_attempts or self.accuracy_hits < 0:
                     quality_flag = "ACCURACY_ERROR"
-                elif tracking_quality is not None and tracking_quality < 50.0:
-                    quality_flag = "TRACKING_ERROR"
                 else:
                     quality_flag = "VALID"
                 
+                # Adaptive difficulty context
+                difficulty_tier = int(getattr(self, 'difficulty_tier', getattr(getattr(self, 'adaptive_recommendation', None), 'difficulty_tier', 3)))
+                target_scale = float(getattr(self, 'adaptive_target_scale', 1.0))
+                speed_scale = float(getattr(self, 'adaptive_speed_scale', 1.0))
+                session_time_limit = float(getattr(self, 'session_time_limit', LEVEL_DURATION))
+                hold_duration = float(getattr(self, 'rotation_hold_required', 1.5))
+                rotation_tolerance = float(getattr(self, 'rotation_tolerance', 25.0))
+                assembly_pos_tol = float(getattr(self, 'assembly_position_tolerance', 50.0))
+                corridor_w = float(getattr(getattr(self, 'pathway_config', None), 'width', 60.0))
+
                 avg_hand_angle = sum(self.angle_history) / len(self.angle_history) if len(self.angle_history) > 0 else 0
                 self._pending_session_summary = {
                     "duration": duration,
@@ -77,6 +95,26 @@ class ClinicalMixin:
                     "tracking_quality": tracking_quality,
                     "tracking_frames_valid": valid_f,
                     "tracking_frames_total": total_f,
+                    "tracking_valid_duration": tracking_valid_duration,
+                    "active_engagement_duration": active_engagement_duration,
+                    "difficulty_tier": difficulty_tier,
+                    "target_scale": target_scale,
+                    "speed_scale": speed_scale,
+                    "session_time_limit": session_time_limit,
+                    "hold_duration": hold_duration,
+                    "rotation_tolerance": rotation_tolerance,
+                    "assembly_position_tolerance": assembly_pos_tol,
+                    "corridor_width": corridor_w,
+                    "successful_pickups": getattr(self, "successful_pickups", 0),
+                    "pickup_attempts": getattr(self, "pickup_attempts", 0),
+                    "successful_translations": getattr(self, "successful_translations", 0),
+                    "translation_attempts": getattr(self, "translation_attempts", 0),
+                    "successful_placements": getattr(self, "successful_placements", 0),
+                    "placement_attempts": getattr(self, "placement_attempts", 0),
+                    "unintended_drops": getattr(self, "unintended_drops", 0),
+                    "manipulation_time_avg": getattr(self, "manipulation_time_avg", 0.0),
+                    "placement_time_avg": getattr(self, "placement_time_avg", 0.0),
+                    "correction_count": getattr(self, "correction_count", 0),
                     "session_aborted": session_aborted,
                     "quality_flag": quality_flag,
                     "angle_history": list(self.angle_history),
@@ -100,6 +138,16 @@ class ClinicalMixin:
             tracking_quality = pending_summary.get("tracking_quality")
             tracking_frames_valid = pending_summary.get("tracking_frames_valid", 0)
             tracking_frames_total = pending_summary.get("tracking_frames_total", 0)
+            tracking_valid_duration = pending_summary.get("tracking_valid_duration", 0.0)
+            active_engagement_duration = pending_summary.get("active_engagement_duration", 0.0)
+            difficulty_tier = pending_summary.get("difficulty_tier", 3)
+            target_scale = pending_summary.get("target_scale", 1.0)
+            speed_scale = pending_summary.get("speed_scale", 1.0)
+            session_time_limit = pending_summary.get("session_time_limit", 30.0)
+            hold_duration = pending_summary.get("hold_duration", 1.5)
+            rotation_tolerance = pending_summary.get("rotation_tolerance", 25.0)
+            assembly_pos_tol = pending_summary.get("assembly_position_tolerance", 50.0)
+            corridor_w = pending_summary.get("corridor_width", 60.0)
             session_aborted = pending_summary.get("session_aborted", 0)
             quality_flag = pending_summary.get("quality_flag", "VALID")
 
@@ -162,7 +210,27 @@ class ClinicalMixin:
                 tracking_frames_valid=tracking_frames_valid,
                 tracking_frames_total=tracking_frames_total,
                 session_aborted=session_aborted,
-                quality_flag=quality_flag
+                quality_flag=quality_flag,
+                active_engagement_duration=active_engagement_duration,
+                tracking_valid_duration=tracking_valid_duration,
+                difficulty_tier=difficulty_tier,
+                target_scale=target_scale,
+                speed_scale=speed_scale,
+                session_time_limit=session_time_limit,
+                hold_duration=hold_duration,
+                rotation_tolerance=rotation_tolerance,
+                assembly_position_tolerance=assembly_pos_tol,
+                corridor_width=corridor_w,
+                successful_pickups=int(pending_summary.get("successful_pickups", 0)),
+                pickup_attempts=int(pending_summary.get("pickup_attempts", 0)),
+                successful_translations=int(pending_summary.get("successful_translations", 0)),
+                translation_attempts=int(pending_summary.get("translation_attempts", 0)),
+                successful_placements=int(pending_summary.get("successful_placements", 0)),
+                placement_attempts=int(pending_summary.get("placement_attempts", 0)),
+                unintended_drops=int(pending_summary.get("unintended_drops", 0)),
+                manipulation_time_avg=float(pending_summary.get("manipulation_time_avg", 0.0)),
+                placement_time_avg=float(pending_summary.get("placement_time_avg", 0.0)),
+                correction_count=int(pending_summary.get("correction_count", 0))
             )
             session_id = getattr(self.db, 'last_session_id', None)
             

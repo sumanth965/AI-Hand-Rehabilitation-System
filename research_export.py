@@ -23,7 +23,8 @@ EXERCISE_NAMES = {
     7: "Rotation Orbit",
     8: "Smart Assembly",
     9: "Precision Dots",
-    10: "Precision Pathway"
+    10: "Precision Pathway",
+    11: "Coin Vault"
 }
 
 ACCURACY_TYPES = {
@@ -36,7 +37,8 @@ ACCURACY_TYPES = {
     7: "hit_rate",
     8: "binary_completion",
     9: "hit_rate",
-    10: "path_accuracy"
+    10: "path_accuracy",
+    11: "manipulation_success_rate"
 }
 
 CSV_HEADERS = [
@@ -59,7 +61,26 @@ CSV_HEADERS = [
     "Pain_After",
     "Pain_Delta",
     "Completion_Time",
+    "Active_Engagement_Time",
+    "Tracking_Valid_Time",
     "Readiness",
+    "Target_Scale",
+    "Speed_Scale",
+    "Session_Time_Limit",
+    "Hold_Duration",
+    "Rotation_Tolerance",
+    "Assembly_Tolerance",
+    "Corridor_Width",
+    "Successful_Pickups",
+    "Pickup_Attempts",
+    "Successful_Translations",
+    "Translation_Attempts",
+    "Successful_Placements",
+    "Placement_Attempts",
+    "Unintended_Drops",
+    "Manipulation_Time_Avg",
+    "Placement_Time_Avg",
+    "Correction_Count",
     "Previous_Accuracy",
     "Previous_Readiness",
     "Previous_Difficulty",
@@ -192,6 +213,27 @@ def export_research_dataset(
             prev_diff = prev_data.get("difficulty", "")
             new_diff = current_diff
 
+            active_engagement = f"{s['active_engagement_duration']:.1f}" if ('active_engagement_duration' in s.keys() and s['active_engagement_duration'] is not None and s['active_engagement_duration'] > 0) else completion_time
+            tracking_valid = f"{s['tracking_valid_duration']:.1f}" if ('tracking_valid_duration' in s.keys() and s['tracking_valid_duration'] is not None and s['tracking_valid_duration'] > 0) else completion_time
+            target_scale = f"{s['target_scale']:.2f}" if ('target_scale' in s.keys() and s['target_scale'] is not None) else "1.00"
+            speed_scale = f"{s['speed_scale']:.2f}" if ('speed_scale' in s.keys() and s['speed_scale'] is not None) else "1.00"
+            session_time_limit = f"{s['session_time_limit']:.0f}" if ('session_time_limit' in s.keys() and s['session_time_limit'] is not None) else "30"
+            hold_duration = f"{s['hold_duration']:.1f}" if ('hold_duration' in s.keys() and s['hold_duration'] is not None) else "1.5"
+            rotation_tolerance = f"{s['rotation_tolerance']:.1f}" if ('rotation_tolerance' in s.keys() and s['rotation_tolerance'] is not None) else "25.0"
+            assembly_tolerance = f"{s['assembly_position_tolerance']:.1f}" if ('assembly_position_tolerance' in s.keys() and s['assembly_position_tolerance'] is not None) else "50.0"
+            corridor_width = f"{s['corridor_width']:.1f}" if ('corridor_width' in s.keys() and s['corridor_width'] is not None) else "60.0"
+            
+            succ_pickups = s["successful_pickups"] if ('successful_pickups' in s.keys() and s["successful_pickups"] is not None) else ""
+            pickup_att = s["pickup_attempts"] if ('pickup_attempts' in s.keys() and s["pickup_attempts"] is not None) else ""
+            succ_trans = s["successful_translations"] if ('successful_translations' in s.keys() and s["successful_translations"] is not None) else ""
+            trans_att = s["translation_attempts"] if ('translation_attempts' in s.keys() and s["translation_attempts"] is not None) else ""
+            succ_place = s["successful_placements"] if ('successful_placements' in s.keys() and s["successful_placements"] is not None) else ""
+            place_att = s["placement_attempts"] if ('placement_attempts' in s.keys() and s["placement_attempts"] is not None) else ""
+            unintended_drops = s["unintended_drops"] if ('unintended_drops' in s.keys() and s["unintended_drops"] is not None) else ""
+            manip_time_avg = f"{s['manipulation_time_avg']:.2f}" if ('manipulation_time_avg' in s.keys() and s['manipulation_time_avg'] is not None and s['manipulation_time_avg'] > 0) else ""
+            place_time_avg = f"{s['placement_time_avg']:.2f}" if ('placement_time_avg' in s.keys() and s['placement_time_avg'] is not None and s['placement_time_avg'] > 0) else ""
+            correction_count = s["correction_count"] if ('correction_count' in s.keys() and s["correction_count"] is not None) else ""
+
             row = [
                 patient_display_id,
                 session_id,
@@ -212,7 +254,26 @@ def export_research_dataset(
                 pain_after,
                 pain_delta,
                 completion_time,
+                active_engagement,
+                tracking_valid,
                 readiness,
+                target_scale,
+                speed_scale,
+                session_time_limit,
+                hold_duration,
+                rotation_tolerance,
+                assembly_tolerance,
+                corridor_width,
+                succ_pickups,
+                pickup_att,
+                succ_trans,
+                trans_att,
+                succ_place,
+                place_att,
+                unintended_drops,
+                manip_time_avg,
+                place_time_avg,
+                correction_count,
                 prev_acc,
                 prev_readiness,
                 prev_diff,

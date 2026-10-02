@@ -56,7 +56,17 @@ class DatabaseManager:
                     tracking_frames_valid INTEGER DEFAULT 0,
                     tracking_frames_total INTEGER DEFAULT 0,
                     session_aborted INTEGER DEFAULT 0,
-                    quality_flag TEXT DEFAULT 'VALID'
+                    quality_flag TEXT DEFAULT 'VALID',
+                    active_engagement_duration REAL DEFAULT 0,
+                    tracking_valid_duration REAL DEFAULT 0,
+                    difficulty_tier INTEGER DEFAULT 3,
+                    target_scale REAL DEFAULT 1.0,
+                    speed_scale REAL DEFAULT 1.0,
+                    session_time_limit REAL DEFAULT 30.0,
+                    hold_duration REAL DEFAULT 1.5,
+                    rotation_tolerance REAL DEFAULT 25.0,
+                    assembly_position_tolerance REAL DEFAULT 50.0,
+                    corridor_width REAL DEFAULT 60.0
                 )
             """)
             cursor.execute("""
@@ -130,7 +140,27 @@ class DatabaseManager:
                               ("tracking_frames_valid", "INTEGER DEFAULT 0"),
                               ("tracking_frames_total", "INTEGER DEFAULT 0"),
                               ("session_aborted", "INTEGER DEFAULT 0"),
-                              ("quality_flag", "TEXT DEFAULT 'VALID'")]:
+                              ("quality_flag", "TEXT DEFAULT 'VALID'"),
+                              ("active_engagement_duration", "REAL DEFAULT 0"),
+                              ("tracking_valid_duration", "REAL DEFAULT 0"),
+                              ("difficulty_tier", "INTEGER DEFAULT 3"),
+                              ("target_scale", "REAL DEFAULT 1.0"),
+                              ("speed_scale", "REAL DEFAULT 1.0"),
+                              ("session_time_limit", "REAL DEFAULT 30.0"),
+                              ("hold_duration", "REAL DEFAULT 1.5"),
+                              ("rotation_tolerance", "REAL DEFAULT 25.0"),
+                              ("assembly_position_tolerance", "REAL DEFAULT 50.0"),
+                              ("corridor_width", "REAL DEFAULT 60.0"),
+                              ("successful_pickups", "INTEGER DEFAULT 0"),
+                              ("pickup_attempts", "INTEGER DEFAULT 0"),
+                              ("successful_translations", "INTEGER DEFAULT 0"),
+                              ("translation_attempts", "INTEGER DEFAULT 0"),
+                              ("successful_placements", "INTEGER DEFAULT 0"),
+                              ("placement_attempts", "INTEGER DEFAULT 0"),
+                              ("unintended_drops", "INTEGER DEFAULT 0"),
+                              ("manipulation_time_avg", "REAL DEFAULT 0.0"),
+                              ("placement_time_avg", "REAL DEFAULT 0.0"),
+                              ("correction_count", "INTEGER DEFAULT 0")]:
                 try:
                     cursor.execute(f"SELECT {col} FROM sessions LIMIT 1")
                 except sqlite3.OperationalError:
@@ -294,7 +324,27 @@ class DatabaseManager:
                     tracking_frames_valid: int = 0,
                     tracking_frames_total: int = 0,
                     session_aborted: int = 0,
-                    quality_flag: str = "VALID"):
+                    quality_flag: str = "VALID",
+                    active_engagement_duration: float = 0.0,
+                    tracking_valid_duration: float = 0.0,
+                    difficulty_tier: int = 3,
+                    target_scale: float = 1.0,
+                    speed_scale: float = 1.0,
+                    session_time_limit: float = 30.0,
+                    hold_duration: float = 1.5,
+                    rotation_tolerance: float = 25.0,
+                    assembly_position_tolerance: float = 50.0,
+                    corridor_width: float = 60.0,
+                    successful_pickups: int = 0,
+                    pickup_attempts: int = 0,
+                    successful_translations: int = 0,
+                    translation_attempts: int = 0,
+                    successful_placements: int = 0,
+                    placement_attempts: int = 0,
+                    unintended_drops: int = 0,
+                    manipulation_time_avg: float = 0.0,
+                    placement_time_avg: float = 0.0,
+                    correction_count: int = 0):
         try:
             pain_before = int(pain_level if pain_before_session is None else pain_before_session)
             pain_after = int(pain_before if pain_after_session is None else pain_after_session)
@@ -313,8 +363,13 @@ class DatabaseManager:
                    movement_quality_score, sub_smoothness, sub_accuracy, sub_rom, sub_stability,
                    successful_hits, total_attempts, accuracy_type, exercise_name,
                    session_number, tracking_quality, tracking_frames_valid, tracking_frames_total,
-                   session_aborted, quality_flag)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   session_aborted, quality_flag, active_engagement_duration, tracking_valid_duration,
+                   difficulty_tier, target_scale, speed_scale, session_time_limit,
+                   hold_duration, rotation_tolerance, assembly_position_tolerance, corridor_width,
+                   successful_pickups, pickup_attempts, successful_translations, translation_attempts,
+                   successful_placements, placement_attempts, unintended_drops, manipulation_time_avg,
+                   placement_time_avg, correction_count)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (enc_patient_id, level, score, duration, avg_accuracy,
                    max_extension, reach_distance, avg_hand_angle, pain_before,
                    pain_before, pain_after, pain_difference,
@@ -322,7 +377,12 @@ class DatabaseManager:
                    movement_quality_score, sub_smoothness, sub_accuracy, sub_rom, sub_stability,
                    successful_hits, total_attempts, accuracy_type, exercise_name,
                    session_number, tracking_quality, tracking_frames_valid, tracking_frames_total,
-                   session_aborted, quality_flag))
+                   session_aborted, quality_flag, active_engagement_duration, tracking_valid_duration,
+                   difficulty_tier, target_scale, speed_scale, session_time_limit,
+                   hold_duration, rotation_tolerance, assembly_position_tolerance, corridor_width,
+                   successful_pickups, pickup_attempts, successful_translations, translation_attempts,
+                   successful_placements, placement_attempts, unintended_drops, manipulation_time_avg,
+                   placement_time_avg, correction_count))
             
             self.last_session_id = cursor.lastrowid
             
@@ -500,7 +560,11 @@ class DatabaseManager:
             return []
 
     def predict_recovery_progress(self, patient_id: str = None) -> float:
-        """Predict recovery percentage over next 7 days based on recent data."""
+        """
+        Longitudinal recovery trend estimation over subsequent sessions based on historical data.
+        The system estimates longitudinal recovery trends from historical session metrics using
+        the implemented computational model; this should not be interpreted as a clinical prognosis.
+        """
         try:
             sessions = self.get_session_history(20, patient_id=patient_id)
             if len(sessions) < 3: return -1.0
@@ -614,13 +678,10 @@ def validate_accuracy(hits: int, attempts: int) -> tuple[Optional[float], str]:
     Returns:
         (accuracy_or_none, quality_flag)
     """
-    if attempts < 0 or hits < 0:
-        return None, "ACCURACY_ERROR"
-    if hits > attempts:
+    if attempts < 0 or hits < 0 or hits > attempts:
         return None, "ACCURACY_ERROR"
     if attempts == 0:
         return None, "NO_VALID_ATTEMPTS"
-    
     accuracy = round(min(100.0, max(0.0, (hits / attempts) * 100.0)), 2)
     return accuracy, "VALID"
 
@@ -628,28 +689,39 @@ def validate_accuracy(hits: int, attempts: int) -> tuple[Optional[float], str]:
 def validate_session_data(session_dict: dict) -> tuple[bool, str]:
     """
     Validates a session dictionary against research constraints.
+    Distinguishes between computer vision tracking failure, patient motor failure,
+    session abort, and valid session outcomes.
     Returns (is_valid_for_research, quality_flag).
     """
     attempts = session_dict.get("total_attempts", 0)
     hits = session_dict.get("successful_hits", 0)
     acc = session_dict.get("avg_accuracy")
     tracking_quality = session_dict.get("tracking_quality")
+    tracking_frames_total = session_dict.get("tracking_frames_total", 0)
+    tracking_frames_valid = session_dict.get("tracking_frames_valid", 0)
     aborted = session_dict.get("session_aborted", 0)
 
     if aborted:
-        return False, "ABORTED_EARLY"
+        return False, "ABORTED_SESSION"
+
+    if tracking_quality is not None and tracking_quality < 50.0:
+        return False, "TRACKING_ERROR"
+
+    if tracking_quality is None and (tracking_frames_total == 0 or tracking_frames_valid == 0):
+        return False, "MISSING_DATA"
 
     if attempts < 0 or hits < 0 or hits > attempts:
+        return False, "ACCURACY_ERROR"
+
+    if acc is not None and (acc < 0.0 or acc > 100.0):
         return False, "ACCURACY_ERROR"
 
     if attempts == 0:
         return False, "NO_VALID_ATTEMPTS"
 
-    if acc is not None and (acc < 0.0 or acc > 100.0):
-        return False, "ACCURACY_ERROR"
-
-    if tracking_quality is not None and tracking_quality < 50.0:
-        return False, "TRACKING_ERROR"
+    if hits == 0 and attempts > 0:
+        return True, "MOTOR_FAILURE"
 
     return True, "VALID"
+
 

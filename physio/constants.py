@@ -41,6 +41,7 @@ LEVEL_DISPLAY_NAMES = {
     8: "Smart Functional Assembly",
     9: "Precision Path - Dots",
     10: "Precision Pathway",
+    11: "In-Hand Manipulation - Coin Vault",
 }
 
 # Game Settings
@@ -65,6 +66,9 @@ AGE_THEMES = {
         "level6_name": "Simon Says",
         "level7_name": "Rotation Orbit",
         "level8_name": "Toy Builder",
+        "level9_name": "Star Connect",
+        "level10_name": "Rainbow Pathway",
+        "level11_name": "Treasure Vault",
         "level1_icon": "🦋",
         "level2_icon": "🌻",
         "level3_icon": "🌱",
@@ -73,6 +77,9 @@ AGE_THEMES = {
         "level6_icon": "🧠",
         "level7_icon": "🪐",
         "level8_icon": "🧱",
+        "level9_icon": "⭐",
+        "level10_icon": "🌈",
+        "level11_icon": "🪙",
         "speed_multiplier": 0.7,  # Slower
         "size_multiplier": 1.3,   # Bigger targets
     },
@@ -90,6 +97,9 @@ AGE_THEMES = {
         "level6_name": "Pattern Logic",
         "level7_name": "Galaxy Spin",
         "level8_name": "Mech Assembly",
+        "level9_name": "Matrix Nodes",
+        "level10_name": "Laser Corridor",
+        "level11_name": "Cyber Vault",
         "level1_icon": "⚡",
         "level2_icon": "🎯",
         "level3_icon": "🔮",
@@ -98,6 +108,9 @@ AGE_THEMES = {
         "level6_icon": "🧩",
         "level7_icon": "🛰️",
         "level8_icon": "🔧",
+        "level9_icon": "💠",
+        "level10_icon": "⚡",
+        "level11_icon": "🪙",
         "speed_multiplier": 1.3,  # Faster
         "size_multiplier": 0.9,   # Smaller targets
     },
@@ -115,6 +128,9 @@ AGE_THEMES = {
         "level6_name": "Memory Path",
         "level7_name": "Orbital Path",
         "level8_name": "Stone Builder",
+        "level9_name": "Precision Dots",
+        "level10_name": "Zen Pathway",
+        "level11_name": "Coin Vault",
         "level1_icon": "🍃",
         "level2_icon": "💧",
         "level3_icon": "🪨",
@@ -123,6 +139,9 @@ AGE_THEMES = {
         "level6_icon": "👣",
         "level7_icon": "🌎",
         "level8_icon": "🧱",
+        "level9_icon": "🎯",
+        "level10_icon": "〰️",
+        "level11_icon": "🪙",
         "speed_multiplier": 1.0,  # Normal
         "size_multiplier": 1.1,   # Slightly bigger
     },
@@ -140,6 +159,9 @@ AGE_THEMES = {
         "level6_name": "Recall Game",
         "level7_name": "Moon Orbit",
         "level8_name": "Birdhouse",
+        "level9_name": "Memory Dots",
+        "level10_name": "Gentle Trail",
+        "level11_name": "Coin Sorter",
         "level1_icon": "🌺",
         "level2_icon": "🎵",
         "level3_icon": "🧩",
@@ -148,6 +170,9 @@ AGE_THEMES = {
         "level6_icon": "🧠",
         "level7_icon": "🌕",
         "level8_icon": "🏠",
+        "level9_icon": "🎨",
+        "level10_icon": "🌿",
+        "level11_icon": "🪙",
         "speed_multiplier": 0.8,  # Slower
         "size_multiplier": 1.2,   # Bigger targets
     }

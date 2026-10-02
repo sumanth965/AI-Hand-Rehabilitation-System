@@ -63,7 +63,12 @@ class GameplayMixin:
                 break
     
     def _update_level1(self, hand_data: HandData):
-        """Level 1: Pop the Bubbles (Flexibility)"""
+        """
+        Level 1: Bubble Pop (Webcam-Based Reaching & Target Acquisition) - Accuracy Type: hit_rate
+        Level 1 provides a webcam-based reaching and target-acquisition task, with reach distance
+        serving as a software-derived ROM-related proxy. This is NOT equivalent to a clinical
+        goniometric ROM measurement.
+        """
         # Safety: ensure bubbles exist
         if not self.bubbles:
             self._spawn_bubbles()
@@ -202,7 +207,12 @@ class GameplayMixin:
             self._end_level()
     
     def _update_level3(self, hand_data: HandData):
-        """Level 3: Pinch & Drop (Fine Motor) - Accuracy Type: hit_rate"""
+        """
+        Level 3: Pinch & Drop (Fine Motor Pinch & Object Transfer) - Accuracy Type: hit_rate
+        Note on self-occlusion: When thumb and index finger overlap from the camera viewpoint,
+        landmark visibility/confidence may decrease, potentially causing incorrect pinch-state
+        transitions or unintended object release.
+        """
         # Update seeds
         for seed in self.seeds[:]:
             if not seed.grabbed:
@@ -325,7 +335,13 @@ class GameplayMixin:
             self._end_level()
 
     def _update_level5(self, hand_data: HandData):
-        """Level 5: Grip & Release (Spasticity Pump) - Accuracy Type: completion_rate"""
+        """
+        Level 5: Grip & Release (Grip-and-Release Rehabilitation Task) - Accuracy Type: completion_rate
+        Level 5 provides repetitive grip-and-release movement training based on detected hand closure
+        and subsequent finger extension. The system does not directly measure grip force, pinch force,
+        muscle tone, or resistance. A patient may complete the detected grip-release movement without
+        the system being able to determine the magnitude of muscular force generated.
+        """
         # Constantly deflate slowly (deflation rate adapts to pacing)
         if self.balloon_scale > 1.0:
             self.balloon_scale -= 0.005 * getattr(self, 'pacing_multiplier', 1.0)
@@ -380,7 +396,11 @@ class GameplayMixin:
             self._end_level()
 
     def _update_level6(self, hand_data: HandData):
-        """Level 6: Memory Sequence (Cognitive Motor) - Accuracy Type: hit_rate"""
+        """
+        Level 6: Memory Sequence (Cognitive-Motor Training Task) - Accuracy Type: hit_rate
+        Level 6 combines sequence recall with visual-motor targeting and is therefore treated as
+        a cognitive-motor training task rather than a validated cognitive assessment.
+        """
         cx, cy = GAME_AREA_WIDTH // 2, WINDOW_HEIGHT // 2
         pads = {
             1: (cx - 150, cy - 80),
@@ -468,7 +488,13 @@ class GameplayMixin:
 
 
     def _update_level7(self, hand_data: HandData):
-        """Level 7: Rotation Orbit (Forearm Pronation/Supination) - Accuracy Type: hit_rate"""
+        """
+        Level 7: Rotation Orbit (Webcam-Derived Forearm Rotation Proxy) - Accuracy Type: hit_rate
+        Level 7 provides a webcam-based forearm rotation training task using the relative orientation
+        of hand landmarks as a proxy for rotational movement. Subject to 2D projection limitations,
+        camera orientation sensitivity, wrist-motion confounding, possible upper-limb compensation,
+        and absence of goniometric validation.
+        """
         cx, cy = GAME_AREA_WIDTH // 2, WINDOW_HEIGHT // 2
         
         if not getattr(self, 'wrist_mode', None):
@@ -531,7 +557,8 @@ class GameplayMixin:
         """
         Level 8: Smart Object Assembly - Accuracy Type: binary_completion
         Measures task-level binary completion: whole object assembled before timeout = 100%,
-        timeout before all parts placed = 0%.
+        timeout before all parts placed = 0%. Note on self-occlusion: Complex multi-finger manipulation
+        is subject to self-occlusion when grasping and rotating parts in 2D perspective.
         """
         if not hand_data.index_tip or not getattr(hand_data, 'is_pinching', False) and not getattr(self, 'was_pinching', False):
             pass
@@ -1417,25 +1444,520 @@ class GameplayMixin:
             pygame.draw.circle(self.screen, (255, 100, 100), (int(end_p[0]), int(end_p[1])), 15)
             self.screen.blit(self.font_tiny.render("END", True, (255,255,255)), (end_p[0]-15, end_p[1]-30))
 
+    def _spawn_coin_vault(self):
+        """Initialize Level 11 coins, vaults, and state machine."""
+        tier = int(getattr(self, 'difficulty_tier', 3))
+        target_scale = float(getattr(self, 'adaptive_target_scale', 1.0))
+        
+        # Dimensions and positioning with wide safety margins to guarantee zero panel overlap
+        vw = int(135 * target_scale)
+        vh = int(72 * target_scale)
+        margin_x = 24
+        margin_y_top = 90
+        margin_y_bottom = 24
+        
+        self.vaults = [
+            Vault("GOLD", "1", (255, 215, 0), margin_x, margin_y_top, vw, vh),
+            Vault("BLUE", "2", (0, 180, 255), GAME_AREA_WIDTH - vw - margin_x, margin_y_top, vw, vh),
+            Vault("GREEN", "3", (50, 230, 140), margin_x, WINDOW_HEIGHT - vh - margin_y_bottom, vw, vh),
+            Vault("RED", "4", (240, 70, 90), GAME_AREA_WIDTH - vw - margin_x, WINDOW_HEIGHT - vh - margin_y_bottom, vw, vh)
+        ]
+        
+        coin_counts = {1: 3, 2: 3, 3: 4, 4: 4, 5: 5}
+        total_coins = coin_counts.get(tier, 4)
+        
+        vault_types = [
+            ("GOLD", "1", (255, 215, 0)),
+            ("BLUE", "2", (0, 180, 255)),
+            ("GREEN", "3", (50, 230, 140)),
+            ("RED", "4", (240, 70, 90))
+        ]
+        
+        cx = GAME_AREA_WIDTH // 2
+        cy = WINDOW_HEIGHT // 2 + 10
+        coin_radius = int(24 * target_scale)
+        
+        self.coins = []
+        for i in range(total_coins):
+            vtype, sym, col = vault_types[i % len(vault_types)]
+            self.coins.append(
+                Coin(
+                    coin_id=i + 1,
+                    color_type=vtype,
+                    symbol=sym,
+                    color=col,
+                    x=float(cx),
+                    y=float(cy),
+                    radius=float(coin_radius),
+                    target_vault=vtype,
+                    state="PRESENTED",
+                    spawn_timestamp=time.time()
+                )
+            )
+        
+        self.current_coin_idx = 0
+        self.active_coin = self.coins[0] if self.coins else None
+        self.manipulation_state = "COIN_PRESENTED"
+        self.in_hand_shift_start = 0.0
+        self.shift_progress = 0.0
+        self.coin_grabbed_in_placement = True
+        self.manipulation_times = []
+        self.placement_times = []
+        self.successful_pickups = 0
+        self.pickup_attempts = 0
+        self.successful_translations = 0
+        self.translation_attempts = 0
+        self.successful_placements = 0
+        self.placement_attempts = 0
+        self.unintended_drops = 0
+        self.correction_count = 0
+        self.occlusion_grace_frames = 0
+        self.manipulation_time_avg = 0.0
+        self.placement_time_avg = 0.0
+
+    def _update_level11(self, hand_data: HandData):
+        """
+        Level 11: Coin Vault - In-Hand Manipulation
+        Accuracy Type: manipulation_success_rate
+        Measures virtual in-hand manipulation performance (finger-to-palm translation,
+        in-hand shift holding, palm-to-finger repositioning, and vault placement).
+        Does NOT physically measure objects occluded inside the palm; implements an inferred
+        webcam-derived virtual manipulation proxy with anti-cheat state validation.
+        """
+        if not self.active_coin or self.current_coin_idx >= len(self.coins):
+            self._end_level()
+            return
+            
+        cx = GAME_AREA_WIDTH // 2
+        cy = WINDOW_HEIGHT // 2 + 10
+        now = time.time()
+        target_scale = float(getattr(self, 'adaptive_target_scale', 1.0))
+        
+        # Self-occlusion grace buffer (cushions momentary loss during complex hand flexion)
+        if hand_data.index_tip is None or hand_data.thumb_tip is None:
+            self.occlusion_grace_frames = getattr(self, 'occlusion_grace_frames', 0) + 1
+            if self.occlusion_grace_frames > 25:
+                # Prolonged loss handled by global system freeze
+                pass
+            return
+        
+        self.occlusion_grace_frames = 0
+        pinch_pos = (
+            (hand_data.index_tip[0] + hand_data.thumb_tip[0]) // 2,
+            (hand_data.index_tip[1] + hand_data.thumb_tip[1]) // 2
+        )
+        idx_pos = hand_data.index_tip
+        palm_pos = hand_data.palm_center or hand_data.wrist or pinch_pos
+        
+        # Hand-relative normalized distance metrics
+        palm_span = distance(hand_data.wrist, palm_pos) if hand_data.wrist else 100.0
+        dist_pinch_to_palm = distance(pinch_pos, palm_pos)
+        rel_palm_dist = dist_pinch_to_palm / max(35.0, palm_span)
+        avg_knuckle = sum(hand_data.knuckle_angles) / len(hand_data.knuckle_angles) if hand_data.knuckle_angles else 90.0
+
+        # --- STATE MACHINE ---
+        if self.manipulation_state in ("READY", "COIN_PRESENTED"):
+            self.active_coin.x = float(cx)
+            self.active_coin.y = float(cy)
+            
+            # Check for pickup: pinch within coin proximity (check both pinch point and visible index tip)
+            dist_pinch = distance(pinch_pos, (self.active_coin.x, self.active_coin.y))
+            dist_idx = distance(idx_pos, (self.active_coin.x, self.active_coin.y))
+            dist_to_coin = min(dist_pinch, dist_idx)
+            pickup_radius = self.active_coin.radius + (45.0 * target_scale)
+            
+            if hand_data.is_pinching and dist_to_coin < pickup_radius:
+                self.successful_pickups += 1
+                self.pickup_attempts += 1
+                self.accuracy_attempts += 1
+                self.active_coin.pickup_timestamp = now
+                self.active_coin.state = "PICKED_UP"
+                self.manipulation_state = "IN_HAND_TRANSLATION"
+                self.manipulation_phase_start = now
+                self.sounds.play('catch')
+                self.particles.emit(int(self.active_coin.x), int(self.active_coin.y), self.active_coin.color, 16)
+                self.popups.append(ScorePopup(self.active_coin.x, self.active_coin.y - 30, "PICKED UP! FOLD INTO PALM"))
+                
+        elif self.manipulation_state == "IN_HAND_TRANSLATION":
+            # Coin follows pinch point while translating
+            self.active_coin.x = float(pinch_pos[0])
+            self.active_coin.y = float(pinch_pos[1])
+            
+            # Unintended drop if released when far from palm
+            if not hand_data.is_pinching and rel_palm_dist > 0.65:
+                self.unintended_drops += 1
+                self.active_coin.state = "PRESENTED"
+                self.manipulation_state = "COIN_PRESENTED"
+                self.sounds.play('pop')
+                self.popups.append(ScorePopup(pinch_pos[0], pinch_pos[1] - 30, "DROPPED! RETRY PICKUP"))
+                return
+                
+            # Finger-to-palm transition detected: pinch approaches palm center or hand flexes
+            if rel_palm_dist < 0.45 or avg_knuckle < 58.0 or getattr(hand_data, 'is_fist', False):
+                self.active_coin.state = "PALM_HOLD"
+                self.manipulation_state = "IN_HAND_SHIFT"
+                self.in_hand_shift_start = now
+                self.active_coin.manipulation_start_timestamp = now
+                self.sounds.play('select')
+                self.particles.emit(int(palm_pos[0]), int(palm_pos[1]), (0, 220, 255), 18)
+                self.popups.append(ScorePopup(palm_pos[0], palm_pos[1] - 30, "PALM HOLD: REPOSITION COIN"))
+                
+        elif self.manipulation_state == "IN_HAND_SHIFT":
+            # Coin rests in palm pocket
+            self.active_coin.x = float(palm_pos[0])
+            self.active_coin.y = float(palm_pos[1])
+            
+            # Anti-cheat hold duration requirement
+            req_hold = max(0.8, float(getattr(self, 'rotation_hold_required', 1.5)))
+            elapsed = now - self.in_hand_shift_start
+            self.shift_progress = min(1.0, elapsed / req_hold)
+            
+            # Unintended drop if hand flings wide open prematurely
+            if rel_palm_dist > 0.75 and elapsed < 0.35 and not getattr(hand_data, 'is_fist', False) and avg_knuckle > 80.0:
+                self.unintended_drops += 1
+                self.active_coin.state = "PRESENTED"
+                self.manipulation_state = "COIN_PRESENTED"
+                self.sounds.play('pop')
+                self.popups.append(ScorePopup(palm_pos[0], palm_pos[1] - 30, "LOST CONTROL IN PALM!"))
+                return
+                
+            if self.shift_progress >= 1.0:
+                self.successful_translations += 1
+                self.translation_attempts += 1
+                self.active_coin.manipulation_end_timestamp = now
+                manip_duration = self.active_coin.manipulation_end_timestamp - self.active_coin.manipulation_start_timestamp
+                self.manipulation_times.append(manip_duration)
+                self.active_coin.state = "PALM_TO_FINGERTIP"
+                self.manipulation_state = "PALM_TO_FINGERTIP"
+                self.sounds.play('select')
+                self.particles.emit(int(palm_pos[0]), int(palm_pos[1]), (50, 255, 150), 20)
+                self.popups.append(ScorePopup(palm_pos[0], palm_pos[1] - 35, "BRING TO FINGERTIPS!"))
+                
+        elif self.manipulation_state == "PALM_TO_FINGERTIP":
+            # Patient extends fingers outward to present coin at fingertips
+            self.active_coin.x = float(lerp(self.active_coin.x, pinch_pos[0], 0.25))
+            self.active_coin.y = float(lerp(self.active_coin.y, pinch_pos[1], 0.25))
+            
+            is_extended = (rel_palm_dist > 0.55 or getattr(hand_data, 'finger_extension', 0.0) > 0.35 or avg_knuckle > 60.0 or not getattr(hand_data, 'is_fist', False))
+            if is_extended:
+                self.active_coin.state = "READY_FOR_PLACEMENT"
+                self.manipulation_state = "TARGET_PLACEMENT"
+                self.placement_phase_start = now
+                self.coin_grabbed_in_placement = True
+                self.sounds.play('pop')
+                self.popups.append(ScorePopup(pinch_pos[0], pinch_pos[1] - 30, f"PLACE IN {self.active_coin.target_vault} VAULT!"))
+                
+        elif self.manipulation_state == "TARGET_PLACEMENT":
+            tol = float(getattr(self, 'assembly_position_tolerance', 50.0))
+            is_grabbed = getattr(self, 'coin_grabbed_in_placement', True)
+            
+            # Re-grab check: if the coin was released and sits at center, permit picking it up again
+            if not is_grabbed:
+                dist_pinch = distance(pinch_pos, (self.active_coin.x, self.active_coin.y))
+                dist_idx = distance(idx_pos, (self.active_coin.x, self.active_coin.y))
+                grab_rad = self.active_coin.radius + (45.0 * target_scale)
+                if hand_data.is_pinching and min(dist_pinch, dist_idx) < grab_rad:
+                    self.coin_grabbed_in_placement = True
+                    is_grabbed = True
+                    self.sounds.play('select')
+                    self.popups.append(ScorePopup(self.active_coin.x, self.active_coin.y - 25, "GRABBED!"))
+            
+            if is_grabbed:
+                # Coin follows pinch point for precision placement
+                self.active_coin.x = float(pinch_pos[0])
+                self.active_coin.y = float(pinch_pos[1])
+                
+                # Check placement in vaults upon pinch release
+                if not hand_data.is_pinching:
+                    placed_in_vault = None
+                    for v in self.vaults:
+                        if (v.x - tol <= self.active_coin.x <= v.x + v.w + tol and
+                            v.y - tol <= self.active_coin.y <= v.y + v.h + tol):
+                            placed_in_vault = v
+                            break
+                            
+                    if placed_in_vault is not None:
+                        self.placement_attempts += 1
+                        if placed_in_vault.vault_id == self.active_coin.target_vault:
+                            # SUCCESS: Correct vault!
+                            self.successful_placements += 1
+                            self.accuracy_hits += 1
+                            self.active_coin.placement_timestamp = now
+                            place_duration = self.active_coin.placement_timestamp - self.placement_phase_start
+                            self.placement_times.append(place_duration)
+                            placed_in_vault.coins_collected += 1
+                            self.active_coin.state = "PLACED"
+                            self.coin_grabbed_in_placement = False
+                            
+                            pts = int(40 * self.score_multiplier)
+                            self.score += pts
+                            self.combo += 1
+                            self.consecutive_misses = 0
+                            self.sounds.play('level_complete')
+                            self.particles.emit(int(self.active_coin.x), int(self.active_coin.y), self.active_coin.color, 30)
+                            self.popups.append(ScorePopup(self.active_coin.x, self.active_coin.y - 30, f"+{pts} VAULT SECURED!"))
+                            
+                            # Advance to next coin
+                            self.current_coin_idx += 1
+                            if self.current_coin_idx < len(self.coins):
+                                self.active_coin = self.coins[self.current_coin_idx]
+                                self.active_coin.spawn_timestamp = now
+                                self.manipulation_state = "COIN_PRESENTED"
+                            else:
+                                self.manipulation_time_avg = round(sum(self.manipulation_times) / len(self.manipulation_times), 3) if self.manipulation_times else 0.0
+                                self.placement_time_avg = round(sum(self.placement_times) / len(self.placement_times), 3) if self.placement_times else 0.0
+                                self._end_level()
+                            return
+                        else:
+                            # Mismatched vault
+                            self.correction_count += 1
+                            self.combo = 0
+                            self.coin_grabbed_in_placement = False
+                            self.sounds.play('pop')
+                            self.popups.append(ScorePopup(self.active_coin.x, self.active_coin.y - 30, f"WRONG VAULT! NEED {self.active_coin.target_vault}"))
+                            self.active_coin.x = float(cx)
+                            self.active_coin.y = float(cy)
+                            self.active_coin.state = "READY_FOR_PLACEMENT"
+                            return
+                    else:
+                        # Released outside any vault
+                        self.unintended_drops += 1
+                        self.coin_grabbed_in_placement = False
+                        self.sounds.play('pop')
+                        self.popups.append(ScorePopup(self.active_coin.x, self.active_coin.y - 30, "DROPPED! RETRY PLACEMENT"))
+                        self.active_coin.x = float(cx)
+                        self.active_coin.y = float(cy)
+                        self.active_coin.state = "READY_FOR_PLACEMENT"
+                        return
+
+        # Check time limit
+        time_expired = (time.time() - self.session_start > self.session_time_limit) or (time.time() - getattr(self, 'level_wall_start', 0.0) > self.session_time_limit * 1.5)
+        if time_expired:
+            self.manipulation_time_avg = round(sum(self.manipulation_times) / len(self.manipulation_times), 3) if self.manipulation_times else 0.0
+            self.placement_time_avg = round(sum(self.placement_times) / len(self.placement_times), 3) if self.placement_times else 0.0
+            self._end_level()
+
+    def _draw_level11(self):
+        theme = self._get_theme()
+        primary = theme.get("primary_color", (0, 200, 255))
+        level_name = theme.get("level11_name", "Coin Vault")
+        
+        # Cached font resolution (safely falls back if running in test harnesses)
+        font_head = getattr(self, 'font_head', None) or pygame.font.SysFont("segoeui", 22, bold=True)
+        font_hint = getattr(self, 'font_hint', None) or pygame.font.SysFont("segoeui", 13)
+        font_vault = getattr(self, 'font_vault', None) or pygame.font.SysFont("segoeui", 12, bold=True)
+        font_phase = getattr(self, 'font_phase', None) or pygame.font.SysFont("segoeui", 10, bold=True)
+        font_coin = getattr(self, 'font_coin', None) or pygame.font.SysFont("segoeui", 18, bold=True)
+        font_tiny = getattr(self, 'font_tiny', None) or pygame.font.SysFont("segoeui", 11)
+        
+        # Header title (centered neatly between top vaults, cleared below HUD)
+        title_surf = font_head.render(f"LEVEL 11: {level_name.upper()}", True, primary)
+        self.screen.blit(title_surf, title_surf.get_rect(center=(GAME_AREA_WIDTH // 2, 92)))
+        
+        sub_surf = font_hint.render("In-Hand Dexterity & Vault Sorting", True, (160, 195, 225))
+        self.screen.blit(sub_surf, sub_surf.get_rect(center=(GAME_AREA_WIDTH // 2, 116)))
+        
+        # Draw 4 Cyber-Clinical Vault Receptacles in the 4 corners
+        for v in getattr(self, 'vaults', []):
+            v_rect = pygame.Rect(v.x, v.y, v.w, v.h)
+            is_target = bool(self.active_coin and self.active_coin.target_vault == v.vault_id)
+            
+            # Subtle background glassmorphism panel
+            bg_surf = pygame.Surface((v.w, v.h), pygame.SRCALPHA)
+            bg_alpha = 75 if is_target else 28
+            bg_surf.fill((*v.color, bg_alpha))
+            self.screen.blit(bg_surf, (v.x, v.y))
+            
+            # Vault Border with neon pulse if active target
+            if is_target:
+                pulse = int(3 * math.sin(time.time() * 6))
+                glow_rect = v_rect.inflate(4 + pulse * 2, 4 + pulse * 2)
+                pygame.draw.rect(self.screen, v.color, glow_rect, 1, border_radius=12)
+                pygame.draw.rect(self.screen, v.color, v_rect, 3, border_radius=10)
+            else:
+                pygame.draw.rect(self.screen, (55, 70, 95), v_rect, 1, border_radius=10)
+            
+            # Number badge and Vault Label
+            badge_r = 9
+            bx = v.x + 18
+            by = v.y + 18
+            pygame.draw.circle(self.screen, v.color, (bx, by), badge_r)
+            badge_txt = font_phase.render(v.symbol, True, (15, 20, 30))
+            self.screen.blit(badge_txt, badge_txt.get_rect(center=(bx, by)))
+            
+            v_title = font_vault.render(f"{v.vault_id} VAULT", True, v.color if is_target else (210, 225, 240))
+            self.screen.blit(v_title, (bx + badge_r + 6, v.y + 11))
+            
+            # Vault Coin Drop Slot graphic
+            slot_rect = pygame.Rect(v.x + 12, v.y + 34, v.w - 24, 6)
+            pygame.draw.rect(self.screen, (10, 15, 25), slot_rect, border_radius=3)
+            pygame.draw.rect(self.screen, v.color if is_target else (55, 70, 95), slot_rect, 1, border_radius=3)
+            
+            # Stored coins count and dots
+            cnt_text = f"Stored: {v.coins_collected}"
+            cnt_surf = font_tiny.render(cnt_text, True, (215, 225, 235))
+            self.screen.blit(cnt_surf, (v.x + 12, v.y + v.h - 18))
+            
+            # Draw mini stored token dots
+            for c_i in range(min(4, v.coins_collected)):
+                dot_x = v.x + v.w - 14 - (c_i * 9)
+                dot_y = v.y + v.h - 12
+                pygame.draw.circle(self.screen, v.color, (dot_x, dot_y), 3)
+                pygame.draw.circle(self.screen, (255, 255, 255), (dot_x, dot_y), 3, 1)
+
+        # Draw In-Hand Process Flow Steps (Pill Ribbon centered, 100+ px clearance from vaults)
+        phases = [
+            ("1. PICKUP", self.manipulation_state in ("READY", "COIN_PRESENTED")),
+            ("2. TO PALM", self.manipulation_state in ("IN_HAND_TRANSLATION", "IN_HAND_SHIFT")),
+            ("3. TO FINGERS", self.manipulation_state == "PALM_TO_FINGERTIP"),
+            ("4. DOCK VAULT", self.manipulation_state == "TARGET_PLACEMENT")
+        ]
+        pill_w = 88
+        gap = 6
+        total_bar_w = (pill_w * 4) + (gap * 3)  # 370px
+        start_bx = (GAME_AREA_WIDTH - total_bar_w) // 2  # 295px
+        bar_y = 138
+        
+        for idx, (pname, is_active) in enumerate(phases):
+            px = start_bx + idx * (pill_w + gap)
+            p_rect = pygame.Rect(px, bar_y, pill_w, 22)
+            
+            p_surf = pygame.Surface((pill_w, 22), pygame.SRCALPHA)
+            p_surf.fill((0, 200, 255, 80) if is_active else (20, 26, 40, 180))
+            self.screen.blit(p_surf, (px, bar_y))
+            pygame.draw.rect(self.screen, (0, 220, 255) if is_active else (50, 65, 85), p_rect, 2 if is_active else 1, border_radius=6)
+            
+            txt_surf = font_phase.render(pname, True, (255, 255, 255) if is_active else (140, 160, 180))
+            self.screen.blit(txt_surf, txt_surf.get_rect(center=p_rect.center))
+
+        # Draw Central Prompt & Active Coin
+        if self.active_coin and self.active_coin.state != "PLACED":
+            ac = self.active_coin
+            cx, cy = int(ac.x), int(ac.y)
+            rad = int(ac.radius)
+            
+            # Floating Guidance Prompt Badge (elevated cleanly above coin with dark backing bubble)
+            prompt_str = None
+            prompt_col = (240, 248, 255)
+            
+            if self.manipulation_state in ("READY", "COIN_PRESENTED"):
+                pulse_r = int(rad + 12 + 3 * math.sin(time.time() * 5))
+                pygame.draw.circle(self.screen, (*ac.color, 90), (cx, cy), pulse_r, 2)
+                prompt_str = "PINCH TO PICK UP"
+                prompt_col = (240, 248, 255)
+                
+            elif self.manipulation_state == "IN_HAND_TRANSLATION":
+                prompt_str = "FOLD FINGERS INTO PALM"
+                prompt_col = (0, 220, 255)
+                
+            elif self.manipulation_state == "PALM_TO_FINGERTIP":
+                prompt_str = "BRING TO FINGERTIPS"
+                prompt_col = (50, 255, 150)
+                
+            elif self.manipulation_state == "TARGET_PLACEMENT":
+                target_v = next((v for v in getattr(self, 'vaults', []) if v.vault_id == ac.target_vault), None)
+                if target_v:
+                    tx = target_v.x + target_v.w // 2
+                    ty = target_v.y + target_v.h // 2
+                    pygame.draw.line(self.screen, (*ac.color, 70), (cx, cy), (tx, ty), 2)
+                
+                is_held = getattr(self, 'coin_grabbed_in_placement', True)
+                prompt_str = f"PLACE IN {ac.target_vault} VAULT" if is_held else "PINCH TO PICK UP AGAIN"
+                prompt_col = ac.color if is_held else (255, 180, 50)
+            
+            if prompt_str:
+                p_surf = font_hint.render(prompt_str, True, prompt_col)
+                p_rect = p_surf.get_rect(center=(cx, cy - rad - 28))
+                bg_bubble = p_rect.inflate(18, 8)
+                bg_bubble_surf = pygame.Surface((bg_bubble.width, bg_bubble.height), pygame.SRCALPHA)
+                bg_bubble_surf.fill((16, 22, 36, 215))
+                self.screen.blit(bg_bubble_surf, bg_bubble.topleft)
+                pygame.draw.rect(self.screen, (0, 180, 220), bg_bubble, 1, border_radius=6)
+                self.screen.blit(p_surf, p_rect)
+
+            # Drop shadow under coin
+            shadow_surf = pygame.Surface((rad * 2 + 16, rad + 10), pygame.SRCALPHA)
+            pygame.draw.ellipse(shadow_surf, (0, 0, 0, 95), shadow_surf.get_rect())
+            self.screen.blit(shadow_surf, (cx - rad - 8, cy + rad - 4))
+            
+            # Subtle glow around coin during palm hold
+            if self.manipulation_state == "IN_HAND_SHIFT":
+                glow_surf = pygame.Surface((rad * 4, rad * 4), pygame.SRCALPHA)
+                pygame.draw.circle(glow_surf, (*ac.color, 60), (rad * 2, rad * 2), rad + 14)
+                self.screen.blit(glow_surf, (cx - rad * 2, cy - rad * 2))
+                
+            # Coin Outer Rim (Metallic Bevel)
+            pygame.draw.circle(self.screen, (245, 245, 250), (cx, cy), rad + 2)
+            # Coin Face
+            pygame.draw.circle(self.screen, ac.color, (cx, cy), rad)
+            # Coin Inner Rim
+            pygame.draw.circle(self.screen, (255, 255, 255), (cx, cy), max(2, rad - 4), 1)
+            
+            # Specular shine glint
+            glint_x = int(cx - rad * 0.35)
+            glint_y = int(cy - rad * 0.35)
+            pygame.draw.circle(self.screen, (255, 255, 255), (glint_x, glint_y), max(2, rad // 6))
+            
+            # Symbol text inside coin with drop shadow
+            sym_shadow = font_coin.render(ac.symbol, True, (0, 0, 0))
+            self.screen.blit(sym_shadow, sym_shadow.get_rect(center=(cx + 1, cy + 1)))
+            sym_surf = font_coin.render(ac.symbol, True, (20, 22, 35))
+            self.screen.blit(sym_surf, sym_surf.get_rect(center=(cx, cy)))
+
+        # Palm Shift Hold Progress Ring & Guidance
+        if self.manipulation_state == "IN_HAND_SHIFT":
+            prog = getattr(self, 'shift_progress', 0.0)
+            prog_w = 260
+            prog_h = 16
+            prog_x = (GAME_AREA_WIDTH - prog_w) // 2
+            prog_y = WINDOW_HEIGHT // 2 + 75
+            
+            # Progress bar track
+            pygame.draw.rect(self.screen, (22, 28, 44), (prog_x, prog_y, prog_w, prog_h), border_radius=8)
+            fill_w = int(prog_w * prog)
+            if fill_w > 0:
+                pygame.draw.rect(self.screen, (0, 230, 140), (prog_x, prog_y, fill_w, prog_h), border_radius=8)
+            pygame.draw.rect(self.screen, (0, 180, 220), (prog_x, prog_y, prog_w, prog_h), 2, border_radius=8)
+            
+            hold_lbl = font_hint.render(f"Manipulating In Palm: {int(prog * 100)}%", True, (255, 255, 255))
+            self.screen.blit(hold_lbl, hold_lbl.get_rect(center=(GAME_AREA_WIDTH // 2, prog_y - 14)))
+
+        # Bottom Interaction Stats HUD (cleanly centered, 100+ px clearance from bottom vaults)
+        stats_w = 420
+        stats_h = 32
+        stats_x = (GAME_AREA_WIDTH - stats_w) // 2
+        stats_y = WINDOW_HEIGHT - 52
+        s_surf = pygame.Surface((stats_w, stats_h), pygame.SRCALPHA)
+        s_surf.fill((16, 22, 36, 215))
+        self.screen.blit(s_surf, (stats_x, stats_y))
+        pygame.draw.rect(self.screen, (0, 180, 220), (stats_x, stats_y, stats_w, stats_h), 1, border_radius=8)
+        
+        target_name = self.active_coin.target_vault if self.active_coin else "DONE"
+        hud_str = f"TARGET: {target_name}  |  Pickups: {self.successful_pickups}  |  Shifts: {self.successful_translations}  |  Secured: {self.successful_placements}  |  Drops: {self.unintended_drops}"
+        hud_txt = font_tiny.render(hud_str, True, (210, 230, 250))
+        self.screen.blit(hud_txt, hud_txt.get_rect(center=(stats_x + stats_w // 2, stats_y + stats_h // 2)))
+
     def _get_level_goals(self) -> str:
         if self.state == GameState.MAIN_MENU:
             return "Select a level to begin rehabilitation"
         elif self.state == GameState.LEVEL1_FLEXIBILITY:
-            return "Pop all bubbles in corners to test flexibility and reach"
+            return "Reach and touch bubbles across the screen for reaching range and target acquisition"
         elif self.state == GameState.LEVEL2_STRENGTH:
-            return "Move palm to catch falling items. Build strength!"
+            return "Move palm to catch falling items to train horizontal agility and coordination"
         elif self.state == GameState.LEVEL3_FINEMOTOR:
-            return "Pinch seeds and drop them in the pot. Fine motor control!"
+            return "Pinch seeds and drop them in the pot for fine-motor pinch practice"
         elif self.state == GameState.LEVEL4_COORDINATION:
-            return "Follow the moving target smoothly to test hand stability!"
+            return "Follow the moving target smoothly to test hand stability and path coordination"
         elif self.state == GameState.LEVEL5_GRIP_RELEASE:
-            return "Make a FIST, then OPEN fully to pump the object!"
+            return "Make a FIST, then OPEN fully to practice repetitive grip and release cycles!"
         elif self.state == GameState.LEVEL6_FINGER_TAPS:
-            return "Memorize the pattern and repeat it!"
+            return "Memorize the pattern and repeat it for cognitive-motor sequence training!"
         elif self.state == GameState.LEVEL9_PRECISION_PATH:
             return "Connect the numbered dots in sequence using your index fingertip."
         elif self.state == GameState.LEVEL10_PRECISION_PATHWAY:
             return "Guide your index finger from START to END along the pathway."
+        elif self.state == GameState.LEVEL11_COIN_VAULT:
+            return "Pinch coin -> Translate into palm -> Reposition within hand -> Place in matching vault!"
         return ""
 
     def _get_current_exercise_name(self) -> str:
@@ -1602,6 +2124,8 @@ class GameplayMixin:
         self.accuracy_attempts = 0
         self.tracking_frames_valid = 0
         self.tracking_frames_total = 0
+        self.tracking_valid_duration = 0.0
+        self.active_engagement_duration = 0.0
         self.session_aborted = 0
         
         level_accuracy_types = {
@@ -1614,7 +2138,8 @@ class GameplayMixin:
             7: "hit_rate",
             8: "binary_completion",
             9: "hit_rate",
-            10: "path_accuracy"
+            10: "path_accuracy",
+            11: "manipulation_success_rate"
         }
         self.accuracy_type = level_accuracy_types.get(lv, "hit_rate")
         
@@ -1684,6 +2209,10 @@ class GameplayMixin:
             self.pathway_boundary_violations = 0
             self.pathway_total_deviation = 0.0
             VOICE.speak("Level 10: Precision Pathway. Carefully guide your index finger along the path from start to finish.")
+        elif lv == 11:
+            self.state = GameState.LEVEL11_COIN_VAULT
+            self._spawn_coin_vault()
+            VOICE.speak("Level 11: Coin Vault. Pinch the coin, translate it into your palm, reposition it within your hand, and place it in the matching vault.")
         self.sounds.play('select')
         self.popups.append(ScorePopup(GAME_AREA_WIDTH//2, WINDOW_HEIGHT//2 - 60, "POSTURE FIX: Sit up & keep shoulders relaxed!"))
 

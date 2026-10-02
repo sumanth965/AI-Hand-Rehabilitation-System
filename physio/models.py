@@ -27,6 +27,7 @@ class GameState(Enum):
     LEVEL8_SMART_ASSEMBLY = 17
     LEVEL9_PRECISION_PATH = 18
     LEVEL10_PRECISION_PATHWAY = 19
+    LEVEL11_COIN_VAULT = 26
     PAUSED = 20
     LEVEL_COMPLETE = 22
     RESULTS = 21
@@ -128,3 +129,35 @@ class PathwayConfig:
     points: List[Tuple[float, float]]
     width: float
     recommended_direction: str
+
+
+@dataclass
+class Coin:
+    """Virtual coin object for Level 11 In-Hand Manipulation"""
+    coin_id: int
+    color_type: str  # "GOLD", "BLUE", "GREEN", "RED"
+    symbol: str      # "1", "2", "3", "4" or symbol
+    color: Tuple[int, int, int]
+    x: float
+    y: float
+    radius: float
+    target_vault: str
+    state: str = "PRESENTED"  # PRESENTED, PICKED_UP, IN_HAND_TRANSLATING, PALM_HOLD, PALM_TO_FINGERTIP, PLACED, DROPPED
+    spawn_timestamp: float = 0.0
+    pickup_timestamp: float = 0.0
+    manipulation_start_timestamp: float = 0.0
+    manipulation_end_timestamp: float = 0.0
+    placement_timestamp: float = 0.0
+
+
+@dataclass
+class Vault:
+    """Target receptacle vault for Level 11"""
+    vault_id: str  # "GOLD", "BLUE", "GREEN", "RED"
+    symbol: str
+    color: Tuple[int, int, int]
+    x: int
+    y: int
+    w: int
+    h: int
+    coins_collected: int = 0

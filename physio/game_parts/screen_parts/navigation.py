@@ -93,7 +93,7 @@ class NavigationScreenMixin:
 
         # Update level button labels to clinical terminology
         clinical_labels = [
-            "Wrist Flexion & Extension\n(Active ROM)",
+            "Active Reaching ROM\n(Bubble Pop)",
             "Grip Strength & Coordination\n(Fruit Catch)",
             "Pinch Training\n(Seed Planting)",
             "Coordination & Tracing\n(Path Trace)",
@@ -102,9 +102,10 @@ class NavigationScreenMixin:
             "Forearm Pronate & Supinate\n(Rotation Orbit)",
             "Functional Spatial Coord\n(Toy Builder)",
             "Precision Path - Dots\n(Hand Trace)",
-            "Precision Pathway\n(Fine Motor Control)"
+            "Precision Pathway\n(Fine Motor Control)",
+            "In-Hand Manipulation\n(Coin Vault)"
         ]
-        btn_font = pygame.font.SysFont("segoeui", 16)
+        btn_font = pygame.font.SysFont("segoeui", 14)
         for i, button in enumerate(self.level_buttons):
             if i < len(clinical_labels):
                 button.text = clinical_labels[i]
@@ -112,7 +113,7 @@ class NavigationScreenMixin:
 
         # Instructions
         inst = self.font_tiny.render("Hover your finger over a level to select", True, COLOR_TEXT)
-        inst_rect = inst.get_rect(center=(GAME_AREA_WIDTH // 2, 595))
+        inst_rect = inst.get_rect(center=(GAME_AREA_WIDTH // 2, 565))
         self.screen.blit(inst, inst_rect)
 
         # History, Calibration, and Exit utility buttons

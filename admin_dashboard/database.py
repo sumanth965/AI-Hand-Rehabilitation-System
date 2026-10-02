@@ -924,7 +924,11 @@ class DashboardRepository:
             "Grip Release Cycle": 5,
             "Cognitive Finger Taps": 6,
             "Forearm Rotation Orbit": 7,
-            "Smart Functional Assembly": 8
+            "Smart Functional Assembly": 8,
+            "Precision Path": 9,
+            "Precision Pathway": 10,
+            "Coin Vault": 11,
+            "In-Hand Manipulation": 11
         }
         
         if patient:
@@ -943,7 +947,7 @@ class DashboardRepository:
                 comp_counts[matched_lvl] = comp_counts.get(matched_lvl, 0) + r["cnt"]
                 
         improvements = {}
-        for lvl in range(1, 10):
+        for lvl in range(1, 12):
             if patient:
                 cursor.execute("""
                     SELECT avg_accuracy FROM sessions 
@@ -956,7 +960,7 @@ class DashboardRepository:
                     WHERE level = ? 
                     ORDER BY timestamp ASC
                 """, (lvl,))
-            lvl_sessions = [r[0] for r in cursor.fetchall()]
+            lvl_sessions = [r[0] for r in cursor.fetchall() if r[0] is not None]
             if len(lvl_sessions) >= 2:
                 first_3 = lvl_sessions[:3]
                 last_3 = lvl_sessions[-3:]
@@ -984,6 +988,52 @@ class DashboardRepository:
             })
             
         return analytics_list
+
+    def coin_vault_analytics(self, patient: str = "") -> dict:
+        conn = self.connect()
+        cursor = conn.cursor()
+        where_clause = "WHERE level = 11"
+        params = []
+        if patient:
+            enc_patient = security_utils.encrypt_deterministic(patient)
+            where_clause += " AND patient_id = ?"
+            params.append(enc_patient)
+            
+        cursor.execute(f"""
+            SELECT 
+                COUNT(id) as sessions_count,
+                AVG(avg_accuracy) as manipulation_success_rate,
+                SUM(successful_pickups) as total_pickups,
+                SUM(pickup_attempts) as total_pickup_attempts,
+                SUM(successful_translations) as total_translations,
+                SUM(translation_attempts) as total_translation_attempts,
+                SUM(successful_placements) as total_placements,
+                SUM(placement_attempts) as total_placement_attempts,
+                SUM(unintended_drops) as total_drops,
+                AVG(manipulation_time_avg) as avg_manip_time,
+                MAX(difficulty_tier) as max_tier
+            FROM sessions
+            {where_clause}
+        """, params)
+        row = cursor.fetchone()
+        conn.close()
+        if not row or not row["sessions_count"]:
+            return {}
+            
+        pickups_rate = (row["total_pickups"] / row["total_pickup_attempts"] * 100.0) if row["total_pickup_attempts"] else 0.0
+        trans_rate = (row["total_translations"] / row["total_translation_attempts"] * 100.0) if row["total_translation_attempts"] else 0.0
+        place_rate = (row["total_placements"] / row["total_placement_attempts"] * 100.0) if row["total_placement_attempts"] else 0.0
+        
+        return {
+            "sessions_count": row["sessions_count"],
+            "manipulation_success_rate": row["manipulation_success_rate"] or 0.0,
+            "pickup_success_rate": pickups_rate,
+            "translation_success_rate": trans_rate,
+            "placement_success_rate": place_rate,
+            "unintended_drops": row["total_drops"] or 0,
+            "avg_manipulation_time": row["avg_manip_time"] or 0.0,
+            "difficulty_tier": row["max_tier"] or 3
+        }
 
     def _weekly_rom_improvement(self, sessions: list[sqlite3.Row]) -> float:
         if len(sessions) < 2:

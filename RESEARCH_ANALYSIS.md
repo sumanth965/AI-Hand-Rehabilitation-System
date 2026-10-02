@@ -19,7 +19,7 @@
 4. [Research Questions](#4-research-questions)
 5. [Hypotheses](#5-hypotheses)
 6. [Complete System Architecture](#6-complete-system-architecture)
-7. [Exercise Library (Complete 10-Level Catalog)](#7-exercise-library)
+7. [Exercise Library (Complete 11-Level Catalog)](#7-exercise-library)
 8. [Computer Vision Methodology](#8-computer-vision-methodology)
 9. [Accuracy Methodology](#9-accuracy-methodology)
 10. [Accuracy Type Taxonomy](#10-accuracy-type-taxonomy)
@@ -74,7 +74,7 @@ Recent advancements in real-time deep learning for computer vision (specifically
 This project introduces the **AI Hand Rehabilitation System**, an integrated cyber-physical rehabilitation platform that unifies:
 - **Zero-Keyboard Natural User Interface (NUI):** Full hands-free menu navigation and exercise interaction via gesture hover selection and fist/pinch mechanics.
 - **Biomechanical Telemetry:** Continuous webcam-derived tracking of 21 hand landmarks and 33 pose landmarks.
-- **10-Level Progressive Gamified Exercise Suite:** Ranging from gross finger flexion to fine-motor pinch-and-drop, forearm pronation/supination, and precision pathway tracking.
+- **11-Level Progressive Gamified Exercise Suite:** Ranging from gross finger flexion to fine-motor pinch-and-drop, forearm pronation/supination, precision pathway tracking, and in-hand manipulation.
 - **Multi-Dimensional Movement Quality & Compensation Tracking:** Explicit detection of abnormal wrist translations, jerky trajectories, and compensatory shoulder elevation, shoulder abduction, elbow drift, and trunk lean.
 - **Deterministic Closed-Loop Adaptive AI Engine:** Rule-based prescription algorithm computing patient readiness, risk levels, and 5-tier difficulty parameterization.
 - **Clinician Dashboard & Audit Pipeline:** Local clinician analytics server, Digital Twin trajectory modeling, and standardized IRB/research-ready pseudonymized CSV export (`research_export.py`).
@@ -109,7 +109,7 @@ While computer-vision gamified rehabilitation applications have proliferated in 
 
 #### What This Project Implements
 This system implements a **tightly coupled, transparent, closed-loop pipeline**:
-1. It partitions task performance into **5 distinct accuracy taxonomies** (`hit_rate`, `proximity_rate`, `completion_rate`, `binary_completion`, `path_accuracy`).
+1. It partitions task performance into **6 distinct accuracy taxonomies** (`hit_rate`, `proximity_rate`, `completion_rate`, `binary_completion`, `path_accuracy`, `manipulation_success_rate`).
 2. It pairs 2D hand tracking with concurrent upper-limb pose compensation detection.
 3. It integrates patient-reported pain delta ($Pain_{After} - Pain_{Before}$) and session-over-session adherence into a deterministic, rule-based **Readiness Score**.
 4. It dynamically adapts 10 mechanical parameters (target scale, speed scale, required ROM, time limit, repetitions, hold duration, rotation tolerance, assembly position tolerance, assembly angle tolerance, and guidance level).
@@ -133,7 +133,7 @@ pie title Research Contribution Classification
 ```
 
 #### A. Implemented and Verified in Software Architecture
-- **10-Level Gamified Rehabilitation Framework:** Fully functional Pygame runtime executing 10 clinically mapped exercises with zero keyboard requirement.
+- **11-Level Gamified Rehabilitation Framework:** Fully functional Pygame runtime executing 11 clinically mapped exercises with zero keyboard requirement.
 - **Per-Exercise Mathematical Accuracy Engine:** Implemented discrete denominators, raw hit/attempt counters, and handling of edge cases (0 attempts = `NULL` / `NO_VALID_ATTEMPTS`).
 - **Kinematic Movement Quality Pipeline:** Real-time jerk-derived smoothness, hold stability standard deviation, and composite movement quality calculations (`physio/clinical.py`).
 - **Upper-Limb & Hand Compensation Detectors:** Dual-layer compensation logic tracking wrist velocity anomalies and MediaPipe Pose shoulder/elbow/trunk deviations.
@@ -204,7 +204,7 @@ flowchart TD
     end
 
     subgraph Runtime Layer [Exercise Engine & Game Loop]
-        FE --> EX[10-Level Exercise Runtime: Pygame 60 FPS]
+        FE --> EX[11-Level Exercise Runtime: Pygame 60 FPS]
         EX --> ACC[Accuracy Engine: Taxonomical Attempt/Hit Resolvers]
         EX --> PN[Self-Reported Pain Module: NRS 0-10 Before/After]
     end
@@ -253,20 +253,86 @@ A paramount architectural design principle implemented in `adaptive_ai_engine.py
 
 ### 7. Exercise Library
 
-The following catalog represents the **10 active exercise levels** implemented in `physio/game_parts/gameplay.py`:
+The following catalog represents the **11 active exercise levels** implemented in `physio/game_parts/gameplay.py`:
 
 | Level | Implemented Exercise Name | Clinical / Therapeutic Purpose | Accuracy Type Taxonomy | Attempt Definition ($D$) | Success Definition ($N$) | Failure Definition | Primary Metrics Recorded |
 | :---: | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
-| **1** | **Bubble Pop** | Gross finger flexion, reach range, visual-motor targeting | `hit_rate` | Every bubble spawned and resolved (touched or expired at timeout) | Index fingertip enters bubble radius ($dist < r$) | Bubble unpopped when session expires | Hits, Attempts, Accuracy %, Reach Distance, Max Extension |
+| **1** | **Bubble Pop** | Webcam-based reaching and target-acquisition task; reach distance serves as a software-derived ROM-related proxy (NOT equivalent to clinical goniometric measurement) | `hit_rate` | Every bubble spawned and resolved (touched or expired at timeout) | Index fingertip enters bubble radius ($dist < r$) | Bubble unpopped when session expires | Hits, Attempts, Accuracy %, Reach Distance, Max Extension |
 | **2** | **Fruit Catch** | Dynamic wrist tracking, horizontal motor agility | `hit_rate` | Every presented catchable item that crosses the lower basket threshold | Catchable fruit lands within basket bounds ($|x_{item} - x_{basket}| < 75$) | Fruit falls past screen without basket contact | Caught count, Missed count, Combo streaks, Deflection events |
-| **3** | **Pinch & Drop** | Fine-motor precision pinch, thumb-index coordination | `hit_rate` | Every seed presented (grabbed or dropped off screen) | Seed pinched ($dist < 35$), dragged, and released inside pot radius ($dist < 60$) | Released outside pot or falls off screen ungrabbed | Pinch attempts, Successful pot drops, Combo count |
+| **3** | **Pinch & Drop** | Fine-motor precision pinch, thumb-index coordination (subject to self-occlusion when digits overlap) | `hit_rate` | Every seed presented (grabbed or dropped off screen) | Seed pinched ($dist < 35$), dragged, and released inside pot radius ($dist < 60$) | Released outside pot or falls off screen ungrabbed | Pinch attempts, Successful pot drops, Combo count |
 | **4** | **Path Tracing** | Dynamic coordination, continuous trajectory stability | `proximity_rate` | Waypoints sampled periodically ($t \pmod 5 == 0$) along Lissajous curve | Index tip distance within adaptive tolerance ($dist < 85 \times scale$) | Index tip distance exceeds boundary ($dist \ge 85 \times scale$) | Waypoint hits, Total samples, Tracing accuracy %, Combo |
-| **5** | **Grip & Release** | Spasticity reduction, full hand opening / closing cycle | `completion_rate` | Initiated fist closure cycle ($is\_fist == True$) | Full fist closure followed by full extension ($angle > 120^\circ$) within 5.0s | Failure to achieve full finger extension within 5.0s window | Pump reps completed, Cycle timeouts, Max extension angle |
-| **6** | **Memory Sequence** | Cognitive-motor integration, working memory recall | `hit_rate` | Each pad selection attempt made by patient during recall phase | Patient hovers ($>0.4s$) over the matching sequential color pad | Patient hovers over incorrect pad (breaks combo and resets) | Correct pad touches, Total pad attempts, Sequence level reached |
-| **7** | **Rotation Orbit** | Forearm pronation & supination isolation | `hit_rate` | Each orbital target angle checkpoint presented | Maintaining forearm angle within tolerance ($\pm 25^\circ$) for hold duration ($1.5s$) | Target angle unachieved or held insufficiently before level timeout | Checkpoints locked, Forearm rotation angle, Smoothness |
-| **8** | **Smart Assembly** | Complex multi-joint functional manipulation | `binary_completion` | Whole-task assembly opportunity (multi-piece blueprint) | All blueprint pieces grabbed, rotated, and locked within pos/ang tolerances | Level timer expires with one or more parts unlocked | Binary outcome (100% or 0%), Locked pieces, Assembly time |
+| **5** | **Grip & Release** | Repetitive grip-and-release movement training based on detected hand closure and subsequent finger extension (does NOT measure grip force, pinch force, muscle tone, or resistance) | `completion_rate` | Initiated fist closure cycle ($is\_fist == True$) | Full fist closure followed by full extension ($angle > 120^\circ$) within 5.0s | Failure to achieve full finger extension within 5.0s window | Pump reps completed, Cycle timeouts, Max extension angle |
+| **6** | **Memory Sequence** | Cognitive-motor training task combining sequence recall with visual-motor targeting (NOT a validated cognitive or neuropsychological assessment) | `hit_rate` | Each pad selection attempt made by patient during recall phase | Patient hovers ($>0.4s$) over the matching sequential color pad | Patient hovers over incorrect pad (breaks combo and resets) | Correct pad touches, Total pad attempts, Sequence level reached |
+| **7** | **Rotation Orbit** | Webcam-derived forearm rotation proxy using relative orientation of hand landmarks (subject to 2D projection limits, camera orientation sensitivity, wrist-motion confounding, and absence of goniometric validation) | `hit_rate` | Each orbital target angle checkpoint presented | Maintaining forearm angle within tolerance ($\pm 25^\circ$) for hold duration ($1.5s$) | Target angle unachieved or held insufficiently before level timeout | Checkpoints locked, Forearm rotation angle, Smoothness |
+| **8** | **Smart Assembly** | Whole-task functional manipulation (subject to self-occlusion during multi-finger rotation/grasping) | `binary_completion` | Whole-task assembly opportunity (multi-piece blueprint) | All blueprint pieces grabbed, rotated, and locked within pos/ang tolerances | Level timer expires with one or more parts unlocked | Binary outcome (100% or 0%), Locked pieces, Assembly time |
 | **9** | **Precision Dots** | Static targeting, point-to-point fine motor accuracy | `hit_rate` | Total numbered dots in sequence + penalty attempts for wrong touches | Touching active dot in exact numerical ascending sequence | Touching wrong numbered dot or timeout with unreached dots | Dot hits, Out-of-sequence errors, Max reach distance |
 | **10** | **Precision Pathway** | Corridor-constrained motor tracking, boundary control | `path_accuracy` | Total trajectory tracking samples recorded along path corridor | Tracking sample index tip within corridor half-width ($dist \le width/2$) | Tracking sample strays beyond corridor half-width ($dist > width/2$) | On-path samples, Total samples, Boundary violations, Deviation |
+| **11** | **Coin Vault** | In-hand manipulation: finger-to-palm translation, palm shift, palm-to-finger translation, and precision vault docking (virtual in-hand manipulation proxy) | `manipulation_success_rate` | Each presented coin manipulation cycle initiated | Coin pinched, translated to palm, held for required duration, repositioned to fingertip, and docked in matching vault | Coin dropped, incorrect vault, or timeout | Manipulation success %, Pickups, Translations, Placements, Drops, Manipulation time |
+
+> [!NOTE]
+> **Exercise-Specific Technical & Clinical Caveats:**
+> - **Level 1 (Bubble Pop):** Provides a webcam-based reaching and target-acquisition task, with reach distance serving as a software-derived ROM-related proxy. It is *not* equivalent to a clinical goniometric ROM measurement.
+> - **Level 5 (Grip & Release):** Provides repetitive grip-and-release movement training based on detected hand closure and subsequent finger extension. The system does *not* directly measure grip force, pinch force, muscle tone, or resistance. A patient may complete the detected grip-release movement without the system being able to determine the magnitude of muscular force generated.
+> - **Level 6 (Memory Sequence):** Combines sequence recall with visual-motor targeting and is therefore treated as a cognitive-motor training task rather than a validated cognitive assessment or neuropsychological battery.
+> - **Level 7 (Rotation Orbit):** Provides a webcam-based forearm rotation training task using the relative orientation of hand landmarks as a proxy for rotational movement. True anatomical pronation/supination occurs in 3D radial-ulnar geometry; the 2D planar projection used is sensitive to camera orientation, wrist flexion/extension confounding, and upper-limb compensation.
+> - **Levels 3 & 8 (Self-Occlusion):** When thumb and index finger overlap from the camera viewpoint, landmark visibility and tracking confidence may decrease, potentially causing incorrect pinch-state transitions or unintended object release.
+> - **Level 11 (Coin Vault):** Extends the exercise library with a task-specific virtual in-hand manipulation module, introducing a motor-control category that differs from external object dragging and simple point-targeting tasks. The system does not directly observe or measure physical object translation inside the patient's hand. Level 11 represents a virtual in-hand manipulation task whose performance is inferred from webcam-derived hand landmark configurations.
+
+#### 7.11 Level 11 Deep-Dive: Coin Vault (In-Hand Manipulation)
+
+##### 1. Clinical / Therapeutic Rehabilitation Focus
+Level 11 targets intrinsic hand dexterity and fine-motor coordination:
+- **Finger-to-palm translation:** Moving an object from distal fingertip grasp (thumb and index) into the central palm pocket.
+- **In-palm stabilization & shift:** Stabilizing and shifting the object within the palm using intrinsic hand muscles while maintaining partial finger flexion.
+- **Palm-to-finger translation:** Repositioning the object from the palm pocket back out to the radial fingertips (thumb-index).
+- **Precision target placement:** Controlled spatial positioning and release into an assigned target vault without unintentional drop.
+
+##### 2. Explicit Differentiation from Pinch & Drop (Level 3)
+Level 3 (*Pinch & Drop*) is an **external transport task** ($Pinch \to Drag \to Release$). The object remains continuously grasped between the fingertips and is moved across screen space by arm/wrist movement.
+In contrast, Level 11 enforces an **internal translation sequence**. The coin must travel inward toward the palm center, satisfy a sustained palm hold duration, and then be translated outward back to the fingertips. Moving directly from pickup to vault without entering the palm is rejected by the anti-cheat state validator.
+
+##### 3. Finite State Machine (8 Discrete States)
+The manipulation cycle proceeds through an 8-stage deterministic state machine:
+```mermaid
+stateDiagram-v2
+    [*] --> READY
+    READY --> COIN_PRESENTED : Coin Spawned
+    COIN_PRESENTED --> PICKUP : Thumb-Index Pinch (< 45px)
+    PICKUP --> IN_HAND_TRANSLATION : Distance to Palm < 65px
+    IN_HAND_TRANSLATION --> IN_HAND_SHIFT : Palm Threshold Met
+    IN_HAND_SHIFT --> PALM_TO_FINGERTIP : Palm Hold Duration Satisfied (0.8s-2.1s)
+    PALM_TO_FINGERTIP --> TARGET_PLACEMENT : Knuckle Angle & Extension Outward
+    TARGET_PLACEMENT --> SUCCESS : Vault Release (< 55px matching vault)
+    TARGET_PLACEMENT --> FAILURE : Unintended Drop / Timeout
+    SUCCESS --> READY
+    FAILURE --> READY
+```
+
+##### 4. Landmark Features & Coordinate Normalization
+- **Palm Center Reference ($P_{palm}$):** Computed as the midpoint between Wrist ($L_0$) and Middle MCP ($L_9$):
+  $$P_{palm} = \left(\frac{x_0 + x_9}{2}, \, \frac{y_0 + y_9}{2}\right)$$
+- **Hand Scale Normalization ($S_{hand}$):** Euclidean pixel distance between Wrist ($L_0$) and Middle MCP ($L_9$):
+  $$S_{hand} = \|L_9 - L_0\|_2$$
+- **Normalized Palm Proximity ($D_{palm}$):**
+  $$D_{palm} = \frac{\|L_{coin} - P_{palm}\|_2}{S_{hand}}$$
+  Translation into palm requires $D_{palm} < 0.40$ (or raw screen distance $< 65\text{ px} \times \text{target\_scale}$).
+- **Repositioning Extension Metric:** Average knuckle angle across index, middle, and ring digits exceeding $80^\circ$ combined with thumb-index distance expanding outward ($D_{palm} > 0.65$).
+
+##### 5. Anti-Cheat Enforcement & Self-Occlusion Cushioning
+- **Anti-Cheat Lock:** Target vaults refuse dock interaction unless the coin state is explicitly `READY_FOR_PLACEMENT` and the manipulation state is `TARGET_PLACEMENT`. Direct external transport attempts are ignored.
+- **Wrong Vault Correction:** Releasing near a non-matching vault increments `correction_count` without aborting the trial, encouraging cognitive-motor correction.
+- **Occlusion Grace Window:** To prevent camera perspective occlusion (when digits overlap the palm) from triggering false-positive drops, an `occlusion_grace_frames` buffer (25 frames $\approx 416\text{ ms}$) permits transient landmark disappearance during tight pinch-to-palm phases without resetting the cycle.
+
+##### 6. Adaptive Parameters Scaled (Tier 1–5)
+- Coin collision radius: $42\text{ px} \times \text{target\_scale}$ ($30.2\text{ px}$ to $60.9\text{ px}$).
+- Vault acceptance radius: $55\text{ px} \times \text{target\_scale}$ ($39.6\text{ px}$ to $79.7\text{ px}$).
+- In-hand palm hold duration requirement: $0.8\text{ s}$ (Tier 1) to $2.1\text{ s}$ (Tier 5).
+- Vault movement dynamics: Stationary at Tiers 1–3; slow subtle oscillation ($0.3\times - 0.5\times\text{speed}$) at Tiers 4–5.
+
+##### 7. Computer Vision Limitation Notice
+> [!CAUTION]
+> **Virtual In-Hand Manipulation Proxy Limitation:**
+> Commodity monocular RGB webcams cannot view or track a physical coin hidden within an occluded human palm. Level 11 is an **inferred virtual manipulation proxy**. The system tracks the patient's normalized hand landmark geometry (finger flexion, knuckle angles, and pinch distance relative to the palm center) to infer in-hand manipulation states, rather than tracking a physical token inside the palm.
 
 ---
 
@@ -315,7 +381,7 @@ If tracking is lost (e.g., patient moved hand outside camera view for 70% of the
 #### 9.4 Non-Poolability Warning for Statistical Analysis
 > [!WARNING]
 > **Do NOT Pool Different Accuracy Types in Group Aggregations!**
-> Because `hit_rate` (discrete targets), `proximity_rate` (waypoint samples), `completion_rate` (time-bounded reps), `binary_completion` (0 or 100%), and `path_accuracy` (continuous corridor containment) measure fundamentally different mathematical distributions, pooling them into a single aggregate "overall accuracy" variable violates statistical validity. They must be evaluated within their respective taxonomical strata.
+> Accuracy values from different exercises should not automatically be pooled or averaged because their denominators, event structures, and interpretations differ. Because `hit_rate` (discrete targets), `proximity_rate` (waypoint samples), `completion_rate` (time-bounded reps), `binary_completion` (0 or 100%), and `path_accuracy` (continuous corridor containment) measure fundamentally different mathematical distributions, pooling them into a single aggregate "overall accuracy" variable violates statistical validity. They must be evaluated strictly within their respective taxonomical strata.
 
 ---
 
@@ -345,6 +411,11 @@ If tracking is lost (e.g., patient moved hand outside camera view for 70% of the
 │ path_accuracy      │ L10       │ Trajectory   │ Total        │ Continuous   │
 │                    │           │ samples on   │ corridor     │ motor control│
 │                    │           │ path         │ samples      │ containment  │
+├────────────────────┼───────────┼──────────────┼──────────────┼──────────────┤
+│ manipulation_      │ L11       │ Completed    │ Total        │ In-hand      │
+│ success_rate       │           │ in-hand      │ manipulation │ manipulation │
+│                    │           │ placements   │ cycles       │ task         │
+│                    │           │ in vault     │ initiated    │ performance  │
 └────────────────────┴───────────┴──────────────┴──────────────┴──────────────┘
 ```
 
@@ -407,15 +478,23 @@ Monitored via `AdvancedCompensationDetector` with a 3.0-second cooldown between 
 5. **Abnormal Rotation Speed:** Angular velocity change $> 35.0^\circ$ per frame.
 
 #### 13.2 Upper-Limb Biomechanical Compensation (`upper_limb_analysis.py`)
-Utilizes MediaPipe Pose landmarks (shoulders, elbows, wrists, hips):
-- **Shoulder Elevation ($C_{sh\_elev}$):** Vertical displacement of shoulder joint relative to torso height. Threshold: $> 0.18$.
-- **Shoulder Abduction ($C_{sh\_abd}$):** Lateral flare of elbow away from shoulder width baseline. Threshold: $> 0.35$.
-- **Elbow Drift ($C_{elb}$):** Deviation of elbow position normalized to upper arm length. Threshold: $> 0.35$.
-- **Trunk Lean ($C_{trunk}$):** Angular deviation of the shoulder-midpoint to hip-midpoint vector from $90^\circ$ vertical. Threshold: $> 18^\circ$.
+Utilizes MediaPipe Pose landmarks (shoulders, elbows, wrists, hips) to monitor compensatory posturing using **heuristic compensation thresholds**:
+- **Shoulder Elevation ($C_{sh\_elev}$):** Vertical displacement of shoulder joint relative to torso height. Heuristic threshold: $> 0.18$.
+- **Shoulder Abduction ($C_{sh\_abd}$):** Lateral flare of elbow away from shoulder width baseline. Heuristic threshold: $> 0.35$.
+- **Elbow Drift ($C_{elb}$):** Deviation of elbow position normalized to upper arm length. Heuristic threshold: $> 0.35$.
+- **Trunk Lean ($C_{trunk}$):** Angular deviation of the shoulder-midpoint to hip-midpoint vector from $90^\circ$ vertical. Heuristic threshold: $> 18^\circ$.
 
 $$\text{Composite Upper-Limb Compensation} = \operatorname{clamp}(0.40 \cdot C_{sh} + 0.35 \cdot C_{elb} + 0.25 \cdot C_{trunk}, \, 0.0, \, 1.0)$$
 
 $$\text{Movement Efficiency (\%)} = 100.0 \times (1.0 - \text{Composite Compensation})$$
+
+> [!CAUTION]
+> **Heuristic Threshold Notice:**
+> The compensation cutoffs above represent **software-derived heuristic compensation thresholds**; they are **NOT clinically validated, universal clinical, or diagnostic thresholds**. These thresholds require formal empirical validation across heterogeneous patient cohorts with different:
+> 1. Body sizes, arm spans, and torso proportions,
+> 2. Camera-to-patient distances and lens fields of view,
+> 3. Seating positions, chair geometries, and armrest constraints,
+> 4. Physical operating environments and ambient viewing angles.
 
 ---
 
@@ -500,7 +579,7 @@ Every prescription stores a structured JSON explanation containing the rationale
 
 ### 17. Longitudinal & Recovery Modeling
 
-#### 17.1 Trend-Based Recovery Projection
+#### 17.1 Longitudinal Recovery Trend Modeling
 Implemented in `physio/database.py` (`predict_recovery_progress`):
 - Requires a minimum historical series of $N \ge 3$ sessions for the patient.
 - Fits an ordinary least-squares (OLS) linear regression model:
@@ -510,7 +589,9 @@ Implemented in `physio/database.py` (`predict_recovery_progress`):
 - Computes estimated relative recovery velocity:
   $$\text{Recovery Progress (\%)} = \max\left(0.0, \, \frac{\hat{y}_{N+7} - \bar{y}_{current}}{\bar{y}_{current}} \times 100\right)$$
 
-*Scientific Terminology:* This calculation must be reported as **"trend-based linear extrapolation of recorded sessions"**—it is *not* a clinical prognostic model.
+> [!NOTE]
+> **Preferred Scientific Wording:**
+> **The system estimates longitudinal recovery trends from historical session metrics using the implemented computational model; this should not be interpreted as a clinical prognosis.** The model does not clinically predict physiological recovery or provide diagnostic/prognostic certainty.
 
 #### 17.2 Digital Twin Multi-Scenario Modeling
 `digital_twin_rehab.py` builds an explainable patient profile simulating three hypothetical therapeutic trajectories:
@@ -522,7 +603,7 @@ Implemented in `physio/database.py` (`predict_recovery_progress`):
 
 ### 18. Master Research Variables Table
 
-The following 26 research variables are extracted directly by `research_export.py` and persisted in SQLite:
+The following 45 research variables are extracted directly by `research_export.py` and persisted in SQLite:
 
 | # | Variable Name | Data Type | Database Source Field | Operational Unit / Range | Status | Research Utility |
 | :---: | :--- | :---: | :--- | :--- | :---: | :--- |
@@ -530,9 +611,9 @@ The following 26 research variables are extracted directly by `research_export.p
 | **2** | `Session_ID` | Integer | `sessions.id` | $1, 2, 3 \dots$ | Validated | Unique session key for SQL auditing |
 | **3** | `Date` | Datetime | `sessions.timestamp` | ISO 8601 string | Validated | Time-series and adherence tracking |
 | **4** | `Exercise` | String | `sessions.exercise_name` | Name string (e.g. Bubble Pop) | Validated | Factorial exercise stratifications |
-| **5** | `Level` | Integer | `sessions.level` | $1 - 10$ | Validated | Exercise level covariate |
-| **6** | `Difficulty` | Integer | `adaptive_prescriptions.difficulty_tier` | $1 - 5$ | Validated | Difficulty state classification |
-| **7** | `Accuracy_Type` | String | `sessions.accuracy_type` | Categorical (5 classes) | Validated | Stratification filter (prevents invalid pooling) |
+| **5** | `Level` | Integer | `sessions.level` | $1 - 11$ | Validated | Exercise level covariate |
+| **6** | `Difficulty` | Integer | `sessions.difficulty_tier` | $1 - 5$ | Validated | Difficulty state classification |
+| **7** | `Accuracy_Type` | String | `sessions.accuracy_type` | Categorical (6 classes) | Validated | Stratification filter (prevents invalid pooling) |
 | **8** | `Successful_Hits` | Integer | `sessions.successful_hits` | $0 - N$ integer | Validated | Raw performance numerator |
 | **9** | `Total_Attempts` | Integer | `sessions.total_attempts` | $0 - N$ integer | Validated | Raw performance denominator |
 | **10** | `Accuracy` | Float | `sessions.avg_accuracy` | $0.0 - 100.0$ (or NULL) | Validated | Primary outcome metric |
@@ -544,14 +625,33 @@ The following 26 research variables are extracted directly by `research_export.p
 | **16** | `Pain_Before` | Integer | `sessions.pain_before_session` | $0 - 10$ NRS | Self-Report | Baseline subjective pain covariate |
 | **17** | `Pain_After` | Integer | `sessions.pain_after_session` | $0 - 10$ NRS | Self-Report | Post-session subjective pain |
 | **18** | `Pain_Delta` | Integer | `sessions.pain_difference` | $-10 \text{ to } +10$ | Derived | Acute exercise-induced pain response |
-| **19** | `Completion_Time` | Float | `sessions.duration` | Seconds | Validated | Session endurance / pacing |
-| **20** | `Readiness` | Float | `adaptive_prescriptions.readiness_score`| $0.0 - 100.0$ | Heuristic | Adaptive state variable |
-| **21** | `Previous_Accuracy` | Float | Derived from historical lag | $0.0 - 100.0$ % | Derived | Longitudinal state transition analysis |
-| **22** | `Previous_Readiness`| Float | Derived from historical lag | $0.0 - 100.0$ | Derived | Longitudinal adaptation trajectory |
-| **23** | `Previous_Difficulty`| Integer| Derived from historical lag | $1 - 5$ tier | Derived | Difficulty tier transitions |
-| **24** | `New_Difficulty` | Integer | `adaptive_prescriptions.difficulty_tier` | $1 - 5$ tier | Validated | Adaptive AI prescription choice |
-| **25** | `Session_Aborted` | Integer | `sessions.session_aborted` | $0 \text{ or } 1$ | Validated | Dropout / task frustration marker |
-| **26** | `Quality_Flag` | String | `sessions.quality_flag` | `VALID`, `TRACKING_ERROR`... | Validated | Data cleaning / inclusion filter |
+| **19** | `Completion_Time` | Float | `sessions.duration` | Seconds | Validated | Total wall-clock session time |
+| **20** | `Active_Engagement_Time` | Float | `sessions.active_engagement_duration` | Seconds | Validated | Net time engaged in active motor movement |
+| **21** | `Tracking_Valid_Time` | Float | `sessions.tracking_valid_duration` | Seconds | Validated | Net duration with valid hand tracking |
+| **22** | `Readiness` | Float | `adaptive_prescriptions.readiness_score`| $0.0 - 100.0$ | Heuristic | Adaptive state variable |
+| **23** | `Target_Scale` | Float | `sessions.target_scale` | $0.5 - 2.0\times$ | Validated | Adaptive target scaling factor |
+| **24** | `Speed_Scale` | Float | `sessions.speed_scale` | $0.5 - 2.0\times$ | Validated | Adaptive gameplay speed multiplier |
+| **25** | `Session_Time_Limit`| Float | `sessions.session_time_limit` | Seconds ($30 - 70$) | Validated | Adaptive exercise duration window |
+| **26** | `Hold_Duration` | Float | `sessions.hold_duration` | Seconds ($0.8 - 2.1$) | Validated | Static angle hold requirement (Level 7, 11) |
+| **27** | `Rotation_Tolerance`| Float | `sessions.rotation_tolerance` | Degrees ($\pm 16 - 40^\circ$) | Validated | Angular locking tolerance (Level 7) |
+| **28** | `Assembly_Tolerance`| Float | `sessions.assembly_position_tolerance` | Pixels ($32 - 85\text{ px}$) | Validated | Spatial placement tolerance (Level 8) |
+| **29** | `Corridor_Width` | Float | `sessions.corridor_width` | Pixels ($40 - 80\text{ px}$) | Validated | Corridor boundary half-width (Level 10) |
+| **30** | `Previous_Accuracy` | Float | Derived from historical lag | $0.0 - 100.0$ % | Derived | Longitudinal state transition analysis |
+| **31** | `Previous_Readiness`| Float | Derived from historical lag | $0.0 - 100.0$ | Derived | Longitudinal adaptation trajectory |
+| **32** | `Previous_Difficulty`| Integer| Derived from historical lag | $1 - 5$ tier | Derived | Difficulty tier transitions |
+| **33** | `New_Difficulty` | Integer | `adaptive_prescriptions.difficulty_tier` | $1 - 5$ tier | Validated | Adaptive AI prescription choice |
+| **34** | `Session_Aborted` | Integer | `sessions.session_aborted` | $0 \text{ or } 1$ | Validated | Dropout / task frustration marker |
+| **35** | `Quality_Flag` | String | `sessions.quality_flag` | `VALID`, `TRACKING_ERROR`... | Validated | Data cleaning / inclusion filter |
+| **36** | `Successful_Pickups` | Integer | `sessions.successful_pickups` | $0 - N$ count | Validated | In-hand phase 1 success (Level 11) |
+| **37** | `Pickup_Attempts` | Integer | `sessions.pickup_attempts` | $0 - N$ count | Validated | In-hand phase 1 attempts (Level 11) |
+| **38** | `Successful_Translations` | Integer | `sessions.successful_translations` | $0 - N$ count | Validated | Finger-to-palm translation success (Level 11) |
+| **39** | `Translation_Attempts` | Integer | `sessions.translation_attempts` | $0 - N$ count | Validated | Finger-to-palm translation attempts (Level 11) |
+| **40** | `Successful_Placements` | Integer | `sessions.successful_placements` | $0 - N$ count | Validated | Vault placement success (Level 11) |
+| **41** | `Placement_Attempts` | Integer | `sessions.placement_attempts` | $0 - N$ count | Validated | Vault placement attempts (Level 11) |
+| **42** | `Unintended_Drops` | Integer | `sessions.unintended_drops` | $0 - N$ count | Validated | In-hand motor failure drops (Level 11) |
+| **43** | `Manipulation_Time_Avg` | Float | `sessions.manipulation_time_avg` | Seconds ($0.0 - N$) | Validated | Mean in-hand translation duration (Level 11) |
+| **44** | `Placement_Time_Avg` | Float | `sessions.placement_time_avg` | Seconds ($0.0 - N$) | Validated | Mean vault positioning duration (Level 11) |
+| **45** | `Correction_Count` | Integer | `sessions.correction_count` | $0 - N$ count | Validated | Wrong vault placement corrections (Level 11) |
 
 ---
 
@@ -570,7 +670,16 @@ The system persists all telemetry in an ACID-compliant SQLite relational databas
 │                          │ total_attempts, accuracy_type, ROM,         │
 │                          │ pain_before, pain_after, pain_difference,   │
 │                          │ movement_quality_score, tracking_quality,   │
-│                          │ quality_flag, timestamp                     │
+│                          │ active_engagement_duration,                 │
+│                          │ tracking_valid_duration, difficulty_tier,   │
+│                          │ target_scale, speed_scale, hold_duration,   │
+│                          │ rotation_tolerance, corridor_width,         │
+│                          │ successful_pickups, pickup_attempts,        │
+│                          │ successful_translations,                    │
+│                          │ translation_attempts, successful_placements,│
+│                          │ placement_attempts, unintended_drops,       │
+│                          │ manipulation_time_avg, placement_time_avg,  │
+│                          │ correction_count, quality_flag, timestamp   │
 ├──────────────────────────┼─────────────────────────────────────────────┤
 │ `patients`               │ name (enc), age, age_group, cal_max_ext,    │
 │                          │ cal_min_ang, cal_max_ang, id_number (enc)   │
@@ -617,35 +726,98 @@ Options include `--no-pseudonymize` (retains clinical names for local review) an
 
 ---
 
-### 21. Data Quality Framework
+### 21. Research Validity & Data Quality Framework
 
-To guarantee research-grade auditability, every session record is evaluated by `validate_session_data()` in `physio/database.py`:
+#### 21.1 Four-Tier Conceptual Research Validity Framework
+To preserve scientific rigor and maintain strict transparency across research claims, the platform is structured around a four-tier validity progression hierarchy:
+
+```
+┌─────────────────────────────────────────────────────────────┐
+│                 1. IMPLEMENTED CAPABILITY                   │
+│   (Software code, tracking pipelines, algorithms exist)     │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│              2. SOFTWARE-DERIVED MEASUREMENT                │
+│   (Calculated heuristics, task accuracy, proxies, scores)   │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│                 3. EXPERIMENTAL VALIDATION                  │
+│    (Controlled lab trials, lighting/distance benchmarks,    │
+│            fixed vs. adaptive comparative testing)          │
+└──────────────────────────────┬──────────────────────────────┘
+                               │
+                               ▼
+┌─────────────────────────────────────────────────────────────┐
+│                  4. CLINICAL VALIDATION                     │
+│    (Gold-standard goniometer concordance, Vicon optical     │
+│        capture, randomized clinical trials [RCTs])          │
+└─────────────────────────────────────────────────────────────┘
+```
+
+##### Honest Status of Current System Components:
+1. **Implemented Capability:**
+   - **Status:** **FULLY IMPLEMENTED**
+   - MediaPipe Hands (21 3D landmarks) and MediaPipe Pose (33 landmarks).
+   - 10-level progressive exercise suite with zero-keyboard gesture navigation.
+   - Deterministic rule-based difficulty adaptation engine ([adaptive_ai_engine.py](file:///d:/Documentsss/AI-Hand-Rehabilitation-System/adaptive_ai_engine.py)).
+   - ACID-compliant SQLite audit database and pseudonymized research CSV exporter ([research_export.py](file:///d:/Documentsss/AI-Hand-Rehabilitation-System/research_export.py)).
+2. **Software-Derived Measurement:**
+   - **Status:** **FULLY COMPUTED (HEURISTIC)**
+   - Computes task-specific accuracy across 5 taxonomies (`hit_rate`, `proximity_rate`, `completion_rate`, `binary_completion`, `path_accuracy`).
+   - Computes webcam-derived reaching/ROM-related proxies, jerk-derived kinematic smoothness ($S_m$), heuristic compensation indicators, and subjective pain telemetry (NRS 0–10).
+3. **Experimental Validation:**
+   - **Status:** **PLANNED / IN PROGRESS**
+   - Controlled illumination and camera distance bench testing.
+   - Empirical fixed-difficulty vs. adaptive-difficulty comparative trials.
+   - Within-subject repeatability and task-learning effect characterization.
+4. **Clinical Validation:**
+   - **Status:** **NOT YET CLINICALLY VALIDATED**
+   - Requires formal concordance studies against medical gold standards (physical universal goniometer, Vicon 3D optical motion capture).
+   - Requires multi-center clinical trials in post-stroke or orthopedic patient cohorts with standardized functional assessments (e.g., Fugl-Meyer Assessment [FMA], Action Research Arm Test [ARAT]).
+   - **Current software does NOT diagnose, treat, or provide prognostic medical claims.**
+
+---
+
+#### 21.2 Data Quality & Audit Framework
+
+To guarantee research-grade auditability, every session record is evaluated by `validate_session_data()` in [physio/database.py](file:///d:/Documentsss/AI-Hand-Rehabilitation-System/physio/database.py). The system explicitly distinguishes between vision tracking dropout, patient motor failure, session abort, and valid motor performance:
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────┐
 │                          DATA QUALITY AUDIT MATRIX                      │
 ├─────────────────────┬───────────────────────────────────────────────────┤
-│ Quality Flag        │ Trigger Condition & Operational Filter            │
+│ Quality Flag        │ Trigger Condition & Operational Research Filter   │
 ├─────────────────────┼───────────────────────────────────────────────────┤
 │ `VALID`             │ attempts > 0, hits <= attempts, tracking >= 50%,  │
 │                     │ duration >= 5.0s, session completed normally.     │
 │                     │ -> INCLUDED in Primary Outcome Analysis.          │
 ├─────────────────────┼───────────────────────────────────────────────────┤
+│ `MOTOR_FAILURE`     │ Tracking confidence >= 50%, attempts > 0, but     │
+│                     │ successful hits == 0.                             │
+│                     │ -> INCLUDED in Clinical Impairment Analysis;      │
+│                     │ Distinguishes patient deficit from camera error.  │
+├─────────────────────┼───────────────────────────────────────────────────┤
+│ `TRACKING_ERROR`    │ Valid tracking frames < 50.0% of total frames.    │
+│                     │ -> EXCLUDED from Primary Kinematics; retained for │
+│                     │ Technical Feasibility / Vision Stability Audits.  │
+├─────────────────────┼───────────────────────────────────────────────────┤
+│ `ABORTED_SESSION`   │ Session exited prior to level duration / timeout. │
+│                     │ -> EXCLUDED from Efficacy; retained for Task      │
+│                     │ Frustration / Fatigue Analysis.                   │
+├─────────────────────┼───────────────────────────────────────────────────┤
+│ `MISSING_DATA`      │ Zero tracking frames or video input missing.      │
+│                     │ -> EXCLUDED from all analyses (hardware offline). │
+├─────────────────────┼───────────────────────────────────────────────────┤
 │ `NO_VALID_ATTEMPTS` │ Total attempts == 0. Accuracy stored as NULL.     │
 │                     │ -> EXCLUDED from Accuracy Analysis; retained for  │
 │                     │ Adherence / Dropout Evaluation.                   │
 ├─────────────────────┼───────────────────────────────────────────────────┤
-│ `TRACKING_ERROR`    │ Tracking frames valid < 50.0% of total frames.    │
-│                     │ -> EXCLUDED from Primary Kinematics; retained for │
-│                     │ Technical Feasibility / Lighting Audits.          │
-├─────────────────────┼───────────────────────────────────────────────────┤
-│ `ABORTED_EARLY`     │ Session exited prior to level duration / timeout. │
-│                     │ -> EXCLUDED from Efficacy; retained for Task      │
-│                     │ Frustration / Fatigue Analysis.                   │
-├─────────────────────┼───────────────────────────────────────────────────┤
 │ `ACCURACY_ERROR`    │ Hits > Attempts or invalid range boundaries.      │
-│                     │ -> EXCLUDED from all statistical analyses         │
-│                     │ (indicates software anomaly).                     │
+│                     │ -> EXCLUDED from all analyses (software anomaly). │
 └─────────────────────┴───────────────────────────────────────────────────┘
 ```
 
@@ -854,12 +1026,35 @@ To prevent scientific overclaiming and maintain strict academic credibility, all
 
 ---
 
-### 34. Limitations
+### 34. Technical & Scientific Limitations
 
-1. **Webcam Lighting & Environmental Sensitivity:** In ambient lighting $< 150\text{ lux}$ or against low-contrast backgrounds, MediaPipe landmark confidence drops, causing tracking loss.
-2. **2D Perspective & Depth Invariance:** Monocular RGB cameras cannot capture true 3D joint depths; radial/ulnar deviation and forearm pronation are approximations derived from planar landmark projections.
-3. **Self-Reported Pain Bias:** Pain ratings are inherently subjective and susceptible to patient reporting bias.
-4. **Current Sample Size:** The current dataset consists solely of developer and pilot calibration data ($N = 3$, 12 sessions).
+1. **Environmental Illumination & Foreground-Background Contrast:**
+   Low illumination, strong backlighting, shadows, and poor foreground-background contrast may reduce landmark detection reliability. The vision engine requires adequate, consistent lighting to maintain high landmark detection confidence.
+2. **Computational Performance on Resource-Constrained Hardware:**
+   Performance may decrease on resource-constrained hardware due to concurrent computer-vision processing (simultaneous MediaPipe Hands and MediaPipe Pose) and real-time game rendering. Without dedicated GPU acceleration, frame rates may vary, emphasizing the need for hardware profiling in deployment settings.
+3. **Potential Temporal Latency from Landmark Smoothing:**
+   To suppress camera sensor jitter, landmark coordinates pass through a 12-frame weighted moving average buffer. This introduces potential temporal latency between physical movement and cursor response. Theoretical frame-window latency should not be interpreted as experimentally measured perceptual latency and requires empirical bench testing.
+4. **Local LLM Response Latency & Strict Architectural Isolation:**
+   Verified implementation timeout is set to 8.0 seconds (`DEFAULT_OLLAMA_TIMEOUT = 8.0s` in [llm_wrapper.py](file:///d:/Documentsss/AI-Hand-Rehabilitation-System/llm_wrapper.py)). Optional local LLM inference may introduce additional response latency, particularly on CPU-only hardware. The LLM is strictly an optional phrasing enhancer and possesses **NO agency over rehabilitation difficulty, safety blocks, readiness scores, or clinical recommendations**. If offline or timed out, the deterministic engine message is emitted instantly with zero clinical degradation.
+5. **Camera Distance & Field-of-View Trade-Off:**
+   A single commodity webcam creates an intrinsic optical trade-off:
+   - *Close camera positioning* improves fine finger and hand landmark visibility.
+   - *Greater camera distance* improves whole-upper-body pose visibility for trunk and shoulder compensation detection.
+   Simultaneous high-precision digit tracking and trunk-lean tracking from a single monocular sensor requires careful empirical calibration of user distance.
+6. **Self-Occlusion during Fine-Motor Tasks (Level 3 & Level 8):**
+   In Level 3 (Pinch & Drop) and Level 8 (Smart Assembly), when the thumb and index finger overlap from the camera viewpoint, landmark visibility and tracking confidence may decrease, potentially causing incorrect pinch-state transitions or unintended object release.
+7. **Game-Learning Effects vs. Physiological Recovery:**
+   Repeated exposure to the same game may improve performance through task familiarity or learning effects independently of physical recovery. Longitudinal research protocols must carefully control for baseline performance, session index, repeated-task familiarity, and fixed vs. adaptive difficulty comparisons. Performance improvements cannot be assumed to reflect physiological neural plasticity without standardized clinical pre/post evaluations.
+8. **Absence of Force, Muscle Tone, and Haptic Telemetry:**
+   The webcam-based system does not directly measure grip force, pinch force, muscle tone, torque, or resistance. For Level 5 (Grip & Release) specifically, a patient may complete the detected grip-release movement without the system being able to determine the magnitude of muscular force generated.
+9. **2D Perspective Distortion & Relative Rotational Proxies:**
+   Monocular RGB cameras cannot capture true 3D spatial depth coordinates. Knuckle angles and forearm rotations (Level 7) represent planar proxies derived from 2D pixel coordinates, which are sensitive to camera orientation, parallax foreshortening, and wrist flexion/extension confounding.
+10. **Heuristic Nature of Biomechanical Compensation Thresholds:**
+    Shoulder elevation, shoulder abduction, elbow drift, and trunk lean cutoffs in [upper_limb_analysis.py](file:///d:/Documentsss/AI-Hand-Rehabilitation-System/upper_limb_analysis.py) are software heuristics. They are not universal clinical or diagnostic cutoffs and require empirical validation across varied patient body dimensions, chair types, and seating postures.
+11. **Software-Derived Indicators vs. Clinical Assessment Instruments:**
+    The current system provides software-derived rehabilitation indicators and has not established equivalence to validated clinical assessment instruments (such as the Fugl-Meyer Assessment [FMA], Action Research Arm Test [ARAT], or universal goniometry).
+12. **Self-Reported Pain Telemetry Subjectivity:**
+    Pre- and post-session Numerical Rating Scale (NRS 0–10) pain scores reflect subjective perception and are susceptible to patient reporting bias, fear avoidance, mood, and cognitive recall variability.
 
 ---
 

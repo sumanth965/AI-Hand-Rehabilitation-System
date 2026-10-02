@@ -543,7 +543,8 @@ class MedicalSidebarV2:
         panel = pygame.Rect(self.x + 12, y, self.width - 24, 52)
         self._panel(screen, panel)
         self._draw_text(screen, "EXERCISE NAME", self.font_small_bold, (0, 180, 220), (panel.x + 14, panel.y + 6))
-        self._draw_text(screen, exercise_name, self.font_data, (240, 248, 255), (panel.x + 14, panel.y + 24))
+        ex_font = self.font_small_bold if len(str(exercise_name)) > 20 else self.font_data
+        self._draw_text(screen, exercise_name, ex_font, (240, 248, 255), (panel.x + 14, panel.y + 24))
         y = panel.bottom + 8
 
         pred_text = "Need more data"

@@ -1,9 +1,10 @@
 """
 Personalized rehabilitation digital twin.
 
-The twin summarizes a patient's rehabilitation trajectory and simulates
-alternative therapy strategies. It is an explainable planning aid, not a
-diagnostic or regulated clinical prediction model.
+The twin summarizes a patient's longitudinal recovery trend estimation and simulates
+alternative therapy scenario projections. The system estimates longitudinal recovery trends
+from historical session metrics using the implemented computational model; this should not
+be interpreted as a clinical prognosis or a diagnostic medical model.
 """
 
 from __future__ import annotations

@@ -1,4 +1,4 @@
-﻿"""
+"""
 Main Game Application (PhysioSystem) for the Zero-Keyboard AI Physiotherapy System.
 """
 
@@ -37,7 +37,7 @@ from physio.voice import VOICE
 from physio.sound import SoundSystem
 from physio.particles import ParticleSystem, ScorePopup
 from physio.models import (
-    GameState, AgeGroup, HandData, AssemblyPart, Bubble, FallingItem, Seed
+    GameState, AgeGroup, HandData, AssemblyPart, Bubble, FallingItem, Seed, Coin, Vault
 )
 from physio.camera import WebcamStream
 from physio.hand_engine import HandEngine

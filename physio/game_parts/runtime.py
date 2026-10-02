@@ -281,7 +281,8 @@ class RuntimeMixin:
                 GameState.LEVEL7_WRIST_MECHANICS,
                 GameState.LEVEL8_SMART_ASSEMBLY,
                 GameState.LEVEL9_PRECISION_PATH,
-                GameState.LEVEL10_PRECISION_PATHWAY
+                GameState.LEVEL10_PRECISION_PATHWAY,
+                GameState.LEVEL11_COIN_VAULT
             ]
             is_gameplay = self.state in gameplay_states
             
@@ -311,7 +312,8 @@ class RuntimeMixin:
                                     GameState.LEVEL3_FINEMOTOR, GameState.LEVEL4_COORDINATION,
                                     GameState.LEVEL5_GRIP_RELEASE, GameState.LEVEL6_FINGER_TAPS,
                                     GameState.LEVEL7_WRIST_MECHANICS, GameState.LEVEL8_SMART_ASSEMBLY,
-                                    GameState.LEVEL9_PRECISION_PATH, GameState.LEVEL10_PRECISION_PATHWAY]
+                                    GameState.LEVEL9_PRECISION_PATH, GameState.LEVEL10_PRECISION_PATHWAY,
+                                    GameState.LEVEL11_COIN_VAULT]
         
         now = time.time()
         dt = now - getattr(self, '_last_update_time', now)
@@ -322,6 +324,8 @@ class RuntimeMixin:
             self.tracking_frames_total = getattr(self, 'tracking_frames_total', 0) + 1
             if hand_data.index_tip is not None:
                 self.tracking_frames_valid = getattr(self, 'tracking_frames_valid', 0) + 1
+                self.tracking_valid_duration = getattr(self, 'tracking_valid_duration', 0.0) + dt
+                self.active_engagement_duration = getattr(self, 'active_engagement_duration', 0.0) + dt
 
         if is_playing and hand_data.index_tip is None:
             self.tracking_lost = True
@@ -378,6 +382,9 @@ class RuntimeMixin:
         elif self.state == GameState.LEVEL10_PRECISION_PATHWAY:
             if not getattr(self, 'tracking_lost', False):
                 self._update_level10(hand_data)
+        elif self.state == GameState.LEVEL11_COIN_VAULT:
+            if not getattr(self, 'tracking_lost', False):
+                self._update_level11(hand_data)
         elif self.state == GameState.LEVEL_COMPLETE:
             if time.time() - self._level_complete_time > 2.5:
                 self.state = GameState.RESULTS
@@ -479,6 +486,8 @@ class RuntimeMixin:
             self._draw_level9()
         elif self.state == GameState.LEVEL10_PRECISION_PATHWAY:
             self._draw_level10()
+        elif self.state == GameState.LEVEL11_COIN_VAULT:
+            self._draw_level11()
         elif self.state == GameState.LEVEL_COMPLETE:
             self._draw_level_complete()
         elif self.state == GameState.RESULTS:
@@ -541,7 +550,8 @@ class RuntimeMixin:
                            GameState.LEVEL7_WRIST_MECHANICS,
                            GameState.LEVEL8_SMART_ASSEMBLY,
                            GameState.LEVEL9_PRECISION_PATH,
-                           GameState.LEVEL10_PRECISION_PATHWAY]
+                           GameState.LEVEL10_PRECISION_PATHWAY,
+                           GameState.LEVEL11_COIN_VAULT]
         if self.state in gameplay_states:
             hud_y = 15
             hud_h = 60

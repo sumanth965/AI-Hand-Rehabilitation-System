@@ -52,6 +52,8 @@ LEVEL_NAMES = {
     7: "Forearm Rotation - Rotation Orbit",
     8: "Functional Motor - Smart Assembly",
     9: "Fine Motor - Precision Path",
+    10: "Fine Motor - Precision Pathway",
+    11: "In-Hand Manipulation - Coin Vault",
 }
 
 

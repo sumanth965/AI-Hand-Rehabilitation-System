@@ -20,6 +20,9 @@ class SetupMixin:
         self.font_tiny   = pygame.font.SysFont("segoeui", 16)
         self.font_cd     = pygame.font.SysFont("segoeui", 32)
         self.font_badge  = pygame.font.SysFont("segoeui", 24)
+        self.font_vault  = pygame.font.SysFont("segoeui", 14, bold=True)
+        self.font_phase  = pygame.font.SysFont("segoeui", 11, bold=True)
+        self.font_coin   = pygame.font.SysFont("segoeui", 22, bold=True)
 
         # Cursor trail buffer
         self._cursor_trail: list = []
@@ -108,21 +111,22 @@ class SetupMixin:
         
         cx = GAME_AREA_WIDTH // 2
         bw = 310
-        gap = 30
+        gap = 24
         col1_x = cx - bw - (gap // 2)
         col2_x = cx + (gap // 2)
-        h = 75
+        h = 60
         self.level_buttons = [
-            LevelButton(col1_x, 150, bw, h, "LEVEL 1", 1, ring_radius=30),
-            LevelButton(col2_x, 150, bw, h, "LEVEL 2", 2, ring_radius=30),
-            LevelButton(col1_x, 235, bw, h, "LEVEL 3", 3, ring_radius=30),
-            LevelButton(col2_x, 235, bw, h, "LEVEL 4", 4, ring_radius=30),
-            LevelButton(col1_x, 320, bw, h, "LEVEL 5", 5, ring_radius=30),
-            LevelButton(col2_x, 320, bw, h, "LEVEL 6", 6, ring_radius=30),
-            LevelButton(col1_x, 405, bw, h, "LEVEL 7", 7, ring_radius=30),
-            LevelButton(col2_x, 405, bw, h, "LEVEL 8", 8, ring_radius=30),
-            LevelButton(col1_x, 490, bw, h, "LEVEL 9", 9, ring_radius=30),
-            LevelButton(col2_x, 490, bw, h, "LEVEL 10", 10, ring_radius=30)
+            LevelButton(col1_x, 125, bw, h, "LEVEL 1", 1, ring_radius=26),
+            LevelButton(col2_x, 125, bw, h, "LEVEL 2", 2, ring_radius=26),
+            LevelButton(col1_x, 195, bw, h, "LEVEL 3", 3, ring_radius=26),
+            LevelButton(col2_x, 195, bw, h, "LEVEL 4", 4, ring_radius=26),
+            LevelButton(col1_x, 265, bw, h, "LEVEL 5", 5, ring_radius=26),
+            LevelButton(col2_x, 265, bw, h, "LEVEL 6", 6, ring_radius=26),
+            LevelButton(col1_x, 335, bw, h, "LEVEL 7", 7, ring_radius=26),
+            LevelButton(col2_x, 335, bw, h, "LEVEL 8", 8, ring_radius=26),
+            LevelButton(col1_x, 405, bw, h, "LEVEL 9", 9, ring_radius=26),
+            LevelButton(col2_x, 405, bw, h, "LEVEL 10", 10, ring_radius=26),
+            LevelButton(cx - bw // 2, 475, bw, h, "LEVEL 11", 11, ring_radius=26)
         ]
         # Bottom utility buttons — evenly spaced with smaller rings
         btn_w = 210
