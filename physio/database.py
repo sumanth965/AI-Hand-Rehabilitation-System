@@ -66,7 +66,32 @@ class DatabaseManager:
                     hold_duration REAL DEFAULT 1.5,
                     rotation_tolerance REAL DEFAULT 25.0,
                     assembly_position_tolerance REAL DEFAULT 50.0,
-                    corridor_width REAL DEFAULT 60.0
+                    corridor_width REAL DEFAULT 60.0,
+                    index_successes INTEGER DEFAULT 0,
+                    middle_successes INTEGER DEFAULT 0,
+                    ring_successes INTEGER DEFAULT 0,
+                    pinky_successes INTEGER DEFAULT 0,
+                    index_attempts INTEGER DEFAULT 0,
+                    middle_attempts INTEGER DEFAULT 0,
+                    ring_attempts INTEGER DEFAULT 0,
+                    pinky_attempts INTEGER DEFAULT 0,
+                    unintended_movement_events INTEGER DEFAULT 0,
+                    target_activation_time_avg REAL DEFAULT 0.0,
+                    dwell_success_count INTEGER DEFAULT 0,
+                    dwell_failure_count INTEGER DEFAULT 0,
+                    average_movement_time REAL DEFAULT 0.0,
+                    average_target_error REAL DEFAULT 0.0,
+                    average_overshoot REAL DEFAULT 0.0,
+                    average_hold_stability REAL DEFAULT 0.0,
+                    direction_accuracy REAL DEFAULT 0.0,
+                    card_shift_successes INTEGER DEFAULT 0,
+                    card_shift_attempts INTEGER DEFAULT 0,
+                    average_shift_latency REAL DEFAULT 0.0,
+                    median_shift_latency REAL DEFAULT 0.0,
+                    maximum_shift_latency REAL DEFAULT 0.0,
+                    incorrect_finger_events INTEGER DEFAULT 0,
+                    target_timeouts INTEGER DEFAULT 0,
+                    sequence_completion_rate REAL DEFAULT 0.0
                 )
             """)
             cursor.execute("""
@@ -160,7 +185,37 @@ class DatabaseManager:
                               ("unintended_drops", "INTEGER DEFAULT 0"),
                               ("manipulation_time_avg", "REAL DEFAULT 0.0"),
                               ("placement_time_avg", "REAL DEFAULT 0.0"),
-                              ("correction_count", "INTEGER DEFAULT 0")]:
+                              ("correction_count", "INTEGER DEFAULT 0"),
+                              ("d2_contacts", "INTEGER DEFAULT 0"),
+                              ("d3_contacts", "INTEGER DEFAULT 0"),
+                              ("d4_contacts", "INTEGER DEFAULT 0"),
+                              ("d5_contacts", "INTEGER DEFAULT 0"),
+                              ("opposition_latency_avg", "REAL DEFAULT 0.0"),
+                              ("index_successes", "INTEGER DEFAULT 0"),
+                              ("middle_successes", "INTEGER DEFAULT 0"),
+                              ("ring_successes", "INTEGER DEFAULT 0"),
+                              ("pinky_successes", "INTEGER DEFAULT 0"),
+                              ("index_attempts", "INTEGER DEFAULT 0"),
+                              ("middle_attempts", "INTEGER DEFAULT 0"),
+                              ("ring_attempts", "INTEGER DEFAULT 0"),
+                              ("pinky_attempts", "INTEGER DEFAULT 0"),
+                              ("unintended_movement_events", "INTEGER DEFAULT 0"),
+                              ("target_activation_time_avg", "REAL DEFAULT 0.0"),
+                              ("dwell_success_count", "INTEGER DEFAULT 0"),
+                              ("dwell_failure_count", "INTEGER DEFAULT 0"),
+                              ("average_movement_time", "REAL DEFAULT 0.0"),
+                              ("average_target_error", "REAL DEFAULT 0.0"),
+                              ("average_overshoot", "REAL DEFAULT 0.0"),
+                              ("average_hold_stability", "REAL DEFAULT 0.0"),
+                              ("direction_accuracy", "REAL DEFAULT 0.0"),
+                              ("card_shift_successes", "INTEGER DEFAULT 0"),
+                              ("card_shift_attempts", "INTEGER DEFAULT 0"),
+                              ("average_shift_latency", "REAL DEFAULT 0.0"),
+                              ("median_shift_latency", "REAL DEFAULT 0.0"),
+                              ("maximum_shift_latency", "REAL DEFAULT 0.0"),
+                              ("incorrect_finger_events", "INTEGER DEFAULT 0"),
+                              ("target_timeouts", "INTEGER DEFAULT 0"),
+                              ("sequence_completion_rate", "REAL DEFAULT 0.0")]:
                 try:
                     cursor.execute(f"SELECT {col} FROM sessions LIMIT 1")
                 except sqlite3.OperationalError:
@@ -344,7 +399,37 @@ class DatabaseManager:
                     unintended_drops: int = 0,
                     manipulation_time_avg: float = 0.0,
                     placement_time_avg: float = 0.0,
-                    correction_count: int = 0):
+                    correction_count: int = 0,
+                    d2_contacts: int = 0,
+                    d3_contacts: int = 0,
+                    d4_contacts: int = 0,
+                    d5_contacts: int = 0,
+                    opposition_latency_avg: float = 0.0,
+                    index_successes: int = 0,
+                    middle_successes: int = 0,
+                    ring_successes: int = 0,
+                    pinky_successes: int = 0,
+                    index_attempts: int = 0,
+                    middle_attempts: int = 0,
+                    ring_attempts: int = 0,
+                    pinky_attempts: int = 0,
+                    unintended_movement_events: int = 0,
+                    target_activation_time_avg: float = 0.0,
+                    dwell_success_count: int = 0,
+                    dwell_failure_count: int = 0,
+                    average_movement_time: float = 0.0,
+                    average_target_error: float = 0.0,
+                    average_overshoot: float = 0.0,
+                    average_hold_stability: float = 0.0,
+                    direction_accuracy: float = 0.0,
+                    card_shift_successes: int = 0,
+                    card_shift_attempts: int = 0,
+                    average_shift_latency: float = 0.0,
+                    median_shift_latency: float = 0.0,
+                    maximum_shift_latency: float = 0.0,
+                    incorrect_finger_events: int = 0,
+                    target_timeouts: int = 0,
+                    sequence_completion_rate: float = 0.0):
         try:
             pain_before = int(pain_level if pain_before_session is None else pain_before_session)
             pain_after = int(pain_before if pain_after_session is None else pain_after_session)
@@ -368,8 +453,15 @@ class DatabaseManager:
                    hold_duration, rotation_tolerance, assembly_position_tolerance, corridor_width,
                    successful_pickups, pickup_attempts, successful_translations, translation_attempts,
                    successful_placements, placement_attempts, unintended_drops, manipulation_time_avg,
-                   placement_time_avg, correction_count)
-                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
+                   placement_time_avg, correction_count,
+                   d2_contacts, d3_contacts, d4_contacts, d5_contacts, opposition_latency_avg,
+                   index_successes, middle_successes, ring_successes, pinky_successes,
+                   index_attempts, middle_attempts, ring_attempts, pinky_attempts,
+                   unintended_movement_events, target_activation_time_avg, dwell_success_count, dwell_failure_count,
+                   average_movement_time, average_target_error, average_overshoot, average_hold_stability, direction_accuracy,
+                   card_shift_successes, card_shift_attempts, average_shift_latency, median_shift_latency,
+                   maximum_shift_latency, incorrect_finger_events, target_timeouts, sequence_completion_rate)
+                VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)
             """, (enc_patient_id, level, score, duration, avg_accuracy,
                    max_extension, reach_distance, avg_hand_angle, pain_before,
                    pain_before, pain_after, pain_difference,
@@ -382,7 +474,14 @@ class DatabaseManager:
                    hold_duration, rotation_tolerance, assembly_position_tolerance, corridor_width,
                    successful_pickups, pickup_attempts, successful_translations, translation_attempts,
                    successful_placements, placement_attempts, unintended_drops, manipulation_time_avg,
-                   placement_time_avg, correction_count))
+                   placement_time_avg, correction_count,
+                   d2_contacts, d3_contacts, d4_contacts, d5_contacts, opposition_latency_avg,
+                   index_successes, middle_successes, ring_successes, pinky_successes,
+                   index_attempts, middle_attempts, ring_attempts, pinky_attempts,
+                   unintended_movement_events, target_activation_time_avg, dwell_success_count, dwell_failure_count,
+                   average_movement_time, average_target_error, average_overshoot, average_hold_stability, direction_accuracy,
+                   card_shift_successes, card_shift_attempts, average_shift_latency, median_shift_latency,
+                   maximum_shift_latency, incorrect_finger_events, target_timeouts, sequence_completion_rate))
             
             self.last_session_id = cursor.lastrowid
             

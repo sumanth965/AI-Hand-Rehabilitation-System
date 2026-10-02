@@ -67,6 +67,8 @@ class SetupMixin:
         self.reach_distance = 0.0
         self.accuracy_hits = 0
         self.accuracy_attempts = 0
+        self.successful_hits = 0
+        self.total_attempts = 0
         self.active_prescription = None
         self.session_time_limit = LEVEL_DURATION
         self.adaptive_target_scale = 1.0
@@ -114,19 +116,22 @@ class SetupMixin:
         gap = 24
         col1_x = cx - bw - (gap // 2)
         col2_x = cx + (gap // 2)
-        h = 60
+        h = 54
         self.level_buttons = [
-            LevelButton(col1_x, 125, bw, h, "LEVEL 1", 1, ring_radius=26),
-            LevelButton(col2_x, 125, bw, h, "LEVEL 2", 2, ring_radius=26),
-            LevelButton(col1_x, 195, bw, h, "LEVEL 3", 3, ring_radius=26),
-            LevelButton(col2_x, 195, bw, h, "LEVEL 4", 4, ring_radius=26),
-            LevelButton(col1_x, 265, bw, h, "LEVEL 5", 5, ring_radius=26),
-            LevelButton(col2_x, 265, bw, h, "LEVEL 6", 6, ring_radius=26),
-            LevelButton(col1_x, 335, bw, h, "LEVEL 7", 7, ring_radius=26),
-            LevelButton(col2_x, 335, bw, h, "LEVEL 8", 8, ring_radius=26),
-            LevelButton(col1_x, 405, bw, h, "LEVEL 9", 9, ring_radius=26),
-            LevelButton(col2_x, 405, bw, h, "LEVEL 10", 10, ring_radius=26),
-            LevelButton(cx - bw // 2, 475, bw, h, "LEVEL 11", 11, ring_radius=26)
+            LevelButton(col1_x, 110, bw, h, "LEVEL 1", 1, ring_radius=22),
+            LevelButton(col2_x, 110, bw, h, "LEVEL 2", 2, ring_radius=22),
+            LevelButton(col1_x, 172, bw, h, "LEVEL 3", 3, ring_radius=22),
+            LevelButton(col2_x, 172, bw, h, "LEVEL 4", 4, ring_radius=22),
+            LevelButton(col1_x, 234, bw, h, "LEVEL 5", 5, ring_radius=22),
+            LevelButton(col2_x, 234, bw, h, "LEVEL 6", 6, ring_radius=22),
+            LevelButton(col1_x, 296, bw, h, "LEVEL 7", 7, ring_radius=22),
+            LevelButton(col2_x, 296, bw, h, "LEVEL 8", 8, ring_radius=22),
+            LevelButton(col1_x, 358, bw, h, "LEVEL 9", 9, ring_radius=22),
+            LevelButton(col2_x, 358, bw, h, "LEVEL 10", 10, ring_radius=22),
+            LevelButton(col1_x, 420, bw, h, "LEVEL 11", 11, ring_radius=22),
+            LevelButton(col2_x, 420, bw, h, "LEVEL 12", 12, ring_radius=22),
+            LevelButton(col1_x, 482, bw, h, "LEVEL 13", 13, ring_radius=22),
+            LevelButton(col2_x, 482, bw, h, "LEVEL 14", 14, ring_radius=22)
         ]
         # Bottom utility buttons — evenly spaced with smaller rings
         btn_w = 210
@@ -183,6 +188,25 @@ class SetupMixin:
         self.simon_timer = 0
         self.simon_show_idx = 0
         self.simon_active_pad = None
+        
+        # Level 13 Finger Isolation Challenge state
+        self.isolation_prompts = []
+        self.isolation_active_prompt = None
+        self.isolation_dwell_start = None
+        self.isolation_contact_progress = 0.0
+        self.index_successes = 0
+        self.middle_successes = 0
+        self.ring_successes = 0
+        self.pinky_successes = 0
+        self.index_attempts = 0
+        self.middle_attempts = 0
+        self.ring_attempts = 0
+        self.pinky_attempts = 0
+        self.unintended_movement_events = 0
+        self.target_activation_time_avg = 0.0
+        self.target_activation_times = []
+        self.dwell_success_count = 0
+        self.dwell_failure_count = 0
         
         self.current_level = 0
         

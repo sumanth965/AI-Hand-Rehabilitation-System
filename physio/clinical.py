@@ -158,21 +158,23 @@ class AdvancedCompensationDetector:
             disp = math.hypot(wrist[0] - self.prev_wrist[0], wrist[1] - self.prev_wrist[1])
             self.wrist_velocities.append(disp)
             
-            # 1. Sudden Landmark Translation
-            if disp > 55.0 and len(self.wrist_velocities) > 5:
+            # 1. Sudden Landmark Translation (Calibrated per exercise type)
+            is_rotation_task = current_level in [7, 8]
+            trans_thresh = 55.0 if is_rotation_task else 115.0
+            if disp > trans_thresh and len(self.wrist_velocities) > 5:
                 detected = True
                 comp_type = "Sudden Landmark Translation"
-                desc = "Rotate your forearm instead of shifting your entire arm suddenly."
-                severity = min(1.0, disp / 120.0)
+                desc = "Rotate your forearm instead of shifting your entire arm suddenly." if is_rotation_task else "Maintain a smooth, controlled motion without sudden jerks."
+                severity = min(1.0, disp / (120.0 if is_rotation_task else 200.0))
                 
             # 2. Inconsistent Wrist Movement
             if not detected and len(self.wrist_velocities) >= 15:
                 vel_std = np.std(list(self.wrist_velocities))
-                if vel_std > 18.0:
+                if vel_std > 22.0:
                     detected = True
                     comp_type = "Inconsistent Wrist Movement"
                     desc = "Maintain a steady, controlled motion. Avoid jerking."
-                    severity = min(1.0, vel_std / 35.0)
+                    severity = min(1.0, vel_std / 40.0)
                     
             # 3. Unstable Trajectory
             if not detected and len(self.wrist_velocities) >= 3:
@@ -180,19 +182,19 @@ class AdvancedCompensationDetector:
                 self.jerk_buffer.append(jerk)
                 if len(self.jerk_buffer) >= 15:
                     avg_jerk = np.mean(list(self.jerk_buffer))
-                    if avg_jerk > 12.0:
+                    if avg_jerk > 16.0:
                         detected = True
                         comp_type = "Unstable Trajectory"
                         desc = "Keep your wrist steady and trace along a smooth path."
-                        severity = min(1.0, avg_jerk / 30.0)
+                        severity = min(1.0, avg_jerk / 35.0)
                         
-            # 5. Excessive Lateral Movement
-            if not detected and current_level in [1, 5, 7]:
+            # 5. Excessive Lateral Movement (Applicable only to stationary/in-place exercises)
+            if not detected and current_level in [5, 7]:
                 lat_disp = abs(wrist[0] - self.prev_wrist[0])
                 self.lateral_movements.append(lat_disp)
                 if len(self.lateral_movements) >= 20:
                     avg_lat = np.mean(list(self.lateral_movements))
-                    if avg_lat > 15.0:
+                    if avg_lat > 18.0:
                         detected = True
                         comp_type = "Excessive Lateral Movement"
                         desc = "Rotate your wrist or bend fingers directly. Avoid shifting sideways."

@@ -103,7 +103,10 @@ class NavigationScreenMixin:
             "Functional Spatial Coord\n(Toy Builder)",
             "Precision Path - Dots\n(Hand Trace)",
             "Precision Pathway\n(Fine Motor Control)",
-            "In-Hand Manipulation\n(Coin Vault)"
+            "In-Hand Manipulation\n(Coin Vault)",
+            "In-Hand Manipulation\n(Card Shift Challenge)",
+            "Finger Selective Control\n(Finger Isolation)",
+            "Wrist Control\n(Flexion-Extension)"
         ]
         btn_font = pygame.font.SysFont("segoeui", 14)
         for i, button in enumerate(self.level_buttons):
@@ -113,7 +116,7 @@ class NavigationScreenMixin:
 
         # Instructions
         inst = self.font_tiny.render("Hover your finger over a level to select", True, COLOR_TEXT)
-        inst_rect = inst.get_rect(center=(GAME_AREA_WIDTH // 2, 565))
+        inst_rect = inst.get_rect(center=(GAME_AREA_WIDTH // 2, 560))
         self.screen.blit(inst, inst_rect)
 
         # History, Calibration, and Exit utility buttons

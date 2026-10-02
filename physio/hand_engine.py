@@ -47,6 +47,7 @@ class HandEngine:
         self.index_y_buffer = deque(maxlen=SMOOTHING_WINDOW)
         self.palm_x_buffer = deque(maxlen=SMOOTHING_WINDOW)
         self.palm_y_buffer = deque(maxlen=SMOOTHING_WINDOW)
+        self.wrist_flex_ext_buffer = deque(maxlen=SMOOTHING_WINDOW)
         
         self.mirrored_frame = None
         
@@ -158,6 +159,9 @@ class HandEngine:
             
         index_pos = (int(smooth_x), int(smooth_y))
         thumb_pos = (int(thumb_tip.x * GAME_AREA_WIDTH), int(thumb_tip.y * WINDOW_HEIGHT))
+        middle_pos = (int(middle_tip.x * GAME_AREA_WIDTH), int(middle_tip.y * WINDOW_HEIGHT))
+        ring_pos = (int(ring_tip.x * GAME_AREA_WIDTH), int(ring_tip.y * WINDOW_HEIGHT))
+        pinky_pos = (int(pinky_tip.x * GAME_AREA_WIDTH), int(pinky_tip.y * WINDOW_HEIGHT))
         
         # Palm center
         raw_palm_x = ((wrist.x + middle_mcp.x) / 2) * GAME_AREA_WIDTH
@@ -208,10 +212,47 @@ class HandEngine:
         dx_dev = middle_mcp.x - wrist.x
         dy_dev = middle_mcp.y - wrist.y
         wrist_dev = math.degrees(math.atan2(dy_dev, dx_dev))
+
+        # Wrist Flexion-Extension (Sagittal Plane Movement Proxy)
+        # Evaluates sagittal pitch from 3D landmark depth deflection and 2D orientation.
+        # In MediaPipe Hands, landmark.z is depth relative to the wrist (positive = deeper into screen / away from camera).
+        dz_mcp = middle_mcp.z - wrist.z
+        dz_tip = middle_tip.z - middle_mcp.z
+        palm_h = math.sqrt((middle_mcp.x - wrist.x)**2 + (middle_mcp.y - wrist.y)**2 + 1e-6)
+
+        # Cross product (wrist->middle_mcp) x (index_mcp->pinky_mcp) to determine palm facing
+        v1_x = middle_mcp.x - wrist.x
+        v1_y = middle_mcp.y - wrist.y
+        v2_x = pinky_mcp.x - index_mcp.x
+        v2_y = pinky_mcp.y - index_mcp.y
+        cross_z = v1_x * v2_y - v1_y * v2_x
+        palm_dir = 1.0 if cross_z >= 0 else -1.0
+
+        # Sagittal depth angle:
+        # Tilting wrist backward into Extension moves fingers away (dz > 0) -> positive degrees (up to +45°)
+        # Tilting wrist forward into Flexion moves fingers closer (dz < 0) -> negative degrees (down to -45°)
+        dz_eff = (0.7 * dz_mcp + 0.3 * dz_tip) * palm_dir
+        sagittal_angle = math.degrees(math.atan2(dz_eff, palm_h)) * 1.8
+
+        # Lateral forearm angle support (when hand is oriented horizontally across screen)
+        dx_horiz = middle_mcp.x - wrist.x
+        dy_vert = -(middle_mcp.y - wrist.y)
+        if abs(dx_horiz) > abs(dy_vert) * 1.2:
+            dir_sign = 1.0 if dx_horiz > 0 else -1.0
+            raw_flex_ext = math.degrees(math.atan2(dy_vert, abs(dx_horiz))) * dir_sign
+        else:
+            raw_flex_ext = sagittal_angle
+
+        clamped_angle = float(np.clip(raw_flex_ext, -60.0, 60.0))
+        self.wrist_flex_ext_buffer.append(clamped_angle)
+        wrist_flex_ext = float(weighted_average(self.wrist_flex_ext_buffer))
         
         return HandData(
             index_tip=index_pos,
             thumb_tip=thumb_pos,
+            middle_tip=middle_pos,
+            ring_tip=ring_pos,
+            pinky_tip=pinky_pos,
             palm_center=palm_center,
             wrist=wrist_pos,
             is_pinching=is_pinching,
@@ -220,6 +261,7 @@ class HandEngine:
             knuckle_angles=angles,
             wrist_rotation_angle=wrist_rot,
             wrist_deviation_angle=wrist_dev,
+            wrist_flexion_extension_angle=wrist_flex_ext,
             landmarks=[landmarks]
         )
     

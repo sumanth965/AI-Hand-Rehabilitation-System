@@ -513,10 +513,18 @@ class MedicalSidebarV2:
             return
 
         correctness_lower = correctness_text.lower()
-        is_correct = correctness_lower.startswith(("correct", "good", "ready"))
-        correct_border = (50, 230, 140) if is_correct else (255, 75, 95)
-        correct_bg = (16, 36, 30) if is_correct else (40, 18, 26)
-        correct_txt = (60, 255, 160) if is_correct else (255, 105, 125)
+        if correctness_lower.startswith(("correct", "good", "ready", "holding", "centered", "steady", "on track", "optimal")):
+            correct_border = (50, 230, 140)
+            correct_bg = (16, 36, 30)
+            correct_txt = (60, 255, 160)
+        elif correctness_lower.startswith(("adjust", "caution", "warning", "align", "pinch", "open", "squeeze", "lower")):
+            correct_border = (255, 190, 40)
+            correct_bg = (42, 34, 18)
+            correct_txt = (255, 205, 70)
+        else:
+            correct_border = (255, 75, 95)
+            correct_bg = (40, 18, 26)
+            correct_txt = (255, 105, 125)
         self._status_pill(screen, pygame.Rect(self.x + 12, y, self.width - 24, 32),
                           correctness_text, correct_border, bg_color=correct_bg,
                           text_color=correct_txt, show_reticle=False)
@@ -966,7 +974,7 @@ class PostGameSummary:
 
     def _next_level_rec(self, level: int, accuracy: float) -> str:
         if accuracy >= 75:
-            if level < 3:
+            if level < 12:
                 return f"🚀 RECOMMENDED NEXT: Level {level + 1} — you're ready!"
             return "🏆 All levels complete! Increase session duration or repeat for maintenance."
         return f"🔄 REPEAT Level {level} — aim for 75%+ accuracy before progressing."

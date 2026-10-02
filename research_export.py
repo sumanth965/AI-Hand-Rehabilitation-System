@@ -24,7 +24,10 @@ EXERCISE_NAMES = {
     8: "Smart Assembly",
     9: "Precision Dots",
     10: "Precision Pathway",
-    11: "Coin Vault"
+    11: "Coin Vault",
+    12: "Card Shift Challenge",
+    13: "Finger Isolation",
+    14: "Wrist Flexion-Extension Control"
 }
 
 ACCURACY_TYPES = {
@@ -38,7 +41,10 @@ ACCURACY_TYPES = {
     8: "binary_completion",
     9: "hit_rate",
     10: "path_accuracy",
-    11: "manipulation_success_rate"
+    11: "manipulation_success_rate",
+    12: "completion_rate",
+    13: "finger_isolation_accuracy",
+    14: "wrist_target_accuracy"
 }
 
 CSV_HEADERS = [
@@ -81,6 +87,36 @@ CSV_HEADERS = [
     "Manipulation_Time_Avg",
     "Placement_Time_Avg",
     "Correction_Count",
+    "D2_Contacts",
+    "D3_Contacts",
+    "D4_Contacts",
+    "D5_Contacts",
+    "Opposition_Latency_Avg",
+    "Index_Successes",
+    "Middle_Successes",
+    "Ring_Successes",
+    "Pinky_Successes",
+    "Index_Attempts",
+    "Middle_Attempts",
+    "Ring_Attempts",
+    "Pinky_Attempts",
+    "Unintended_Movement_Events",
+    "Target_Activation_Time_Avg",
+    "Dwell_Success_Count",
+    "Dwell_Failure_Count",
+    "Movement_Time",
+    "Target_Error",
+    "Overshoot",
+    "Hold_Stability",
+    "Direction_Accuracy",
+    "Card_Shift_Successes",
+    "Card_Shift_Attempts",
+    "Average_Shift_Latency",
+    "Median_Shift_Latency",
+    "Maximum_Shift_Latency",
+    "Incorrect_Finger_Events",
+    "Target_Timeouts",
+    "Sequence_Completion_Rate",
     "Previous_Accuracy",
     "Previous_Readiness",
     "Previous_Difficulty",
@@ -124,27 +160,34 @@ def export_research_dataset(
     sessions = cursor.fetchall()
 
     # Query compensation events count by session_id
-    cursor.execute("""
-        SELECT session_id, COUNT(*) as comp_count
-        FROM compensation_events
-        WHERE session_id IS NOT NULL
-        GROUP BY session_id
-    """)
-    comp_counts = {row["session_id"]: row["comp_count"] for row in cursor.fetchall()}
+    comp_counts = {}
+    try:
+        cursor.execute("""
+            SELECT session_id, COUNT(*) as comp_count
+            FROM compensation_events
+            WHERE session_id IS NOT NULL
+            GROUP BY session_id
+        """)
+        comp_counts = {row["session_id"]: row["comp_count"] for row in cursor.fetchall()}
+    except sqlite3.OperationalError:
+        comp_counts = {}
 
     # Query adaptive prescriptions by session_id
-    cursor.execute("""
-        SELECT session_id, difficulty_tier, readiness_score
-        FROM adaptive_prescriptions
-        WHERE session_id IS NOT NULL
-        ORDER BY id ASC
-    """)
     prescriptions_by_session = {}
-    for row in cursor.fetchall():
-        prescriptions_by_session[row["session_id"]] = {
-            "difficulty_tier": row["difficulty_tier"],
-            "readiness_score": row["readiness_score"]
-        }
+    try:
+        cursor.execute("""
+            SELECT session_id, difficulty_tier, readiness_score
+            FROM adaptive_prescriptions
+            WHERE session_id IS NOT NULL
+            ORDER BY id ASC
+        """)
+        for row in cursor.fetchall():
+            prescriptions_by_session[row["session_id"]] = {
+                "difficulty_tier": row["difficulty_tier"],
+                "readiness_score": row["readiness_score"]
+            }
+    except sqlite3.OperationalError:
+        prescriptions_by_session = {}
 
     conn.close()
 
@@ -233,6 +276,37 @@ def export_research_dataset(
             manip_time_avg = f"{s['manipulation_time_avg']:.2f}" if ('manipulation_time_avg' in s.keys() and s['manipulation_time_avg'] is not None and s['manipulation_time_avg'] > 0) else ""
             place_time_avg = f"{s['placement_time_avg']:.2f}" if ('placement_time_avg' in s.keys() and s['placement_time_avg'] is not None and s['placement_time_avg'] > 0) else ""
             correction_count = s["correction_count"] if ('correction_count' in s.keys() and s["correction_count"] is not None) else ""
+            d2_contacts = s["d2_contacts"] if ('d2_contacts' in s.keys() and s["d2_contacts"] is not None) else ""
+            d3_contacts = s["d3_contacts"] if ('d3_contacts' in s.keys() and s["d3_contacts"] is not None) else ""
+            d4_contacts = s["d4_contacts"] if ('d4_contacts' in s.keys() and s["d4_contacts"] is not None) else ""
+            d5_contacts = s["d5_contacts"] if ('d5_contacts' in s.keys() and s["d5_contacts"] is not None) else ""
+            opp_lat_avg = f"{s['opposition_latency_avg']:.2f}" if ('opposition_latency_avg' in s.keys() and s['opposition_latency_avg'] is not None and s['opposition_latency_avg'] > 0) else ""
+
+            idx_succ = s["index_successes"] if ('index_successes' in s.keys() and s["index_successes"] is not None) else ""
+            mid_succ = s["middle_successes"] if ('middle_successes' in s.keys() and s["middle_successes"] is not None) else ""
+            ring_succ = s["ring_successes"] if ('ring_successes' in s.keys() and s["ring_successes"] is not None) else ""
+            pinky_succ = s["pinky_successes"] if ('pinky_successes' in s.keys() and s["pinky_successes"] is not None) else ""
+            idx_att = s["index_attempts"] if ('index_attempts' in s.keys() and s["index_attempts"] is not None) else ""
+            mid_att = s["middle_attempts"] if ('middle_attempts' in s.keys() and s["middle_attempts"] is not None) else ""
+            ring_att = s["ring_attempts"] if ('ring_attempts' in s.keys() and s["ring_attempts"] is not None) else ""
+            pinky_att = s["pinky_attempts"] if ('pinky_attempts' in s.keys() and s["pinky_attempts"] is not None) else ""
+            unintended_events = s["unintended_movement_events"] if ('unintended_movement_events' in s.keys() and s["unintended_movement_events"] is not None) else ""
+            act_time_avg = f"{s['target_activation_time_avg']:.2f}" if ('target_activation_time_avg' in s.keys() and s['target_activation_time_avg'] is not None and s['target_activation_time_avg'] > 0) else ""
+            dwell_succ = s["dwell_success_count"] if ('dwell_success_count' in s.keys() and s["dwell_success_count"] is not None) else ""
+            dwell_fail = s["dwell_failure_count"] if ('dwell_failure_count' in s.keys() and s["dwell_failure_count"] is not None) else ""
+            mov_time = f"{s['average_movement_time']:.2f}" if ('average_movement_time' in s.keys() and s['average_movement_time'] is not None and s['average_movement_time'] > 0) else ""
+            tgt_err = f"{s['average_target_error']:.2f}" if ('average_target_error' in s.keys() and s['average_target_error'] is not None) else ""
+            overshoot = f"{s['average_overshoot']:.2f}" if ('average_overshoot' in s.keys() and s['average_overshoot'] is not None) else ""
+            hold_stab = f"{s['average_hold_stability']:.2f}" if ('average_hold_stability' in s.keys() and s['average_hold_stability'] is not None) else ""
+            dir_acc = f"{s['direction_accuracy']:.2f}" if ('direction_accuracy' in s.keys() and s['direction_accuracy'] is not None) else ""
+            cs_succ = s["card_shift_successes"] if ('card_shift_successes' in s.keys() and s["card_shift_successes"] is not None) else ""
+            cs_att = s["card_shift_attempts"] if ('card_shift_attempts' in s.keys() and s["card_shift_attempts"] is not None) else ""
+            avg_shift_lat = f"{s['average_shift_latency']:.2f}" if ('average_shift_latency' in s.keys() and s['average_shift_latency'] is not None and s['average_shift_latency'] > 0) else ""
+            med_shift_lat = f"{s['median_shift_latency']:.2f}" if ('median_shift_latency' in s.keys() and s['median_shift_latency'] is not None and s['median_shift_latency'] > 0) else ""
+            max_shift_lat = f"{s['maximum_shift_latency']:.2f}" if ('maximum_shift_latency' in s.keys() and s['maximum_shift_latency'] is not None and s['maximum_shift_latency'] > 0) else ""
+            inc_events = s["incorrect_finger_events"] if ('incorrect_finger_events' in s.keys() and s["incorrect_finger_events"] is not None) else ""
+            timeouts = s["target_timeouts"] if ('target_timeouts' in s.keys() and s["target_timeouts"] is not None) else ""
+            seq_comp = f"{s['sequence_completion_rate']:.2f}" if ('sequence_completion_rate' in s.keys() and s['sequence_completion_rate'] is not None) else ""
 
             row = [
                 patient_display_id,
@@ -274,6 +348,36 @@ def export_research_dataset(
                 manip_time_avg,
                 place_time_avg,
                 correction_count,
+                d2_contacts,
+                d3_contacts,
+                d4_contacts,
+                d5_contacts,
+                opp_lat_avg,
+                idx_succ,
+                mid_succ,
+                ring_succ,
+                pinky_succ,
+                idx_att,
+                mid_att,
+                ring_att,
+                pinky_att,
+                unintended_events,
+                act_time_avg,
+                dwell_succ,
+                dwell_fail,
+                mov_time,
+                tgt_err,
+                overshoot,
+                hold_stab,
+                dir_acc,
+                cs_succ,
+                cs_att,
+                avg_shift_lat,
+                med_shift_lat,
+                max_shift_lat,
+                inc_events,
+                timeouts,
+                seq_comp,
                 prev_acc,
                 prev_readiness,
                 prev_diff,

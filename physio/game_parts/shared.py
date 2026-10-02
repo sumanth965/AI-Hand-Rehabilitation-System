@@ -37,7 +37,7 @@ from physio.voice import VOICE
 from physio.sound import SoundSystem
 from physio.particles import ParticleSystem, ScorePopup
 from physio.models import (
-    GameState, AgeGroup, HandData, AssemblyPart, Bubble, FallingItem, Seed, Coin, Vault
+    GameState, AgeGroup, HandData, AssemblyPart, Bubble, FallingItem, Seed, Coin, Vault, OppositionPrompt, IsolationPrompt, WristControlTarget, CardShiftPrompt
 )
 from physio.camera import WebcamStream
 from physio.hand_engine import HandEngine

@@ -54,6 +54,9 @@ LEVEL_NAMES = {
     9: "Fine Motor - Precision Path",
     10: "Fine Motor - Precision Pathway",
     11: "In-Hand Manipulation - Coin Vault",
+    12: "In-Hand Manipulation - Card Shift Challenge",
+    13: "Finger Selective Control - Finger Isolation",
+    14: "Wrist Control - Flexion Extension",
 }
 
 

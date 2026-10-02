@@ -19,7 +19,7 @@
 4. [Research Questions](#4-research-questions)
 5. [Hypotheses](#5-hypotheses)
 6. [Complete System Architecture](#6-complete-system-architecture)
-7. [Exercise Library (Complete 11-Level Catalog)](#7-exercise-library)
+7. [Exercise Library (Complete 13-Level Catalog)](#7-exercise-library)
 8. [Computer Vision Methodology](#8-computer-vision-methodology)
 9. [Accuracy Methodology](#9-accuracy-methodology)
 10. [Accuracy Type Taxonomy](#10-accuracy-type-taxonomy)
@@ -74,7 +74,7 @@ Recent advancements in real-time deep learning for computer vision (specifically
 This project introduces the **AI Hand Rehabilitation System**, an integrated cyber-physical rehabilitation platform that unifies:
 - **Zero-Keyboard Natural User Interface (NUI):** Full hands-free menu navigation and exercise interaction via gesture hover selection and fist/pinch mechanics.
 - **Biomechanical Telemetry:** Continuous webcam-derived tracking of 21 hand landmarks and 33 pose landmarks.
-- **11-Level Progressive Gamified Exercise Suite:** Ranging from gross finger flexion to fine-motor pinch-and-drop, forearm pronation/supination, precision pathway tracking, and in-hand manipulation.
+- **14-Level Progressive Gamified Exercise Suite:** Ranging from gross finger flexion to fine-motor pinch-and-drop, forearm pronation/supination, precision pathway tracking, in-hand manipulation (coin vault and card shift challenge), isolated finger motor control, and wrist flexion-extension control.
 - **Multi-Dimensional Movement Quality & Compensation Tracking:** Explicit detection of abnormal wrist translations, jerky trajectories, and compensatory shoulder elevation, shoulder abduction, elbow drift, and trunk lean.
 - **Deterministic Closed-Loop Adaptive AI Engine:** Rule-based prescription algorithm computing patient readiness, risk levels, and 5-tier difficulty parameterization.
 - **Clinician Dashboard & Audit Pipeline:** Local clinician analytics server, Digital Twin trajectory modeling, and standardized IRB/research-ready pseudonymized CSV export (`research_export.py`).
@@ -133,7 +133,7 @@ pie title Research Contribution Classification
 ```
 
 #### A. Implemented and Verified in Software Architecture
-- **11-Level Gamified Rehabilitation Framework:** Fully functional Pygame runtime executing 11 clinically mapped exercises with zero keyboard requirement.
+- **13-Level Gamified Rehabilitation Framework:** Fully functional Pygame runtime executing 13 clinically mapped exercises with zero keyboard requirement.
 - **Per-Exercise Mathematical Accuracy Engine:** Implemented discrete denominators, raw hit/attempt counters, and handling of edge cases (0 attempts = `NULL` / `NO_VALID_ATTEMPTS`).
 - **Kinematic Movement Quality Pipeline:** Real-time jerk-derived smoothness, hold stability standard deviation, and composite movement quality calculations (`physio/clinical.py`).
 - **Upper-Limb & Hand Compensation Detectors:** Dual-layer compensation logic tracking wrist velocity anomalies and MediaPipe Pose shoulder/elbow/trunk deviations.
@@ -204,7 +204,7 @@ flowchart TD
     end
 
     subgraph Runtime Layer [Exercise Engine & Game Loop]
-        FE --> EX[11-Level Exercise Runtime: Pygame 60 FPS]
+        FE --> EX[13-Level Exercise Runtime: Pygame 60 FPS]
         EX --> ACC[Accuracy Engine: Taxonomical Attempt/Hit Resolvers]
         EX --> PN[Self-Reported Pain Module: NRS 0-10 Before/After]
     end
@@ -253,7 +253,7 @@ A paramount architectural design principle implemented in `adaptive_ai_engine.py
 
 ### 7. Exercise Library
 
-The following catalog represents the **11 active exercise levels** implemented in `physio/game_parts/gameplay.py`:
+The following catalog represents the **13 active exercise levels** implemented in `physio/game_parts/gameplay.py`:
 
 | Level | Implemented Exercise Name | Clinical / Therapeutic Purpose | Accuracy Type Taxonomy | Attempt Definition ($D$) | Success Definition ($N$) | Failure Definition | Primary Metrics Recorded |
 | :---: | :--- | :--- | :--- | :--- | :--- | :--- | :--- |
@@ -268,6 +268,8 @@ The following catalog represents the **11 active exercise levels** implemented i
 | **9** | **Precision Dots** | Static targeting, point-to-point fine motor accuracy | `hit_rate` | Total numbered dots in sequence + penalty attempts for wrong touches | Touching active dot in exact numerical ascending sequence | Touching wrong numbered dot or timeout with unreached dots | Dot hits, Out-of-sequence errors, Max reach distance |
 | **10** | **Precision Pathway** | Corridor-constrained motor tracking, boundary control | `path_accuracy` | Total trajectory tracking samples recorded along path corridor | Tracking sample index tip within corridor half-width ($dist \le width/2$) | Tracking sample strays beyond corridor half-width ($dist > width/2$) | On-path samples, Total samples, Boundary violations, Deviation |
 | **11** | **Coin Vault** | In-hand manipulation: finger-to-palm translation, palm shift, palm-to-finger translation, and precision vault docking (virtual in-hand manipulation proxy) | `manipulation_success_rate` | Each presented coin manipulation cycle initiated | Coin pinched, translated to palm, held for required duration, repositioned to fingertip, and docked in matching vault | Coin dropped, incorrect vault, or timeout | Manipulation success %, Pickups, Translations, Placements, Drops, Manipulation time |
+| **12** | **Card Shift Challenge** | In-hand manipulation and finger shifting motor training; shifting a virtual card across finger pads (Palm -> Index -> Middle -> Ring -> Pinky) using controlled finger targeting and dwell hold | `completion_rate` | Prescribed card shift prompt presentation (source to target) | User navigates card to target finger pad ($dist \le \text{tolerance}$) and sustains dwell hold | Contact with incorrect finger pad or prompt timeout | Card shift successes, Card shift attempts, Shift latency (avg/median/max), Incorrect finger events, Target timeouts, Sequence completion rate |
+| **13** | **Finger Isolation** | Isolated digital motor control (selective individual finger extension) while actively monitoring involuntary co-activation (enslaving effect) of non-target digits | `finger_isolation_accuracy` | Each isolated finger presentation round | Target finger extended ($\theta \ge 130^\circ - 150^\circ$) while all non-target fingers remain still ($\theta \le 120^\circ - 140^\circ$) for hold duration ($0.40 - 0.70\text{s}$) | Unintended non-target movement or prompt timeout | Hits, Attempts, Index/Middle/Ring/Pinky successes and attempts, Unintended movement events, Target activation time, Dwell successes/failures |
 
 > [!NOTE]
 > **Exercise-Specific Technical & Clinical Caveats:**
@@ -277,6 +279,8 @@ The following catalog represents the **11 active exercise levels** implemented i
 > - **Level 7 (Rotation Orbit):** Provides a webcam-based forearm rotation training task using the relative orientation of hand landmarks as a proxy for rotational movement. True anatomical pronation/supination occurs in 3D radial-ulnar geometry; the 2D planar projection used is sensitive to camera orientation, wrist flexion/extension confounding, and upper-limb compensation.
 > - **Levels 3 & 8 (Self-Occlusion):** When thumb and index finger overlap from the camera viewpoint, landmark visibility and tracking confidence may decrease, potentially causing incorrect pinch-state transitions or unintended object release.
 > - **Level 11 (Coin Vault):** Extends the exercise library with a task-specific virtual in-hand manipulation module, introducing a motor-control category that differs from external object dragging and simple point-targeting tasks. The system does not directly observe or measure physical object translation inside the patient's hand. Level 11 represents a virtual in-hand manipulation task whose performance is inferred from webcam-derived hand landmark configurations.
+> - **Level 12 (Card Shift Challenge):** Evaluates in-hand manipulation and finger shifting across finger pads. Dwell time distinguishes intentional targeting from transient crossings. While inspired by clinical in-hand manipulation assessments (such as the Box and Block or Nine-Hole Peg Test manipulation phases), it is a software-derived vision proxy and does not measure tactile friction, skin shear, or physical contact force.
+> - **Level 13 (Finger Isolation):** Evaluates isolated digital extension and selective motor control. Uses MCP knuckle angles ($L_5, L_9, L_{13}, L_{17}$) to measure active extension of the target digit while actively verifying stillness in non-target digits. Biomechanical coupling (juncturae tendinum) between the ring finger and adjacent digits is recognized, and thresholds are adaptive heuristics. This exercise represents a webcam-derived motor-control proxy and must not be interpreted as an electromyographic (EMG) or diagnostic assessment of spasticity or motor cortex integrity.
 
 #### 7.11 Level 11 Deep-Dive: Coin Vault (In-Hand Manipulation)
 
@@ -333,6 +337,121 @@ stateDiagram-v2
 > [!CAUTION]
 > **Virtual In-Hand Manipulation Proxy Limitation:**
 > Commodity monocular RGB webcams cannot view or track a physical coin hidden within an occluded human palm. Level 11 is an **inferred virtual manipulation proxy**. The system tracks the patient's normalized hand landmark geometry (finger flexion, knuckle angles, and pinch distance relative to the palm center) to infer in-hand manipulation states, rather than tracking a physical token inside the palm.
+
+#### 7.12 Level 12 Deep-Dive: Card Shift Challenge / Target Touch (In-Hand Manipulation / Finger Shifting)
+
+##### 1. Clinical / Therapeutic Rehabilitation Focus
+Level 12 targets in-hand manipulation and finger shifting:
+- **Clinical Task Category:** In-Hand Manipulation / Finger Shifting.
+- **Biomechanical Movement:** Dynamic thumb navigation across discrete anatomical finger landmarks (Palm, Index, Middle, Ring, Pinky), training fine digital coordination, dynamic finger repositioning, and inter-digit motor control.
+- **Simplified Patient-Friendly Interface:** The interaction presents a clear, direct "Thumb-to-Finger Target Touch" mental model:
+  - Highlights one high-contrast target at a time (`🎯 TARGET: [FINGER]`, `👍 Move thumb → [TARGET]`, `HOLD BRIEFLY ✓`).
+  - Animated non-blocking movement guide arrow (`thumb_pos ──► target_pos`) with a traveling pulse at prompt onset.
+  - Large finger icons/emojis (👍 Thumb, ☝️ Index, 🖕 Middle, 💍 Ring, 🤙 Pinky, ✋ Palm).
+  - Eliminates card-playing analogies and complex multi-pad mental loads while preserving underlying clinical shifting trajectories.
+- **Differentiation from Other Levels:** Does not involve external object dragging, bubble popping, path tracing, rotation, grip-release, pinch-and-drop, precision-dot, or isolated single-digit extension. Focuses specifically on shifting the thumb across consecutive anatomical finger locations within the hand.
+
+##### 2. Landmark Features & Contact Metric
+- **Anatomical Contact Coordinates:**
+  - Palm: $(x_{palm}, y_{palm}) = \left(\frac{x_0 + x_9}{2}, \frac{y_0 + y_9}{2}\right)$
+  - Index Tip: Landmark $L_8$
+  - Middle Tip: Landmark $L_{12}$
+  - Ring Tip: Landmark $L_{16}$
+  - Pinky Tip: Landmark $L_{20}$
+  - Shifting Effector: Active thumb tip ($L_4$)
+- **Target Reach Threshold:** $d(\text{effector}, \text{target}) \le \text{tolerance} \times \text{target\_scale}$ (Tier 1: 55px down to Tier 5: 35px).
+- **Shift Stabilization Dwell Hold:** Sustained contact required for $0.15\text{ s} - 0.25\text{ s}$ (Tier 1: 0.15s, Tier 2: 0.18s, Tier 3: 0.20s, Tier 4: 0.23s, Tier 5: 0.25s) to confirm stability and eliminate accidental crossing artifacts.
+- **Adaptive Sequence Progression:**
+  - Tier 1: Palm $\to$ Index $\to$ Palm $\to$ Middle $\to$ Palm (5 targets)
+  - Tier 2: Palm $\to$ Index $\to$ Middle $\to$ Palm $\to$ Ring $\to$ Palm (6 targets)
+  - Tier 3: Index $\to$ Middle $\to$ Ring $\to$ Pinky $\to$ Middle $\to$ Index (6 targets)
+  - Tier 4: Mixed finger sequence (8 targets)
+  - Tier 5: Dynamic non-consecutive sequence (10 targets)
+- **Card Shift Metrics Tracked & Persisted (Database & Research CSV):**
+  - `card_shift_successes` & `card_shift_attempts`
+  - `average_shift_latency`, `median_shift_latency`, `maximum_shift_latency`
+  - `incorrect_finger_events` (contact with non-target finger pad)
+  - `target_timeouts` (expiry without contact)
+  - `sequence_completion_rate`
+  - `accuracy` & `accuracy_type = "completion_rate"`
+  - `tracking_quality` & `quality_flag`
+
+##### 3. Vision Proxy Limitation & Disclaimers
+Level 12 provides a 2D optical proxy for in-hand shifting. It does NOT measure tactile friction, contact pressure, skin shear force, or physical object grasp stability.
+
+---
+
+#### 7.13 Level 13 Deep-Dive: Finger Isolation Challenge (Isolated Digital Motor Control)
+
+##### 1. Clinical / Therapeutic Rehabilitation Focus
+Level 13 evaluates and retrains **isolated digital motor control** (finger individuation) — the capacity to selectively extend an individual digit while inhibiting involuntary movement in the non-target digits:
+- **Mitigating the Enslaving Effect:** In human hand biomechanics, finger movements are naturally coupled via two distinct mechanisms:
+  1. *Peripheral Biomechanical Coupling:* Juncturae tendinum (inter-tendinous connections between the extensor digitorum tendons in the dorsal hand) mechanically link adjacent digits, most notably between the Ring (D4) and Middle (D3) / Pinky (D5) fingers.
+  2. *Central Neural Coupling:* Overlapping cortical representations within the primary motor cortex (M1) and shared multi-digit motor unit recruitment in the deep flexor/extensor muscle compartments cause involuntary co-activation ("enslaving").
+- Following cortical stroke, traumatic brain injury, or focal dystonia, selective corticospinal inhibition is frequently impaired, causing patients to lose individuation and express broad flexor/extensor synergy patterns. Level 13 provides an objective, real-time training loop to isolate individual digits and rebuild selective inhibitory motor control.
+
+##### 2. Explicit Differentiation from Existing Exercise Modules
+- **Differentiation from Level 6 (Memory Sequence):** Level 6 tests sequence recall and gross spatial hover targeting. It imposes zero constraints on hand pose or non-target fingers; a patient may tap pads using a fist or extended fingers.
+- **Differentiation from Level 12 (Card Shift Challenge):** Level 12 evaluates in-hand shifting between palm and finger pads, assessing dynamic repositioning. It does not measure isolated extension or require non-target finger stillness.
+- **Level 13 Specificity:** Exclusively monitors single-digit active extension while continuously enforcing angular stillness boundaries across all three non-target digits.
+
+##### 3. Finite State Machine (4 Discrete States)
+```mermaid
+stateDiagram-v2
+    [*] --> RESTING
+    RESTING --> TARGET_PRESENTED : Baseline Hand Stabilized
+    TARGET_PRESENTED --> DWELL_HOLDING : Target Angle >= Threshold & Non-Target Angles <= Threshold
+    DWELL_HOLDING --> TARGET_PRESENTED : Target Relaxed Early OR Unintended Non-Target Extension
+    DWELL_HOLDING --> SUCCESS : Dwell Duration Satisfied (0.40s - 0.70s)
+    TARGET_PRESENTED --> MOTOR_FAILURE : Attempt Timeout (8.0s - 14.0s)
+    SUCCESS --> RESTING : Brief Pause (0.5s)
+    MOTOR_FAILURE --> RESTING : Brief Pause (0.5s)
+```
+
+##### 4. Landmark Features & Mathematical Formulations
+- **MCP Knuckle Landmarks:** Index ($L_5$), Middle ($L_9$), Ring ($L_{13}$), Little/Pinky ($L_{17}$).
+- **Fingertip Landmarks:** Index ($L_8$), Middle ($L_{12}$), Ring ($L_{16}$), Little/Pinky ($L_{20}$).
+- **Individual Knuckle Extension Angle ($\theta_i$):** Computed using the Law of Cosines for each digit $i \in \{Index, Middle, Ring, Pinky\}$ between Wrist ($L_0$), MCP ($L_{MCP,i}$), and Fingertip ($L_{TIP,i}$):
+  $$\cos(\theta_i) = \frac{\|L_0 - L_{MCP,i}\|^2 + \|L_{TIP,i} - L_{MCP,i}\|^2 - \|L_{TIP,i} - L_0\|^2}{2 \cdot \|L_0 - L_{MCP,i}\| \cdot \|L_{TIP,i} - L_{MCP,i}\|}$$
+  $$\theta_i = \arccos\left(\operatorname{clamp}\left(\cos(\theta_i), -1.0, 1.0\right)\right) \times \frac{180}{\pi}$$
+- **Target Extension Threshold ($\theta_{ext\_thresh}$):**
+  $$\theta_{ext\_thresh} = 130^\circ + 5^\circ \times (\text{tier} - 1) \quad [130^\circ \text{ at Tier 1} \to 150^\circ \text{ at Tier 5}]$$
+- **Unintended Movement / Stillness Threshold ($\theta_{still\_thresh}$):**
+  $$\theta_{still\_thresh} = 140^\circ - 5^\circ \times (\text{tier} - 1) \quad [140^\circ \text{ at Tier 1} \to 120^\circ \text{ at Tier 5}]$$
+  A non-target movement event is flagged if $\exists j \neq \text{target} \text{ such that } \theta_j > \theta_{still\_thresh}$, debounced with an 800 ms refractory period.
+- **Sustained Dwell Time Requirement ($t_{dwell\_req}$):**
+  $$t_{dwell\_req} = 0.40\text{ s} + 0.075\text{ s} \times (\text{tier} - 1) \quad [0.40\text{ s at Tier 1} \to 0.70\text{ s at Tier 5}]$$
+
+##### 5. Raw Performance Metrics & Research Integrity
+- **Raw Accuracy Type:** `accuracy_type = "finger_isolation_accuracy"`.
+  $$\text{Accuracy (\%)} = \begin{cases} 
+  \operatorname{round}\left(\frac{\text{successful\_hits}}{\text{total\_attempts}} \times 100, \, 2\right) & \text{if } \text{total\_attempts} > 0 \\
+  \text{NULL} & \text{if } \text{total\_attempts} = 0 
+  \end{cases}$$
+- **Digit-Specific Tracking (Numerators & Denominators):**
+  - Index: `index_successes / index_attempts`
+  - Middle: `middle_successes / middle_attempts`
+  - Ring: `ring_successes / ring_attempts`
+  - Pinky: `pinky_successes / pinky_attempts`
+- **Co-activation & Dwell Telemetry:**
+  - `unintended_movement_events`: Count of non-target finger involuntary extension spikes.
+  - `target_activation_time_avg`: Mean latency in seconds from prompt presentation to target extension detection.
+  - `dwell_success_count`: Prompts where sustained dwell was completed without release or co-activation.
+  - `dwell_failure_count`: Prompts where target extended but dwell hold broke before completion.
+- **Quality Flags:**
+  - `VALID`: Valid session with $\ge 1$ attempt, $\ge 50\%$ tracking quality, normal completion.
+  - `MOTOR_FAILURE`: Attempts were made, but 0 hits achieved due to severe motor paresis or coordination deficit.
+  - `NO_VALID_ATTEMPTS`: Zero prompt interactions initiated within the session.
+  - `TRACKING_ERROR`: MediaPipe tracking quality dropped below 50.0%.
+  - `ABORTED_SESSION`: User exited prior to session timer completion.
+
+##### 6. Computer Vision & Biomechanical Limitations Notice
+> [!CAUTION]
+> **Webcam-Derived Finger Isolation Proxy Limitation:**
+> 1. **Proxy Definition:** Level 13 provides a **webcam-derived finger isolation and motor-control proxy**. It monitors surface joint kinematics from 2D/3D visual landmarks. It does NOT record surface or intramuscular electromyography (sEMG) and cannot directly measure physiological muscle activation or motor unit firing rates.
+> 2. **No Diagnostic Claim:** The system cannot diagnose focal hand dystonia, spasticity, upper motor neuron syndrome, or corticospinal tract lesion severity.
+> 3. **Biomechanical Juncturae Tendinum:** Due to normal anatomical connective tissue between extensor tendons (especially the ring finger), isolated extension of the ring finger while keeping middle and pinky fingers flexed is biomechanically restricted even in healthy neurotypical adults. Unintended movement flags on the ring finger must be evaluated with this anatomical coupling in mind.
+> 4. **Optical Constraints:** Monocular RGB hand tracking is susceptible to viewpoint self-occlusion (e.g. hand rotated edge-on to the camera) and poor ambient lighting. Patients must face their palm flat toward the camera for accurate landmark angle computation.
 
 ---
 
@@ -395,7 +514,8 @@ If tracking is lost (e.g., patient moved hand outside camera view for 70% of the
 ├────────────────────┼───────────┼──────────────┼──────────────┼──────────────┤
 │ hit_rate           │ L1, L2,   │ Targets      │ Total        │ Point-to-    │
 │                    │ L3, L6,   │ successfully │ presented    │ point visual │
-│                    │ L7, L9    │ reached      │ opportunities│ targeting    │
+│                    │ L7, L9,   │ reached /    │ opportunities│ targeting /  │
+│                    │ L12       │ opposed      │              │ opposition   │
 ├────────────────────┼───────────┼──────────────┼──────────────┼──────────────┤
 │ proximity_rate     │ L4        │ Waypoints    │ Total sampled│ Dynamic path │
 │                    │           │ within radius│ trajectory   │ tracking     │
@@ -416,6 +536,12 @@ If tracking is lost (e.g., patient moved hand outside camera view for 70% of the
 │ success_rate       │           │ in-hand      │ manipulation │ manipulation │
 │                    │           │ placements   │ cycles       │ task         │
 │                    │           │ in vault     │ initiated    │ performance  │
+├────────────────────┼───────────┼──────────────┼──────────────┼──────────────┤
+│ finger_isolation_  │ L13       │ Isolated     │ Total        │ Discrete     │
+│ accuracy           │           │ digit holds  │ isolation    │ selective    │
+│                    │           │ completed    │ rounds       │ digital motor│
+│                    │           │ with still   │ presented    │ control and  │
+│                    │           │ non-targets  │              │ inhibition   │
 └────────────────────┴───────────┴──────────────┴──────────────┴──────────────┘
 ```
 
@@ -603,7 +729,7 @@ Implemented in `physio/database.py` (`predict_recovery_progress`):
 
 ### 18. Master Research Variables Table
 
-The following 45 research variables are extracted directly by `research_export.py` and persisted in SQLite:
+The following 62 research variables are extracted directly by `research_export.py` and persisted in SQLite:
 
 | # | Variable Name | Data Type | Database Source Field | Operational Unit / Range | Status | Research Utility |
 | :---: | :--- | :---: | :--- | :--- | :---: | :--- |
@@ -611,9 +737,9 @@ The following 45 research variables are extracted directly by `research_export.p
 | **2** | `Session_ID` | Integer | `sessions.id` | $1, 2, 3 \dots$ | Validated | Unique session key for SQL auditing |
 | **3** | `Date` | Datetime | `sessions.timestamp` | ISO 8601 string | Validated | Time-series and adherence tracking |
 | **4** | `Exercise` | String | `sessions.exercise_name` | Name string (e.g. Bubble Pop) | Validated | Factorial exercise stratifications |
-| **5** | `Level` | Integer | `sessions.level` | $1 - 11$ | Validated | Exercise level covariate |
+| **5** | `Level` | Integer | `sessions.level` | $1 - 13$ | Validated | Exercise level covariate |
 | **6** | `Difficulty` | Integer | `sessions.difficulty_tier` | $1 - 5$ | Validated | Difficulty state classification |
-| **7** | `Accuracy_Type` | String | `sessions.accuracy_type` | Categorical (6 classes) | Validated | Stratification filter (prevents invalid pooling) |
+| **7** | `Accuracy_Type` | String | `sessions.accuracy_type` | Categorical (7 classes) | Validated | Stratification filter (prevents invalid pooling) |
 | **8** | `Successful_Hits` | Integer | `sessions.successful_hits` | $0 - N$ integer | Validated | Raw performance numerator |
 | **9** | `Total_Attempts` | Integer | `sessions.total_attempts` | $0 - N$ integer | Validated | Raw performance denominator |
 | **10** | `Accuracy` | Float | `sessions.avg_accuracy` | $0.0 - 100.0$ (or NULL) | Validated | Primary outcome metric |
@@ -632,26 +758,43 @@ The following 45 research variables are extracted directly by `research_export.p
 | **23** | `Target_Scale` | Float | `sessions.target_scale` | $0.5 - 2.0\times$ | Validated | Adaptive target scaling factor |
 | **24** | `Speed_Scale` | Float | `sessions.speed_scale` | $0.5 - 2.0\times$ | Validated | Adaptive gameplay speed multiplier |
 | **25** | `Session_Time_Limit`| Float | `sessions.session_time_limit` | Seconds ($30 - 70$) | Validated | Adaptive exercise duration window |
-| **26** | `Hold_Duration` | Float | `sessions.hold_duration` | Seconds ($0.8 - 2.1$) | Validated | Static angle hold requirement (Level 7, 11) |
+| **26** | `Hold_Duration` | Float | `sessions.hold_duration` | Seconds ($0.4 - 2.1$) | Validated | Static angle/dwell requirement (Levels 7, 11, 13) |
 | **27** | `Rotation_Tolerance`| Float | `sessions.rotation_tolerance` | Degrees ($\pm 16 - 40^\circ$) | Validated | Angular locking tolerance (Level 7) |
 | **28** | `Assembly_Tolerance`| Float | `sessions.assembly_position_tolerance` | Pixels ($32 - 85\text{ px}$) | Validated | Spatial placement tolerance (Level 8) |
 | **29** | `Corridor_Width` | Float | `sessions.corridor_width` | Pixels ($40 - 80\text{ px}$) | Validated | Corridor boundary half-width (Level 10) |
-| **30** | `Previous_Accuracy` | Float | Derived from historical lag | $0.0 - 100.0$ % | Derived | Longitudinal state transition analysis |
-| **31** | `Previous_Readiness`| Float | Derived from historical lag | $0.0 - 100.0$ | Derived | Longitudinal adaptation trajectory |
-| **32** | `Previous_Difficulty`| Integer| Derived from historical lag | $1 - 5$ tier | Derived | Difficulty tier transitions |
-| **33** | `New_Difficulty` | Integer | `adaptive_prescriptions.difficulty_tier` | $1 - 5$ tier | Validated | Adaptive AI prescription choice |
-| **34** | `Session_Aborted` | Integer | `sessions.session_aborted` | $0 \text{ or } 1$ | Validated | Dropout / task frustration marker |
-| **35** | `Quality_Flag` | String | `sessions.quality_flag` | `VALID`, `TRACKING_ERROR`... | Validated | Data cleaning / inclusion filter |
-| **36** | `Successful_Pickups` | Integer | `sessions.successful_pickups` | $0 - N$ count | Validated | In-hand phase 1 success (Level 11) |
-| **37** | `Pickup_Attempts` | Integer | `sessions.pickup_attempts` | $0 - N$ count | Validated | In-hand phase 1 attempts (Level 11) |
-| **38** | `Successful_Translations` | Integer | `sessions.successful_translations` | $0 - N$ count | Validated | Finger-to-palm translation success (Level 11) |
-| **39** | `Translation_Attempts` | Integer | `sessions.translation_attempts` | $0 - N$ count | Validated | Finger-to-palm translation attempts (Level 11) |
-| **40** | `Successful_Placements` | Integer | `sessions.successful_placements` | $0 - N$ count | Validated | Vault placement success (Level 11) |
-| **41** | `Placement_Attempts` | Integer | `sessions.placement_attempts` | $0 - N$ count | Validated | Vault placement attempts (Level 11) |
-| **42** | `Unintended_Drops` | Integer | `sessions.unintended_drops` | $0 - N$ count | Validated | In-hand motor failure drops (Level 11) |
-| **43** | `Manipulation_Time_Avg` | Float | `sessions.manipulation_time_avg` | Seconds ($0.0 - N$) | Validated | Mean in-hand translation duration (Level 11) |
-| **44** | `Placement_Time_Avg` | Float | `sessions.placement_time_avg` | Seconds ($0.0 - N$) | Validated | Mean vault positioning duration (Level 11) |
-| **45** | `Correction_Count` | Integer | `sessions.correction_count` | $0 - N$ count | Validated | Wrong vault placement corrections (Level 11) |
+| **30** | `Successful_Pickups` | Integer | `sessions.successful_pickups` | $0 - N$ count | Validated | In-hand phase 1 success (Level 11) |
+| **31** | `Pickup_Attempts` | Integer | `sessions.pickup_attempts` | $0 - N$ count | Validated | In-hand phase 1 attempts (Level 11) |
+| **32** | `Successful_Translations` | Integer | `sessions.successful_translations` | $0 - N$ count | Validated | Finger-to-palm translation success (Level 11) |
+| **33** | `Translation_Attempts` | Integer | `sessions.translation_attempts` | $0 - N$ count | Validated | Finger-to-palm translation attempts (Level 11) |
+| **34** | `Successful_Placements` | Integer | `sessions.successful_placements` | $0 - N$ count | Validated | Vault placement success (Level 11) |
+| **35** | `Placement_Attempts` | Integer | `sessions.placement_attempts` | $0 - N$ count | Validated | Vault placement attempts (Level 11) |
+| **36** | `Unintended_Drops` | Integer | `sessions.unintended_drops` | $0 - N$ count | Validated | In-hand motor failure drops (Level 11) |
+| **37** | `Manipulation_Time_Avg` | Float | `sessions.manipulation_time_avg` | Seconds ($0.0 - N$) | Validated | Mean in-hand translation duration (Level 11) |
+| **38** | `Placement_Time_Avg` | Float | `sessions.placement_time_avg` | Seconds ($0.0 - N$) | Validated | Mean vault positioning duration (Level 11) |
+| **39** | `Correction_Count` | Integer | `sessions.correction_count` | $0 - N$ count | Validated | Wrong vault placement corrections (Level 11) |
+| **40** | `D2_Contacts` | Integer | `sessions.d2_contacts` | $0 - N$ count | Validated | Thumb-to-Index opposition contacts (Level 12) |
+| **41** | `D3_Contacts` | Integer | `sessions.d3_contacts` | $0 - N$ count | Validated | Thumb-to-Middle opposition contacts (Level 12) |
+| **42** | `D4_Contacts` | Integer | `sessions.d4_contacts` | $0 - N$ count | Validated | Thumb-to-Ring opposition contacts (Level 12) |
+| **43** | `D5_Contacts` | Integer | `sessions.d5_contacts` | $0 - N$ count | Validated | Thumb-to-Pinky opposition contacts (Level 12) |
+| **44** | `Opposition_Latency_Avg` | Float | `sessions.opposition_latency_avg` | Seconds ($0.0 - N$) | Validated | Mean thumb opposition contact latency (Level 12) |
+| **45** | `Index_Successes` | Integer | `sessions.index_successes` | $0 - N$ count | Validated | Isolated index finger extensions (Level 13) |
+| **46** | `Middle_Successes` | Integer | `sessions.middle_successes` | $0 - N$ count | Validated | Isolated middle finger extensions (Level 13) |
+| **47** | `Ring_Successes` | Integer | `sessions.ring_successes` | $0 - N$ count | Validated | Isolated ring finger extensions (Level 13) |
+| **48** | `Pinky_Successes` | Integer | `sessions.pinky_successes` | $0 - N$ count | Validated | Isolated pinky finger extensions (Level 13) |
+| **49** | `Index_Attempts` | Integer | `sessions.index_attempts` | $0 - N$ count | Validated | Presented index isolation prompts (Level 13) |
+| **50** | `Middle_Attempts` | Integer | `sessions.middle_attempts` | $0 - N$ count | Validated | Presented middle isolation prompts (Level 13) |
+| **51** | `Ring_Attempts` | Integer | `sessions.ring_attempts` | $0 - N$ count | Validated | Presented ring isolation prompts (Level 13) |
+| **52** | `Pinky_Attempts` | Integer | `sessions.pinky_attempts` | $0 - N$ count | Validated | Presented pinky isolation prompts (Level 13) |
+| **53** | `Unintended_Movement_Events` | Integer | `sessions.unintended_movement_events` | $0 - N$ count | Validated | Enslaving/co-activation violations (Level 13) |
+| **54** | `Target_Activation_Time_Avg` | Float | `sessions.target_activation_time_avg` | Seconds ($0.0 - N$) | Validated | Mean prompt-to-activation latency (Level 13) |
+| **55** | `Dwell_Success_Count` | Integer | `sessions.dwell_success_count` | $0 - N$ count | Validated | Successfully completed dwell holds (Level 13) |
+| **56** | `Dwell_Failure_Count` | Integer | `sessions.dwell_failure_count` | $0 - N$ count | Validated | Dwell holds broken prematurely (Level 13) |
+| **57** | `Previous_Accuracy` | Float | Derived from historical lag | $0.0 - 100.0$ % | Derived | Longitudinal state transition analysis |
+| **58** | `Previous_Readiness`| Float | Derived from historical lag | $0.0 - 100.0$ | Derived | Longitudinal adaptation trajectory |
+| **59** | `Previous_Difficulty`| Integer| Derived from historical lag | $1 - 5$ tier | Derived | Difficulty tier transitions |
+| **60** | `New_Difficulty` | Integer | `adaptive_prescriptions.difficulty_tier` | $1 - 5$ tier | Validated | Adaptive AI prescription choice |
+| **61** | `Session_Aborted` | Integer | `sessions.session_aborted` | $0 \text{ or } 1$ | Validated | Dropout / task frustration marker |
+| **62** | `Quality_Flag` | String | `sessions.quality_flag` | `VALID`, `TRACKING_ERROR`... | Validated | Data cleaning / inclusion filter |
 
 ---
 
@@ -679,7 +822,16 @@ The system persists all telemetry in an ACID-compliant SQLite relational databas
 │                          │ translation_attempts, successful_placements,│
 │                          │ placement_attempts, unintended_drops,       │
 │                          │ manipulation_time_avg, placement_time_avg,  │
-│                          │ correction_count, quality_flag, timestamp   │
+│                          │ correction_count, d2_contacts, d3_contacts, │
+│                          │ d4_contacts, d5_contacts,                   │
+│                          │ opposition_latency_avg, index_successes,    │
+│                          │ middle_successes, ring_successes,           │
+│                          │ pinky_successes, index_attempts,            │
+│                          │ middle_attempts, ring_attempts,             │
+│                          │ pinky_attempts, unintended_movement_events, │
+│                          │ target_activation_time_avg,                 │
+│                          │ dwell_success_count, dwell_failure_count,   │
+│                          │ quality_flag, timestamp                     │
 ├──────────────────────────┼─────────────────────────────────────────────┤
 │ `patients`               │ name (enc), age, age_group, cal_max_ext,    │
 │                          │ cal_min_ang, cal_max_ang, id_number (enc)   │

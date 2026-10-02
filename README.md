@@ -47,7 +47,7 @@ Navigate menus, play games, and track your recovery — **using only your hands.
 | 🎨 | **Premium Dynamic Dashboard UI** | Beautiful, responsive web portal with StudyFlow-inspired dark blue aesthetics, sidebar animations, and seamless dark/light mode toggling |
 | 📊 | **Therapist Dashboard** | Comprehensive web interface featuring Patient Management, Session Analytics, Digital Twin simulation, and Role-Based Access Control |
 | 🔐 | **Secure Authentication** | Full login system with session tokens and secure password verification for Clinicians |
-| 🎮 | **10-Level Progressive Exercises** | Ten clinical exercise levels ranging from gross motor warm-ups to fine-motor pinch, forearm rotation, and precision pathway tracing |
+| 🎮 | **14-Level Progressive Exercises** | Fourteen clinical exercise levels ranging from gross motor warm-ups to fine-motor pinch, forearm rotation, precision pathway tracing, in-hand manipulation (coin vault and card shift challenge), finger isolation, and wrist flexion-extension control |
 | 🦾 | **Biomechanical Compensation** | Real-time posture tracking (shoulder elevation/abduction, elbow drift, trunk lean) |
 | 🧠 | **Clinical Decision & Twin** | Machine learning recovery predictions, health scoring, and digital twin simulation |
 | 🗣️ | **Interactive Virtual Sensei** | Context-aware voice guidance powered by rules and optional local LLM polish |

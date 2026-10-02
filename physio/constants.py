@@ -42,6 +42,9 @@ LEVEL_DISPLAY_NAMES = {
     9: "Precision Path - Dots",
     10: "Precision Pathway",
     11: "In-Hand Manipulation - Coin Vault",
+    12: "Card Shift Challenge",
+    13: "Finger Isolation Challenge",
+    14: "Wrist Flexion-Extension Control",
 }
 
 # Game Settings
@@ -69,6 +72,9 @@ AGE_THEMES = {
         "level9_name": "Star Connect",
         "level10_name": "Rainbow Pathway",
         "level11_name": "Treasure Vault",
+        "level12_name": "Magic Cards",
+        "level13_name": "Magic Fingers",
+        "level14_name": "Magic Wand Wave",
         "level1_icon": "🦋",
         "level2_icon": "🌻",
         "level3_icon": "🌱",
@@ -80,6 +86,9 @@ AGE_THEMES = {
         "level9_icon": "⭐",
         "level10_icon": "🌈",
         "level11_icon": "🪙",
+        "level12_icon": "🃏",
+        "level13_icon": "☝️",
+        "level14_icon": "🪄",
         "speed_multiplier": 0.7,  # Slower
         "size_multiplier": 1.3,   # Bigger targets
     },
@@ -100,6 +109,9 @@ AGE_THEMES = {
         "level9_name": "Matrix Nodes",
         "level10_name": "Laser Corridor",
         "level11_name": "Cyber Vault",
+        "level12_name": "Cyber Deck Shift",
+        "level13_name": "Cyber Isolation",
+        "level14_name": "Cyber Wrist Tilt",
         "level1_icon": "⚡",
         "level2_icon": "🎯",
         "level3_icon": "🔮",
@@ -111,6 +123,9 @@ AGE_THEMES = {
         "level9_icon": "💠",
         "level10_icon": "⚡",
         "level11_icon": "🪙",
+        "level12_icon": "🃏",
+        "level13_icon": "☝️",
+        "level14_icon": "🕹️",
         "speed_multiplier": 1.3,  # Faster
         "size_multiplier": 0.9,   # Smaller targets
     },
@@ -131,6 +146,9 @@ AGE_THEMES = {
         "level9_name": "Precision Dots",
         "level10_name": "Zen Pathway",
         "level11_name": "Coin Vault",
+        "level12_name": "Card Shift Challenge",
+        "level13_name": "Finger Isolation",
+        "level14_name": "Wrist Flexion-Extension Control",
         "level1_icon": "🍃",
         "level2_icon": "💧",
         "level3_icon": "🪨",
@@ -142,6 +160,9 @@ AGE_THEMES = {
         "level9_icon": "🎯",
         "level10_icon": "〰️",
         "level11_icon": "🪙",
+        "level12_icon": "🃏",
+        "level13_icon": "☝️",
+        "level14_icon": "↕️",
         "speed_multiplier": 1.0,  # Normal
         "size_multiplier": 1.1,   # Slightly bigger
     },
@@ -162,6 +183,9 @@ AGE_THEMES = {
         "level9_name": "Memory Dots",
         "level10_name": "Gentle Trail",
         "level11_name": "Coin Sorter",
+        "level12_name": "Card Glide",
+        "level13_name": "Gentle Fingers",
+        "level14_name": "Wrist Mobility Glide",
         "level1_icon": "🌺",
         "level2_icon": "🎵",
         "level3_icon": "🧩",
@@ -173,6 +197,9 @@ AGE_THEMES = {
         "level9_icon": "🎨",
         "level10_icon": "🌿",
         "level11_icon": "🪙",
+        "level12_icon": "🃏",
+        "level13_icon": "☝️",
+        "level14_icon": "🕊️",
         "speed_multiplier": 0.8,  # Slower
         "size_multiplier": 1.2,   # Bigger targets
     }

@@ -215,6 +215,14 @@ class RuntimeMixin:
                     self.state = GameState.THERAPIST_DASHBOARD
                     try: self.sounds.play('select')
                     except: pass
+            # Level 14 Zero Neutral shortcut
+            elif event.type == pygame.KEYDOWN and self.state == GameState.LEVEL14_WRIST_CONTROL:
+                if event.key in (pygame.K_c, pygame.K_SPACE):
+                    self.wrist_baseline_calibrated = False
+                    self._baseline_samples = []
+                    self._baseline_y_samples = []
+                    try: self.sounds.play('select')
+                    except: pass
     
     def _update(self):
         # Check if state has transitioned to safely warp the mouse cursor and reset button hover clocks
@@ -246,23 +254,12 @@ class RuntimeMixin:
         
         if hand_data.knuckle_angles and len(hand_data.knuckle_angles) > 0:
             self.angle_history.append(hand_data.knuckle_angles[0])
-            # Real-time Correctness Detection inside gameplay
-            if self.state in [GameState.LEVEL1_FLEXIBILITY, GameState.LEVEL2_STRENGTH, GameState.LEVEL3_FINEMOTOR]:
-                angle = hand_data.knuckle_angles[0]
-                if angle > 165 and not hand_data.is_pinching: # Not bending enough
-                    if self.warning_timer <= 0:
-                        self.correctness_warning = "Bend fingers slightly more"
-                        VOICE.speak("Bend fingers slightly more")
-                        self.warning_timer = 120 # warn ~2s apart
-                elif angle < 120:
-                    if self.correctness_warning == "Bend fingers slightly more" and self.warning_timer <= 60:
-                        self.correctness_warning = "Good job"
-                        VOICE.speak("Good job")
-                        self.warning_timer = 180 # Stay at "good job" for 3s
-                if self.warning_timer > 0:
-                    self.warning_timer -= 1
-                elif self.warning_timer <= 0:
-                    self.correctness_warning = ""
+            
+        # Step warning_timer every frame so alerts properly expire across all levels
+        if getattr(self, 'warning_timer', 0) > 0:
+            self.warning_timer -= 1
+            if self.warning_timer <= 0:
+                self.correctness_warning = ""
         
         # Check home icon (pause/quit) - Double-Trigger Exit
         if self.state not in [GameState.MAIN_MENU, GameState.RESULTS,
@@ -282,7 +279,10 @@ class RuntimeMixin:
                 GameState.LEVEL8_SMART_ASSEMBLY,
                 GameState.LEVEL9_PRECISION_PATH,
                 GameState.LEVEL10_PRECISION_PATHWAY,
-                GameState.LEVEL11_COIN_VAULT
+                GameState.LEVEL11_COIN_VAULT,
+                GameState.LEVEL12_THUMB_OPPOSITION,
+                GameState.LEVEL13_FINGER_ISOLATION,
+                GameState.LEVEL14_WRIST_CONTROL
             ]
             is_gameplay = self.state in gameplay_states
             
@@ -313,7 +313,8 @@ class RuntimeMixin:
                                     GameState.LEVEL5_GRIP_RELEASE, GameState.LEVEL6_FINGER_TAPS,
                                     GameState.LEVEL7_WRIST_MECHANICS, GameState.LEVEL8_SMART_ASSEMBLY,
                                     GameState.LEVEL9_PRECISION_PATH, GameState.LEVEL10_PRECISION_PATHWAY,
-                                    GameState.LEVEL11_COIN_VAULT]
+                                    GameState.LEVEL11_COIN_VAULT, GameState.LEVEL12_THUMB_OPPOSITION,
+                                    GameState.LEVEL13_FINGER_ISOLATION, GameState.LEVEL14_WRIST_CONTROL]
         
         now = time.time()
         dt = now - getattr(self, '_last_update_time', now)
@@ -385,6 +386,15 @@ class RuntimeMixin:
         elif self.state == GameState.LEVEL11_COIN_VAULT:
             if not getattr(self, 'tracking_lost', False):
                 self._update_level11(hand_data)
+        elif self.state == GameState.LEVEL12_THUMB_OPPOSITION:
+            if not getattr(self, 'tracking_lost', False):
+                self._update_level12(hand_data)
+        elif self.state == GameState.LEVEL13_FINGER_ISOLATION:
+            if not getattr(self, 'tracking_lost', False):
+                self._update_level13(hand_data)
+        elif self.state == GameState.LEVEL14_WRIST_CONTROL:
+            if not getattr(self, 'tracking_lost', False):
+                self._update_level14(hand_data)
         elif self.state == GameState.LEVEL_COMPLETE:
             if time.time() - self._level_complete_time > 2.5:
                 self.state = GameState.RESULTS
@@ -488,6 +498,12 @@ class RuntimeMixin:
             self._draw_level10()
         elif self.state == GameState.LEVEL11_COIN_VAULT:
             self._draw_level11()
+        elif self.state == GameState.LEVEL12_THUMB_OPPOSITION:
+            self._draw_level12()
+        elif self.state == GameState.LEVEL13_FINGER_ISOLATION:
+            self._draw_level13()
+        elif self.state == GameState.LEVEL14_WRIST_CONTROL:
+            self._draw_level14()
         elif self.state == GameState.LEVEL_COMPLETE:
             self._draw_level_complete()
         elif self.state == GameState.RESULTS:
@@ -551,7 +567,8 @@ class RuntimeMixin:
                            GameState.LEVEL8_SMART_ASSEMBLY,
                            GameState.LEVEL9_PRECISION_PATH,
                            GameState.LEVEL10_PRECISION_PATHWAY,
-                           GameState.LEVEL11_COIN_VAULT]
+                           GameState.LEVEL11_COIN_VAULT,
+                           GameState.LEVEL12_THUMB_OPPOSITION]
         if self.state in gameplay_states:
             hud_y = 15
             hud_h = 60
@@ -643,7 +660,13 @@ class RuntimeMixin:
             
         # Draw correctness warning (floating toast below timer bar)
         if getattr(self, 'correctness_warning', "") and getattr(self, 'state', None) in gameplay_states:
-            c_color = (255, 100, 100) if "Bend" in self.correctness_warning else (100, 255, 100)
+            w_lower = self.correctness_warning.lower()
+            if any(k in w_lower for k in ("lost", "deviation", "incorrect", "boundary", "error")):
+                c_color = (255, 95, 95)
+            elif any(k in w_lower for k in ("adjust", "warning", "caution", "follow")):
+                c_color = (255, 195, 45)
+            else:
+                c_color = (60, 255, 160)
             warning_surf = self.font_hud.render(self.correctness_warning, True, c_color)
             
             toast_w = warning_surf.get_width() + 40
