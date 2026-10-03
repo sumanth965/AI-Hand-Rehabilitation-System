@@ -233,7 +233,35 @@ class DatabaseManager:
                     cursor.execute(f"CREATE UNIQUE INDEX IF NOT EXISTS idx_patients_id_number ON patients(id_number)")
                 except Exception as e:
                     print(f"Migration error for patients id_number: {e}")
-                    
+
+            # Migrate any unencrypted patient rows to deterministic encryption and deduplicate
+            try:
+                cursor.execute("SELECT name, age, age_group, cal_fist_val, cal_max_ext, cal_min_ang, cal_max_ang, cal_active, id_number FROM patients")
+                p_rows = cursor.fetchall()
+                for prow in p_rows:
+                    raw_name = prow[0]
+                    dec_name = security_utils.decrypt_deterministic(raw_name)
+                    if dec_name == raw_name and raw_name:
+                        enc_name = security_utils.encrypt_deterministic(raw_name)
+                        cursor.execute("SELECT name FROM patients WHERE name = ?", (enc_name,))
+                        existing = cursor.fetchone()
+                        if existing:
+                            cursor.execute(
+                                """
+                                UPDATE patients SET 
+                                    age = COALESCE(age, ?),
+                                    age_group = COALESCE(age_group, ?),
+                                    id_number = COALESCE(id_number, ?)
+                                WHERE name = ?
+                                """,
+                                (prow[1], prow[2], prow[8], enc_name)
+                            )
+                            cursor.execute("DELETE FROM patients WHERE name = ?", (raw_name,))
+                        else:
+                            cursor.execute("UPDATE patients SET name = ? WHERE name = ?", (enc_name, raw_name))
+            except Exception:
+                pass
+
             conn.commit()
             conn.close()
         except Exception as e:

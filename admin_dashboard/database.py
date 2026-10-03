@@ -424,6 +424,55 @@ class DashboardRepository:
                         conn.execute(f"ALTER TABLE sessions ADD COLUMN {col} {defn}")
                     except Exception:
                         pass
+            # Migrate any unencrypted patient rows to deterministic encryption and deduplicate
+            try:
+                # 1. Patients table
+                p_rows = conn.execute("SELECT name, age, age_group, cal_fist_val, cal_max_ext, cal_min_ang, cal_max_ang, cal_active, id_number FROM patients").fetchall()
+                for prow in p_rows:
+                    raw_name = prow["name"]
+                    dec_name = security_utils.decrypt_deterministic(raw_name)
+                    if dec_name == raw_name and raw_name:
+                        enc_name = security_utils.encrypt_deterministic(raw_name)
+                        existing = conn.execute("SELECT name FROM patients WHERE name = ?", (enc_name,)).fetchone()
+                        if existing:
+                            conn.execute(
+                                """
+                                UPDATE patients SET 
+                                    age = COALESCE(age, ?),
+                                    age_group = COALESCE(age_group, ?),
+                                    id_number = COALESCE(id_number, ?)
+                                WHERE name = ?
+                                """,
+                                (prow["age"], prow["age_group"], prow["id_number"], enc_name)
+                            )
+                            conn.execute("DELETE FROM patients WHERE name = ?", (raw_name,))
+                        else:
+                            conn.execute("UPDATE patients SET name = ? WHERE name = ?", (enc_name, raw_name))
+                            
+                # 2. dashboard_patient_profiles table
+                prof_rows = conn.execute("SELECT patient_name, gender, injury_type, rehab_stage, assigned_exercises, therapist_notes FROM dashboard_patient_profiles").fetchall()
+                for prof in prof_rows:
+                    raw_pname = prof["patient_name"]
+                    dec_pname = security_utils.decrypt_deterministic(raw_pname)
+                    if dec_pname == raw_pname and raw_pname:
+                        enc_pname = security_utils.encrypt_deterministic(raw_pname)
+                        existing = conn.execute("SELECT patient_name FROM dashboard_patient_profiles WHERE patient_name = ?", (enc_pname,)).fetchone()
+                        if existing:
+                            conn.execute("DELETE FROM dashboard_patient_profiles WHERE patient_name = ?", (raw_pname,))
+                        else:
+                            conn.execute("UPDATE dashboard_patient_profiles SET patient_name = ? WHERE patient_name = ?", (enc_pname, raw_pname))
+
+                # 3. sessions table: ensure all patient_id are encrypted
+                sess_rows = conn.execute("SELECT DISTINCT patient_id FROM sessions").fetchall()
+                for srow in sess_rows:
+                    raw_pid = srow["patient_id"]
+                    if raw_pid:
+                        dec_pid = security_utils.decrypt_deterministic(raw_pid)
+                        if dec_pid == raw_pid:
+                            enc_pid = security_utils.encrypt_deterministic(raw_pid)
+                            conn.execute("UPDATE sessions SET patient_id = ? WHERE patient_id = ?", (enc_pid, raw_pid))
+            except Exception:
+                pass
 
             conn.commit()
 
@@ -928,7 +977,14 @@ class DashboardRepository:
             "Precision Path": 9,
             "Precision Pathway": 10,
             "Coin Vault": 11,
-            "In-Hand Manipulation": 11
+            "In-Hand Manipulation": 11,
+            "Card Shift Challenge": 12,
+            "Card Shift": 12,
+            "Finger Isolation": 13,
+            "Finger Isolation Challenge": 13,
+            "Wrist Flexion-Extension Control": 14,
+            "Wrist Control": 14,
+            "Wrist Flexion": 14,
         }
         
         if patient:
@@ -947,7 +1003,7 @@ class DashboardRepository:
                 comp_counts[matched_lvl] = comp_counts.get(matched_lvl, 0) + r["cnt"]
                 
         improvements = {}
-        for lvl in range(1, 12):
+        for lvl in range(1, 15):
             if patient:
                 cursor.execute("""
                     SELECT avg_accuracy FROM sessions 
@@ -1032,6 +1088,150 @@ class DashboardRepository:
             "placement_success_rate": place_rate,
             "unintended_drops": row["total_drops"] or 0,
             "avg_manipulation_time": row["avg_manip_time"] or 0.0,
+            "difficulty_tier": row["max_tier"] or 3
+        }
+
+    def card_shift_analytics(self, patient: str = "") -> dict:
+        conn = self.connect()
+        cursor = conn.cursor()
+        where_clause = "WHERE level = 12"
+        params = []
+        if patient:
+            enc_patient = security_utils.encrypt_deterministic(patient)
+            where_clause += " AND patient_id = ?"
+            params.append(enc_patient)
+            
+        cursor.execute(f"""
+            SELECT 
+                COUNT(id) as sessions_count,
+                AVG(avg_accuracy) as completion_rate,
+                SUM(card_shift_successes) as total_successes,
+                SUM(card_shift_attempts) as total_attempts,
+                AVG(average_shift_latency) as avg_latency,
+                AVG(median_shift_latency) as median_latency,
+                AVG(maximum_shift_latency) as max_latency,
+                SUM(incorrect_finger_events) as total_incorrect_fingers,
+                AVG(sequence_completion_rate) as avg_seq_completion,
+                MAX(difficulty_tier) as max_tier
+            FROM sessions
+            {where_clause}
+        """, params)
+        row = cursor.fetchone()
+        conn.close()
+        if not row or not row["sessions_count"]:
+            return {}
+            
+        success_rate = (row["total_successes"] / row["total_attempts"] * 100.0) if row["total_attempts"] else (row["completion_rate"] or 0.0)
+        
+        return {
+            "sessions_count": row["sessions_count"],
+            "success_rate": success_rate,
+            "total_successes": row["total_successes"] or 0,
+            "total_attempts": row["total_attempts"] or 0,
+            "avg_latency": row["avg_latency"] or 0.0,
+            "median_latency": row["median_latency"] or 0.0,
+            "max_latency": row["max_latency"] or 0.0,
+            "incorrect_finger_events": row["total_incorrect_fingers"] or 0,
+            "sequence_completion_rate": row["avg_seq_completion"] or 0.0,
+            "difficulty_tier": row["max_tier"] or 3
+        }
+
+    def finger_isolation_analytics(self, patient: str = "") -> dict:
+        conn = self.connect()
+        cursor = conn.cursor()
+        where_clause = "WHERE level = 13"
+        params = []
+        if patient:
+            enc_patient = security_utils.encrypt_deterministic(patient)
+            where_clause += " AND patient_id = ?"
+            params.append(enc_patient)
+            
+        cursor.execute(f"""
+            SELECT 
+                COUNT(id) as sessions_count,
+                AVG(avg_accuracy) as isolation_accuracy,
+                SUM(index_successes) as idx_succ,
+                SUM(index_attempts) as idx_att,
+                SUM(middle_successes) as mid_succ,
+                SUM(middle_attempts) as mid_att,
+                SUM(ring_successes) as ring_succ,
+                SUM(ring_attempts) as ring_att,
+                SUM(pinky_successes) as pin_succ,
+                SUM(pinky_attempts) as pin_att,
+                SUM(unintended_movement_events) as total_unintended,
+                AVG(target_activation_time_avg) as avg_act_time,
+                SUM(dwell_success_count) as total_dwell_succ,
+                SUM(dwell_failure_count) as total_dwell_fail,
+                MAX(difficulty_tier) as max_tier
+            FROM sessions
+            {where_clause}
+        """, params)
+        row = cursor.fetchone()
+        conn.close()
+        if not row or not row["sessions_count"]:
+            return {}
+            
+        total_succ = (row["idx_succ"] or 0) + (row["mid_succ"] or 0) + (row["ring_succ"] or 0) + (row["pin_succ"] or 0)
+        total_att = (row["idx_att"] or 0) + (row["mid_att"] or 0) + (row["ring_att"] or 0) + (row["pin_att"] or 0)
+        overall_succ_rate = (total_succ / total_att * 100.0) if total_att > 0 else (row["isolation_accuracy"] or 0.0)
+        
+        idx_rate = (row["idx_succ"] / row["idx_att"] * 100.0) if (row["idx_att"] or 0) > 0 else 0.0
+        mid_rate = (row["mid_succ"] / row["mid_att"] * 100.0) if (row["mid_att"] or 0) > 0 else 0.0
+        ring_rate = (row["ring_succ"] / row["ring_att"] * 100.0) if (row["ring_att"] or 0) > 0 else 0.0
+        pin_rate = (row["pin_succ"] / row["pin_att"] * 100.0) if (row["pin_att"] or 0) > 0 else 0.0
+        
+        return {
+            "sessions_count": row["sessions_count"],
+            "isolation_accuracy": overall_succ_rate,
+            "index_rate": idx_rate,
+            "middle_rate": mid_rate,
+            "ring_rate": ring_rate,
+            "pinky_rate": pin_rate,
+            "unintended_movements": row["total_unintended"] or 0,
+            "avg_activation_time": row["avg_act_time"] or 0.0,
+            "dwell_successes": row["total_dwell_succ"] or 0,
+            "dwell_failures": row["total_dwell_fail"] or 0,
+            "difficulty_tier": row["max_tier"] or 3
+        }
+
+    def wrist_control_analytics(self, patient: str = "") -> dict:
+        conn = self.connect()
+        cursor = conn.cursor()
+        where_clause = "WHERE level = 14"
+        params = []
+        if patient:
+            enc_patient = security_utils.encrypt_deterministic(patient)
+            where_clause += " AND patient_id = ?"
+            params.append(enc_patient)
+            
+        cursor.execute(f"""
+            SELECT 
+                COUNT(id) as sessions_count,
+                AVG(avg_accuracy) as target_accuracy,
+                AVG(average_movement_time) as avg_movement_time,
+                AVG(average_target_error) as avg_target_error,
+                AVG(average_overshoot) as avg_overshoot,
+                AVG(average_hold_stability) as avg_hold_stability,
+                AVG(direction_accuracy) as avg_dir_acc,
+                SUM(target_timeouts) as total_timeouts,
+                MAX(difficulty_tier) as max_tier
+            FROM sessions
+            {where_clause}
+        """, params)
+        row = cursor.fetchone()
+        conn.close()
+        if not row or not row["sessions_count"]:
+            return {}
+            
+        return {
+            "sessions_count": row["sessions_count"],
+            "target_accuracy": row["target_accuracy"] or 0.0,
+            "avg_movement_time": row["avg_movement_time"] or 0.0,
+            "avg_target_error": row["avg_target_error"] or 0.0,
+            "avg_overshoot": row["avg_overshoot"] or 0.0,
+            "avg_hold_stability": row["avg_hold_stability"] or 0.0,
+            "direction_accuracy": row["avg_dir_acc"] or 0.0,
+            "target_timeouts": row["total_timeouts"] or 0,
             "difficulty_tier": row["max_tier"] or 3
         }
 

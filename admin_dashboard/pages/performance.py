@@ -95,6 +95,84 @@ class PerformancePagesMixin:
             </section>
             """
 
+        cs_data = self.repo.card_shift_analytics(patient)
+        cs_section = ""
+        if cs_data:
+            cs_section = f"""
+            <section class="card" style="margin-top:20px;">
+              <div class="toolbar">
+                <div>
+                  <h2>Level 12: Card Shift Challenge — Dynamic In-Hand Manipulation</h2>
+                  <p class="muted" style="margin-top:4px;">Finger-to-finger card shifting kinematics, latency, and sequence execution.</p>
+                </div>
+                <span class="badge primary">Difficulty Tier: {cs_data['difficulty_tier']}</span>
+              </div>
+              <div class="grid stats four" style="margin-top:16px;">
+                {self.stat_card('Shift Success Rate', f"{cs_data['success_rate']:.1f}%", 'Task Accuracy')}
+                {self.stat_card('Sequence Completion', f"{cs_data['sequence_completion_rate']:.1f}%", 'Pattern Consistency')}
+                {self.stat_card('Avg Shift Latency', f"{cs_data['avg_latency']:.2f}s", f"Median: {cs_data['median_latency']:.2f}s")}
+                {self.stat_card('Incorrect Contacts', str(cs_data['incorrect_finger_events']), 'Finger Targeting Errors')}
+              </div>
+              <div class="grid stats three" style="margin-top:16px;">
+                {self.stat_card('Successful Shifts', str(cs_data['total_successes']), 'Completed card shifts')}
+                {self.stat_card('Total Attempts', str(cs_data['total_attempts']), 'Shift motions detected')}
+                {self.stat_card('Total Card Sessions', str(cs_data['sessions_count']), 'Recorded therapeutic sessions')}
+              </div>
+            </section>
+            """
+
+        fi_data = self.repo.finger_isolation_analytics(patient)
+        fi_section = ""
+        if fi_data:
+            fi_section = f"""
+            <section class="card" style="margin-top:20px;">
+              <div class="toolbar">
+                <div>
+                  <h2>Level 13: Finger Isolation — Individual Digit Control</h2>
+                  <p class="muted" style="margin-top:4px;">Independent finger flexion accuracy, unintended co-movements, and target dwell stability.</p>
+                </div>
+                <span class="badge primary">Difficulty Tier: {fi_data['difficulty_tier']}</span>
+              </div>
+              <div class="grid stats four" style="margin-top:16px;">
+                {self.stat_card('Isolation Accuracy', f"{fi_data['isolation_accuracy']:.1f}%", 'Overall Digit Control')}
+                {self.stat_card('Index (D2) Success', f"{fi_data['index_rate']:.1f}%", 'Index Finger Isolation')}
+                {self.stat_card('Middle (D3) Success', f"{fi_data['middle_rate']:.1f}%", 'Middle Finger Isolation')}
+                {self.stat_card('Ring / Pinky (D4/D5)', f"{(fi_data['ring_rate'] + fi_data['pinky_rate'])/2:.1f}%", f"D4: {fi_data['ring_rate']:.0f}% | D5: {fi_data['pinky_rate']:.0f}%")}
+              </div>
+              <div class="grid stats three" style="margin-top:16px;">
+                {self.stat_card('Unintended Movements', str(fi_data['unintended_movements']), 'Co-movement events detected')}
+                {self.stat_card('Avg Activation Time', f"{fi_data['avg_activation_time']:.2f}s", 'Target contact latency')}
+                {self.stat_card('Dwell Stability', f"{fi_data['dwell_successes']} succ / {fi_data['dwell_failures']} fail", 'Target hold performance')}
+              </div>
+            </section>
+            """
+
+        wc_data = self.repo.wrist_control_analytics(patient)
+        wc_section = ""
+        if wc_data:
+            wc_section = f"""
+            <section class="card" style="margin-top:20px;">
+              <div class="toolbar">
+                <div>
+                  <h2>Level 14: Wrist Flexion-Extension — Fine Angular Control</h2>
+                  <p class="muted" style="margin-top:4px;">Biomechanical wrist flexion-extension kinematics, trajectory accuracy, and hold stability.</p>
+                </div>
+                <span class="badge primary">Difficulty Tier: {wc_data['difficulty_tier']}</span>
+              </div>
+              <div class="grid stats four" style="margin-top:16px;">
+                {self.stat_card('Target Accuracy', f"{wc_data['target_accuracy']:.1f}%", 'Hit Rate')}
+                {self.stat_card('Direction Accuracy', f"{wc_data['direction_accuracy']:.1f}%", 'Proper Motion Vector')}
+                {self.stat_card('Hold Stability', f"{wc_data['avg_hold_stability']:.1f}%", 'Postural Steadiness')}
+                {self.stat_card('Movement Time', f"{wc_data['avg_movement_time']:.2f}s", 'Execution Speed')}
+              </div>
+              <div class="grid stats three" style="margin-top:16px;">
+                {self.stat_card('Target Error', f"{wc_data['avg_target_error']:.1f}px", 'Mean spatial deviation')}
+                {self.stat_card('Overshoot', f"{wc_data['avg_overshoot']:.1f}px", 'Terminal damping error')}
+                {self.stat_card('Timeouts / Misses', str(wc_data['target_timeouts']), 'Exceeded time allowance')}
+              </div>
+            </section>
+            """
+
         body = f"""
         <section class="card">
           <form method="get" class="toolbar">
@@ -109,6 +187,9 @@ class PerformancePagesMixin:
           {self.stat_card('Compensations Logged', str(total_compensations), 'Clinical biomechanical alerts')}
         </section>
         {cv_section}
+        {cs_section}
+        {fi_section}
+        {wc_section}
         <section class="card" style="margin-top:16px">
           <h2>Clinical Exercise Telemetry</h2>
           <div class="table-container" style="margin-top:24px;">

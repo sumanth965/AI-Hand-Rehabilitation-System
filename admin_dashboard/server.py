@@ -134,10 +134,9 @@ class DashboardHandler(BaseHTTPRequestHandler):
                 ip_address=self.client_address[0],
                 status="Success"
             )
-            self.send_response(HTTPStatus.OK)
+            self.send_response(HTTPStatus.SEE_OTHER)
             self.send_header("Set-Cookie", "session_token=; Path=/; Expires=Thu, 01 Jan 1970 00:00:00 GMT")
             self.send_header("Location", "/login")
-            self.send_status(HTTPStatus.SEE_OTHER)
             self.end_headers()
             return
 
@@ -418,8 +417,6 @@ class DashboardHandler(BaseHTTPRequestHandler):
         else:
             self.send_error(HTTPStatus.NOT_FOUND, "Action not found")
 
-    def send_status(self, status: HTTPStatus) -> None:
-        self.wfile.write(b"") # Placeholder for override to allow SEE_OTHER redirect
 
     def redirect(self, location: str) -> None:
         self.send_response(HTTPStatus.SEE_OTHER)
