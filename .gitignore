@@ -1,28 +1,47 @@
-__pycache__/
-*.pyc
-*.pyo
-*.pyd
-.Python
+# ==============================================================================
+# AI Hand Rehabilitation System - Git Ignore Rules
+# ==============================================================================
+
+# 1. Virtual Environments & Python Runtime Artifacts
+.venv/
 env/
 venv/
 ENV/
-.venv/
+.Python
+__pycache__/
+*.py[cod]
+*$py.class
 
-# Databases
-*.db
-*.sqlite3
+# 2. Testing & Quality Tooling Caches
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+.coverage
+htmlcov/
 
-# Local environment files
-.env
+# 3. IDEs & Editor Configuration
 .vscode/
 .idea/
+*.sublime-workspace
+*.sublime-project
 
-# Batch files (optional, but good to ignore the push script itself)
-push_repo.bat
-
-# Clinical Reports (privacy and local session logs)
-reports/
-
-# Encryption Keys
+# 4. Environment Variables & Sensitive Credentials
+.env
+.env.local
 secret.key
 
+# 5. Live Patient Databases & Audit Logs (HIPAA / Privacy Compliance)
+# NOTE: rehab_data.db contains identifiable/session clinical records and must NOT
+# be committed to public/shared git repositories.
+*.db
+*.sqlite3
+*.log
+db_error.txt
+security_audit.log
+
+# 6. Generated Local Reports & Temporary Exports
+reports/
+*.tmp
+
+# 7. Local Operational Scripts
+push_repo.bat

@@ -88,37 +88,120 @@ The Virtual Sensei consumes the current session, previous session history, recov
   * `tests/test_accuracy.py`: Unit test suite verifying mathematical edge cases, zero-attempt handling (`NULL`), and tracking quality thresholds.
   * `research_validation/`: Protocols, data dictionaries, software test reports, and clinician evaluation templates.
 
-## 📦 Installation
+## 📦 Installation on Another Windows Laptop
 
-**1. Clone the repository**
-```bash
-git clone https://github.com/Sumanth965/AI-Hand-Rehabilitation-System.git
-cd AI-Hand-Rehabilitation-System
-```
+To deploy and execute this project on another Windows computer with full environment parity and scientific reproducibility, follow the guide below.
 
-**2. Install dependencies**
-```bash
+### 📋 Prerequisites & Hardware Requirements
+* **Operating System**: Windows 10 or Windows 11 (64-bit strictly required).
+* **Python**: Python **3.12** 64-bit recommended (Supported range: Python **3.10.x to 3.12.x**).
+  > [!IMPORTANT]
+  > **Do NOT install Python 3.13**. Google MediaPipe does not provide Windows precompiled binary wheels for Python 3.13+.
+  > **Do NOT install 32-bit Python**. MediaPipe and OpenCV binary wheels are 64-bit only.
+* **Webcam**: Standard USB or integrated webcam (minimum 640x480 @ 30 FPS).
+* **Visual C++ Runtime**: [Microsoft Visual C++ 2015-2022 Redistributable (x64)](https://aka.ms/vs/17/release/vc_redist.x64.exe) installed.
+
+---
+
+### ⚡ Quick Automated Setup (Recommended)
+
+1. **Clone or copy the project folder**:
+   ```cmd
+   git clone https://github.com/Sumanth965/AI-Hand-Rehabilitation-System.git
+   cd AI-Hand-Rehabilitation-System
+   ```
+
+2. **Run the automated setup script**:
+   ```cmd
+   setup_windows.bat
+   ```
+   *This script verifies your Python version, creates an isolated `.venv`, upgrades pip, installs pinned dependencies from `requirements.txt`, and verifies all computer vision pipelines.*
+
+3. **Launch the application**:
+   ```cmd
+   run_project.bat
+   ```
+   *To launch the Therapist Admin Dashboard instead:*
+   ```cmd
+   run_project.bat --dashboard
+   ```
+
+---
+
+### 🛠️ Manual Setup Procedure
+
+If you prefer to configure the virtual environment manually:
+
+```cmd
+:: 1. Create a 64-bit virtual environment
+python -m venv .venv
+
+:: 2. Activate the virtual environment
+call .venv\Scripts\activate.bat
+
+:: 3. Upgrade pip and wheel
+python -m pip install --upgrade pip setuptools wheel
+
+:: 4. Install exact pinned dependencies
 pip install -r requirements.txt
+
+:: 5. Run full environment diagnostics
+python diagnose_environment.py
+
+:: 6. Launch the Patient Application
+python main.py
+
+:: 7. Launch the Therapist Dashboard (Port 8081)
+python main.py --dashboard
 ```
 
-**3. Launch the Therapist Dashboard**
-```bash
-python therapist_dashboard.py
-```
-*(This will automatically open the local dashboard URL printed in the terminal, usually http://127.0.0.1:8080)*
+---
 
-**4. Launch the Rehabilitation Session**
-```bash
-python zero_keyboard_physio.py
-```
+### 🩺 System Diagnostics
 
-**5. Export Research Dataset**
-```bash
-python research_export.py --db rehab_data.db --output research_dataset.csv
+Run the non-destructive environment diagnostic script at any time to verify hardware, vision pipelines, and database integrity:
+```cmd
+python diagnose_environment.py
 ```
+This script checks:
+* Windows build and architecture (64-bit validation)
+* Python version gate (3.10–3.12)
+* Pinned dependency status (including strict NumPy 1.x validation)
+* MediaPipe Hands pipeline operational test
+* Webcam hardware detection, frame capture, resolution, and FPS
+* Database integrity (`rehab_data.db`) and cryptographic key validation (`secret.key`)
+* Optional Ollama LLM service reachability (with offline rule-based fallback verification)
 
-> [!WARNING]
-> A functioning webcam is required for the Rehabilitation Session. Ensure adequate lighting and camera visibility of both hand and upper torso for optimal landmark tracking.
+---
+
+### 🗄️ Database & Research Data Portability
+
+* **Clean New Installation**: A fresh `rehab_data.db` and AES `secret.key` are generated automatically on first launch.
+* **Transferring Existing Research Data**: If copying patient history from a primary laptop, you must copy **both**:
+  1. `rehab_data.db` (SQLite relational database)
+  2. `secret.key` (256-bit AES encryption key)
+  *If `secret.key` is omitted, patient identifiers will not decrypt correctly.*
+* **Exporting Research Data**:
+  ```cmd
+  python research_export.py --db rehab_data.db --output research_dataset.csv
+  ```
+
+---
+
+### 🔍 Troubleshooting
+
+| Issue / Error Message | Cause | Exact Solution |
+| :--- | :--- | :--- |
+| `ERROR: Could not find a version that satisfies the requirement mediapipe` | Python 3.13 installed, or 32-bit Python installed. | Install [Python 3.12.10 (64-bit)](https://www.python.org/downloads/release/python-31210/) and check "Add python.exe to PATH". |
+| `AttributeError: _ARRAY_API not found` or MediaPipe crash on import | NumPy 2.x was installed by an unpinned dependency. | Run: `pip install "numpy==1.26.4"`. NumPy 1.x is strictly required for MediaPipe compatibility. |
+| `Camera opened but frame capture failed` or black screen | Windows Camera privacy blocked or another app (Zoom/Teams) is using the webcam. | Open Windows **Settings > Privacy > Camera**, enable "Allow desktop apps to access your camera", and close conferencing apps. |
+| `ModuleNotFoundError: No module named 'win32com'` | `pyttsx3` requires Windows COM components. | Run: `pip install pypiwin32==223`. |
+| `ImportError: DLL load failed while importing _sqlite3` or C runtime error | Missing Microsoft Visual C++ runtime. | Download and install the [x64 VC++ Redistributable](https://aka.ms/vs/17/release/vc_redist.x64.exe). |
+| Patient names appear as ciphertext or decryption error | `rehab_data.db` copied without its companion `secret.key`. | Copy the matching `secret.key` from the source machine into the project root folder. |
+| `pygame.error: DirectSoundCreate: No audio device found` | No speakers/headphones connected or audio service disabled. | Plug in headphones or enable Windows Audio in Services (`services.msc`). |
+| `Ollama Service: NOT DETECTED` | Ollama is not installed or not running locally. | **No action required.** The system automatically uses the built-in deterministic clinical rule engine for voice coaching. |
+
+---
 
 ## ⚙️ How It Works
 

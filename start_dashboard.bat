@@ -5,11 +5,15 @@ echo   Therapist Dashboard
 echo ======================================
 echo.
 
+if exist ".venv\Scripts\activate.bat" (
+    call .venv\Scripts\activate.bat
+)
+
 set "PYTHON=python"
 set "PYTHONIOENCODING=utf-8"
 
 echo [1/2] Checking dependencies...
-%PYTHON% -m pip install -r requirements.txt --quiet --user 2>nul
+%PYTHON% -m pip install -r requirements.txt --quiet 2>nul
 
 echo [2/2] Starting dashboard...
 echo.

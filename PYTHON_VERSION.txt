@@ -1,0 +1,9 @@
+Required Python Version: Python 3.10.x - Python 3.12.x (Recommended: Python 3.12.10)
+Tested Python Version: Python 3.12.10 (64-bit AMD64)
+Operating System: Windows 10 / Windows 11 (64-bit)
+Architecture: 64-bit (x86_64 / AMD64) - 32-bit Python is NOT supported
+
+Reason for version requirement:
+1. Google MediaPipe Hand Landmark Tracking: MediaPipe provides official precompiled binary wheels for Windows 64-bit up to Python 3.12. Python 3.13 currently does NOT have precompiled MediaPipe wheels on Windows, causing `pip install mediapipe` to fail.
+2. 32-bit Architecture Incompatibility: MediaPipe C++ underlying libraries and OpenCV wheels are strictly compiled for 64-bit architectures. Installing Python 32-bit will cause dependency resolution failures.
+3. NumPy 1.x Requirement: MediaPipe 0.10.21 requires NumPy < 2.0.0 (strictly verified on numpy==1.26.4). Python 3.12.10 supports numpy 1.26.4 seamlessly.

@@ -1,8 +1,39 @@
-opencv-python
-mediapipe<0.10.30
-numpy
-pygame
-matplotlib
-pyttsx3
-scikit-learn
-reportlab
+# ==============================================================================
+# AI Hand Rehabilitation System - Python Package Dependencies
+# Verified on: Python 3.12.10 (64-bit AMD64) on Windows 10/11
+# ==============================================================================
+#
+# IMPORTANT COMPATIBILITY RULES:
+# 1. NumPy: Must remain in the 1.x series (1.26.4). NumPy 2.x breaks MediaPipe C extensions.
+# 2. Python Version: 3.10 to 3.12 (64-bit only). Python 3.13 lacks prebuilt MediaPipe wheels.
+# 3. Windows Speech: pypiwin32 is required on Windows for pyttsx3 SAPI5 voice output.
+# 4. Security & Cryptography: bcrypt and cryptography provide HIPAA-compliant AES encryption.
+# ==============================================================================
+
+# Core Computer Vision & Gesture Tracking
+numpy==1.26.4
+mediapipe==0.10.21
+opencv-python==4.11.0.86
+opencv-contrib-python==4.11.0.86
+protobuf==4.25.9
+jax==0.7.1
+jaxlib==0.7.1
+
+# Graphical User Interface & Game Loop
+pygame==2.6.1
+
+# Kinematic Analytics & Machine Learning
+scipy==1.17.1
+scikit-learn==1.9.0
+matplotlib==3.11.0
+
+# Voice Coaching / Text-to-Speech (Offline)
+pyttsx3==2.99
+pypiwin32==223; sys_platform == 'win32'
+
+# Clinical Report Generation (PDF Export)
+reportlab==5.0.0
+
+# Data Security & Deterministic Encryption
+bcrypt==5.0.0
+cryptography==49.0.0
