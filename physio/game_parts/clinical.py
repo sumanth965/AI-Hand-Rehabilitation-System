@@ -920,12 +920,13 @@ class ClinicalMixin:
             enc_summary = security_utils.encrypt_non_deterministic(summary_text)
             enc_rec = security_utils.encrypt_non_deterministic(ai_rec)
             
+            enc_patient = security_utils.encrypt_deterministic(self.patient_name or "Unknown")
             conn = sqlite3.connect(self.db.db_path)
             cursor = conn.cursor()
             cursor.execute("""
-                INSERT OR REPLACE INTO clinical_summaries (session_id, summary_text, ai_recommendation)
-                VALUES (?, ?, ?)
-            """, (session_id, enc_summary, enc_rec))
+                INSERT OR REPLACE INTO clinical_summaries (patient_id, session_id, summary_text, ai_recommendation)
+                VALUES (?, ?, ?, ?)
+            """, (enc_patient, session_id, enc_summary, enc_rec))
             conn.commit()
             conn.close()
             
