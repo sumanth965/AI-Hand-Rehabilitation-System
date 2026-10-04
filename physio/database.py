@@ -3,6 +3,8 @@ Database Manager for the Zero-Keyboard AI Physiotherapy System.
 Handles all SQLite operations for session storage and analytics.
 """
 
+from __future__ import annotations
+
 import sqlite3
 import numpy as np
 import pygame

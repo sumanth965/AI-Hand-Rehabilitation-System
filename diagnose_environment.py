@@ -6,6 +6,8 @@ installed dependencies, computer vision pipeline, database integrity,
 and optional local LLM services.
 """
 
+from __future__ import annotations
+
 import sys
 import os
 import platform
@@ -88,17 +90,17 @@ def run_diagnostics():
     if not in_venv:
         warnings.append("Not currently running inside a virtual environment (.venv). Using a venv is recommended.")
 
-    if py_ver.major != 3 or py_ver.minor not in (10, 11, 12):
+    if py_ver.major != 3 or py_ver.minor not in (9, 10, 11, 12):
         if py_ver.minor >= 13:
             critical_failures.append(
                 f"Python {py_str} is incompatible. MediaPipe has no prebuilt Windows wheels for Python 3.13+. Please use Python 3.12.x."
             )
         else:
             critical_failures.append(
-                f"Python {py_str} is below the minimum supported version (Python 3.10+ required)."
+                f"Python {py_str} is below the minimum supported version (Python 3.9+ required)."
             )
     else:
-        print("  * Version Gate: PASS (Python 3.10-3.12 supported)")
+        print("  * Version Gate: PASS (Python 3.9-3.12 supported)")
 
     # ---------------------------------------------------------
     # 3. REQUIRED PACKAGES
